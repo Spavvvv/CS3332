@@ -1,7 +1,7 @@
+// Extension to the existing CourseDate class
 package src.model.system.course;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 public class CourseDate {
@@ -86,9 +86,19 @@ public class CourseDate {
         return LocalDate.now().isEqual(startDate) || LocalDate.now().isAfter(startDate);
     }
 
+    // Check if a given date is within this course's date range
+    public boolean isDateWithinRange(LocalDate date) {
+        return !date.isBefore(startDate) && !date.isAfter(endDate);
+    }
+
+    // Check if this course date overlaps with another course date
+    public boolean overlaps(CourseDate other) {
+        return !this.startDate.isAfter(other.endDate) && !this.endDate.isBefore(other.startDate);
+    }
+
     // type showing
     @Override
     public String toString() {
-        return "Từ " + startDate + " đến " + endDate;
+        return "From " + startDate + " To " + endDate;
     }
 }
