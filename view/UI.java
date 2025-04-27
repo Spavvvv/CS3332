@@ -20,11 +20,19 @@ import javafx.scene.text.TextAlignment;
 public class UI {
     private BorderPane root;
     private VBox mainContent;
-    private final String currentUser = "Lê Quang Huy";
+    private final String currentUser = "Dummy";
     private NavigationController navigationController;
     private MainController mainController;
     private Label pageTitleLabel;
     private Label breadcrumbPathLabel;
+
+    // Biến để lưu trạng thái hiển thị submenu
+    private VBox sidebar;
+    private VBox trainingSubmenu;
+    private VBox studentSubmenu;
+    private VBox reportSubmenu;
+    private VBox manageSubmenu;
+    private String currentSelectedMenu = "";
 
     /**
      * Khởi tạo UI
@@ -57,7 +65,7 @@ public class UI {
         root.setTop(header);
 
         // 2. Tạo Sidebar bên trái
-        VBox sidebar = createSidebar();
+        sidebar = createSidebar();
         root.setLeft(sidebar);
 
         // 3. Tạo phần nội dung chính (Main Content)
@@ -115,6 +123,17 @@ public class UI {
             menuToggle.setStyle("-fx-background-color: transparent; -fx-font-size: 20px;");
         }
 
+        // Xử lý sự kiện khi nhấn nút menu (thu gọn/mở rộng sidebar)
+        menuToggle.setOnAction(e -> {
+            if (sidebar.isVisible()) {
+                sidebar.setVisible(false);
+                sidebar.setManaged(false);
+            } else {
+                sidebar.setVisible(true);
+                sidebar.setManaged(true);
+            }
+        });
+
         // Tiêu đề trang
         pageTitleLabel = new Label("Tổng quan");
         pageTitleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
@@ -160,7 +179,7 @@ public class UI {
             hotlineBox.getChildren().add(phoneEmoji);
         }
 
-        Label hotlineLabel = new Label("Hotline: 0966945495 - 0977962582");
+        Label hotlineLabel = new Label("Hotline: 0888888888 - 0999999999");
         hotlineLabel.setStyle("-fx-text-fill: #757575;");
         hotlineBox.getChildren().add(hotlineLabel);
 
@@ -269,13 +288,236 @@ public class UI {
 
         // Menu items
         Button chatButton = createSidebarButton("Nhắn tin", "message", "chat");
-        Button trainingButton = createSidebarButton("Đào tạo", "training", "training");
-        Button studentButton = createSidebarButton("Học viên", "student", "students");
-        Button reportButton = createSidebarButton("Báo cáo", "report", "reports");
-        Button manageButton = createSidebarButton("Quản lý", "manage", "management");
 
-        sidebar.getChildren().addAll(chatButton, trainingButton, studentButton, reportButton, manageButton);
+        HBox trainingHeader = createMenuHeaderWithToggle("Đào tạo", "training");
+        trainingSubmenu = createSubmenu();
+        trainingSubmenu.getChildren().addAll(
+                createSubmenuButton("Tổng quan đào tạo", "training-overview"),
+                createSubmenuButton("Lớp học", "classes"),
+                createSubmenuButton("Khóa học", "courses"),
+                createSubmenuButton("Giáo viên", "teachers"),
+                createSubmenuButton("Thời khóa biểu", "schedule")
+        );
+        trainingSubmenu.setVisible(false);
+        trainingSubmenu.setManaged(false);
+
+        HBox studentHeader = createMenuHeaderWithToggle("Học viên", "student");
+        studentSubmenu = createSubmenu();
+        studentSubmenu.getChildren().addAll(
+                createSubmenuButton("Danh sách học viên", "student-list"),
+                createSubmenuButton("Đăng ký học", "registrations"),
+                createSubmenuButton("Điểm danh", "attendance"),
+                createSubmenuButton("Học phí", "tuition")
+        );
+        studentSubmenu.setVisible(false);
+        studentSubmenu.setManaged(false);
+
+        HBox reportHeader = createMenuHeaderWithToggle("Báo cáo", "report");
+        reportSubmenu = createSubmenu();
+        reportSubmenu.getChildren().addAll(
+                createSubmenuButton("Báo cáo học viên", "student-reports"),
+                createSubmenuButton("Báo cáo lớp học", "class-reports"),
+                createSubmenuButton("Báo cáo tài chính", "financial-reports"),
+                createSubmenuButton("Báo cáo giáo viên", "teacher-reports")
+        );
+        reportSubmenu.setVisible(false);
+        reportSubmenu.setManaged(false);
+
+        HBox manageHeader = createMenuHeaderWithToggle("Quản lý", "manage");
+        manageSubmenu = createSubmenu();
+        manageSubmenu.getChildren().addAll(
+                createSubmenuButton("Người dùng", "user-management"),
+                createSubmenuButton("Phân quyền", "role-management"),
+                createSubmenuButton("Cấu hình hệ thống", "system-config"),
+                createSubmenuButton("Cài đặt", "settings")
+        );
+        manageSubmenu.setVisible(false);
+        manageSubmenu.setManaged(false);
+
+        sidebar.getChildren().addAll(
+                chatButton,
+                trainingHeader, trainingSubmenu,
+                studentHeader, studentSubmenu,
+                reportHeader, reportSubmenu,
+                manageHeader, manageSubmenu
+        );
+
         return sidebar;
+    }
+
+    /**
+     * Tạo header cho menu có thể mở rộng
+     * @param text Chữ hiển thị
+     * @param iconName Tên icon
+     * @return HBox chứa header menu
+     */
+    private HBox createMenuHeaderWithToggle(String text, String iconName) {
+        HBox header = new HBox();
+        header.setPadding(new Insets(15, 20, 15, 20));
+        header.setMaxWidth(Double.MAX_VALUE);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.setStyle("-fx-background-color: transparent; -fx-cursor: hand;");
+
+        // Icon
+        Node icon;
+        try {
+            ImageView iconView = new ImageView(new Image(getClass().getResourceAsStream("/images/" + iconName + ".png")));
+            iconView.setFitHeight(18);
+            iconView.setFitWidth(18);
+            icon = iconView;
+        } catch (Exception e) {
+            // Nếu không tìm thấy icon, dùng emoji hoặc text
+            String emoji = "";
+            switch (iconName) {
+                case "training": emoji = "📚"; break;
+                case "student": emoji = "👥"; break;
+                case "report": emoji = "📊"; break;
+                case "manage": emoji = "⚙️"; break;
+                default: emoji = "•";
+            }
+            Label iconLabel = new Label(emoji);
+            iconLabel.setMinWidth(30);
+            icon = iconLabel;
+        }
+
+        // Label
+        Label label = new Label(text);
+        label.setStyle("-fx-text-fill: #666; -fx-font-size: 14px;");
+
+        // Toggle icon
+        Label toggleIcon = new Label("▶");
+        toggleIcon.setStyle("-fx-text-fill: #666; -fx-font-size: 10px;");
+
+        // Spacer
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        header.getChildren().addAll(icon, label, spacer, toggleIcon);
+
+        // Hover effect
+        header.setOnMouseEntered(e -> {
+            header.setStyle("-fx-background-color: #f5f5f5; -fx-cursor: hand;");
+            label.setStyle("-fx-text-fill: #333; -fx-font-size: 14px;");
+        });
+
+        header.setOnMouseExited(e -> {
+            if (!iconName.equals(currentSelectedMenu)) {
+                header.setStyle("-fx-background-color: transparent; -fx-cursor: hand;");
+                label.setStyle("-fx-text-fill: #666; -fx-font-size: 14px;");
+            } else {
+                header.setStyle("-fx-background-color: #e3f2fd; -fx-cursor: hand;");
+                label.setStyle("-fx-text-fill: #0091EA; -fx-font-size: 14px;");
+            }
+        });
+
+        // Click event to toggle submenu
+        header.setOnMouseClicked(e -> {
+            VBox submenu = null;
+            switch (iconName) {
+                case "training": submenu = trainingSubmenu; break;
+                case "student": submenu = studentSubmenu; break;
+                case "report": submenu = reportSubmenu; break;
+                case "manage": submenu = manageSubmenu; break;
+            }
+
+            if (submenu != null) {
+                boolean isVisible = submenu.isVisible();
+
+                // Hide all submenus first
+                trainingSubmenu.setVisible(false);
+                trainingSubmenu.setManaged(false);
+                studentSubmenu.setVisible(false);
+                studentSubmenu.setManaged(false);
+                reportSubmenu.setVisible(false);
+                reportSubmenu.setManaged(false);
+                manageSubmenu.setVisible(false);
+                manageSubmenu.setManaged(false);
+
+                // Reset all headers
+                resetMenuHeaderStyles();
+
+                // If the clicked submenu was already visible, we just closed it
+                if (!isVisible) {
+                    submenu.setVisible(true);
+                    submenu.setManaged(true);
+                    toggleIcon.setText("▼");
+                    header.setStyle("-fx-background-color: #e3f2fd; -fx-cursor: hand;");
+                    label.setStyle("-fx-text-fill: #0091EA; -fx-font-size: 14px;");
+                    currentSelectedMenu = iconName;
+                } else {
+                    toggleIcon.setText("▶");
+                    currentSelectedMenu = "";
+                }
+            }
+        });
+
+        return header;
+    }
+
+    /**
+     * Reset styles for all menu headers
+     */
+    private void resetMenuHeaderStyles() {
+        // Reset all menu headers in the sidebar
+        for (Node node : sidebar.getChildren()) {
+            if (node instanceof HBox && !(node instanceof Button)) {
+                HBox header = (HBox) node;
+                header.setStyle("-fx-background-color: transparent; -fx-cursor: hand;");
+
+                // Update label style
+                for (Node child : header.getChildren()) {
+                    if (child instanceof Label && !(((Label) child).getText().equals("▶") || ((Label) child).getText().equals("▼"))) {
+                        ((Label) child).setStyle("-fx-text-fill: #666; -fx-font-size: 14px;");
+                    }
+
+                    // Reset toggle icon
+                    if (child instanceof Label && (((Label) child).getText().equals("▶") || ((Label) child).getText().equals("▼"))) {
+                        ((Label) child).setText("▶");
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Tạo container cho submenu
+     * @return VBox chứa các mục submenu
+     */
+    private VBox createSubmenu() {
+        VBox submenu = new VBox(0);
+        submenu.setPadding(new Insets(0, 0, 0, 30));
+        submenu.setStyle("-fx-background-color: #f9f9f9;");
+        return submenu;
+    }
+
+    /**
+     * Tạo nút submenu
+     * @param text Chữ hiển thị
+     * @param route Đường dẫn điều hướng
+     * @return Button đã được cấu hình
+     */
+    private Button createSubmenuButton(String text, String route) {
+        Button button = new Button(text);
+        button.setPadding(new Insets(10, 15, 10, 15));
+        button.setMaxWidth(Double.MAX_VALUE);
+        button.setAlignment(Pos.CENTER_LEFT);
+        button.setStyle("-fx-background-color: transparent; -fx-text-fill: #666; -fx-font-size: 13px; -fx-border-color: transparent;");
+
+        // Hover effect
+        button.setOnMouseEntered(e ->
+                button.setStyle("-fx-background-color: #e9e9e9; -fx-text-fill: #333; -fx-font-size: 13px;"));
+
+        button.setOnMouseExited(e ->
+                button.setStyle("-fx-background-color: transparent; -fx-text-fill: #666; -fx-font-size: 13px;"));
+
+        // Click event
+        button.setOnAction(e -> {
+            if (navigationController != null) {
+                navigationController.navigateTo(route);
+            }
+        });
+
+        return button;
     }
 
     /**
@@ -321,10 +563,36 @@ public class UI {
         button.setOnAction(e -> {
             if (navigationController != null) {
                 navigationController.navigateTo(route);
+                // Ẩn tất cả submenu khi chuyển đến route khác
+                hideAllSubmenus();
+                resetMenuHeaderStyles();
+                currentSelectedMenu = "";
             }
         });
 
         return button;
+    }
+
+    /**
+     * Ẩn tất cả các submenu
+     */
+    private void hideAllSubmenus() {
+        if (trainingSubmenu != null) {
+            trainingSubmenu.setVisible(false);
+            trainingSubmenu.setManaged(false);
+        }
+        if (studentSubmenu != null) {
+            studentSubmenu.setVisible(false);
+            studentSubmenu.setManaged(false);
+        }
+        if (reportSubmenu != null) {
+            reportSubmenu.setVisible(false);
+            reportSubmenu.setManaged(false);
+        }
+        if (manageSubmenu != null) {
+            manageSubmenu.setVisible(false);
+            manageSubmenu.setManaged(false);
+        }
     }
 
     /**
@@ -335,7 +603,7 @@ public class UI {
         HBox footer = new HBox();
         footer.setPadding(new Insets(15));
         footer.setAlignment(Pos.CENTER);
-        footer.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-width: 1 0 0 0;");
+        footer.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-width: 5 0 0;");
 
         VBox footerContent = new VBox(5);
         footerContent.setAlignment(Pos.CENTER);
