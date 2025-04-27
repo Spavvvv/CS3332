@@ -1,11 +1,97 @@
 package src.controller;
 
-import javafx.fxml.FXML;
+import view.UI;
+import view.components.DashboardView;
+// import các view khác nếu cần
 
+/**
+ * Controller chính của ứng dụng, quản lý logic nghiệp vụ
+ */
 public class MainController {
-    @FXML
+    private UI ui;
+    private NavigationController navigationController;
+
+    /**
+     * Constructor với UI và NavigationController
+     * @param ui Interface người dùng
+     * @param navigationController Controller điều hướng
+     */
+    public MainController(UI ui, NavigationController navigationController) {
+        this.ui = ui;
+        this.navigationController = navigationController;
+        initialize();
+    }
+
+    /**
+     * Khởi tạo controller và đăng ký các màn hình
+     */
     private void initialize() {
-        // Phương thức này sẽ được gọi khi FXML được load
-        // Hiện tại để trống, chúng ta sẽ thêm logic sau
+        registerViews();
+    }
+
+    /**
+     * Đăng ký các view với NavigationController
+     */
+    private void registerViews() {
+        // Đăng ký các views với NavigationController
+        navigationController.registerView("dashboard", new DashboardView());
+
+        // TODO: Đăng ký thêm các views khác
+        // Ví dụ:
+        // navigationController.registerView("student/list", new StudentListView());
+        // navigationController.registerView("training/schedule", new ScheduleView());
+    }
+
+    /**
+     * Thực hiện hành động refresh màn hình hiện tại
+     */
+    public void refreshCurrentView() {
+        navigationController.refreshCurrentScreen();
+    }
+
+    /**
+     * Chuyển đến màn hình được chỉ định
+     * @param route Định danh của màn hình
+     */
+    public void navigateTo(String route) {
+        navigationController.navigateTo(route);
+    }
+
+    /**
+     * Xử lý khi ứng dụng khởi động
+     */
+    public void onAppStart() {
+        // Khởi tạo các tài nguyên, kết nối database, etc.
+        System.out.println("Ứng dụng khởi động...");
+
+        // Điều hướng đến màn hình mặc định
+        navigateTo("dashboard");
+    }
+
+    /**
+     * Xử lý khi ứng dụng kết thúc
+     */
+    public void onAppExit() {
+        // Dọn dẹp tài nguyên, đóng kết nối, etc.
+        System.out.println("Ứng dụng kết thúc...");
+    }
+
+    /**
+     * Xử lý đăng nhập
+     * @param username Tên đăng nhập
+     * @param password Mật khẩu
+     * @return true nếu đăng nhập thành công
+     */
+    public boolean login(String username, String password) {
+        // TODO: Implement login logic
+        return true;
+    }
+
+    /**
+     * Xử lý đăng xuất
+     */
+    public void logout() {
+        // TODO: Implement logout logic
+        navigateTo("login");
     }
 }
