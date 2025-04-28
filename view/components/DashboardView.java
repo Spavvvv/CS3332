@@ -12,8 +12,7 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import view.BaseScreenView;
-import src.controller.NavigationController;
-import src.controller.MainController;
+
 /**
  Màn hình Dashboard hiển thị tổng quan về hoạt động đào tạo
  */
@@ -28,10 +27,6 @@ public class DashboardView extends BaseScreenView {
     private VBox scheduleList;
     private VBox todayClassesList;
 
-    // Khai báo lại các biến để sử dụng trong class này
-    private NavigationController navigationController;
-    private MainController mainController;
-
     /**
      Khởi tạo Dashboard View
      */
@@ -40,19 +35,6 @@ public class DashboardView extends BaseScreenView {
         initializeView();
     }
 
-    // Ghi đè để lưu lại giá trị của NavigationController
-    @Override
-    public void setNavigationController(NavigationController navigationController) {
-        super.setNavigationController(navigationController);
-        this.navigationController = navigationController;
-    }
-
-    // Ghi đè để lưu lại giá trị của MainController
-    @Override
-    public void setMainController(MainController mainController) {
-        super.setMainController(mainController);
-        this.mainController = mainController;
-    }
 
     @Override
     public void initializeView() {

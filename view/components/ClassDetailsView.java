@@ -9,12 +9,10 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import src.model.ClassSession;
 import view.BaseScreenView;
-import src.controller.NavigationController;
-import src.controller.MainController;
 
 /**
- ClassDetailsView hiển thị thông tin chi tiết của một buổi học
- xuất hiện khi người dùng nhấn vào một lớp học trong lịch
+ * ClassDetailsView hiển thị thông tin chi tiết của một buổi học
+ * xuất hiện khi người dùng nhấn vào một lớp học trong lịch
  */
 public class ClassDetailsView extends BaseScreenView {
     private ClassSession session;
@@ -26,37 +24,24 @@ public class ClassDetailsView extends BaseScreenView {
     private Label errorLabel;
     private HBox actionBox;
 
-
-    private NavigationController navigationController;
-    private MainController mainController;
-
     public ClassDetailsView() {
         super("Chi tiết lớp học", "classDetails");
     }
 
     @Override
-    public void setNavigationController(NavigationController navigationController) {
-        super.setNavigationController(navigationController);
-        this.navigationController = navigationController;
-    }
-
-    @Override
-    public void setMainController(MainController mainController) {
-        super.setMainController(mainController);
-        this.mainController = mainController;
-    }
-
-
-    @Override
     public void initializeView() {
-// Thiết lập layout chung
+        // Thiết lập layout chung
         root.setPadding(new Insets(20));
         root.setMinWidth(400);
         root.setAlignment(Pos.CENTER);
         root.setSpacing(15);
+
+        // Đảm bảo tất cả text đều có màu đen
+        root.setStyle("-fx-text-fill: black;");
+
         // Tiêu đề lớp học
         titleLabel = new Label("Chi tiết lớp học");
-        titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: black;");
 
         // Label hiển thị lỗi
         errorLabel = new Label();
@@ -69,9 +54,11 @@ public class ClassDetailsView extends BaseScreenView {
         detailsGrid.setVgap(10);
         detailsGrid.setPadding(new Insets(10, 0, 20, 0));
         detailsGrid.setAlignment(Pos.CENTER);
+        detailsGrid.setStyle("-fx-text-fill: black;");
 
         // Khởi tạo các button hành động
         backButton = new Button("Quay lại");
+        backButton.setStyle("-fx-text-fill: black;");
         backButton.setOnAction(e -> {
             if (navigationController != null) {
                 navigationController.goBack();
@@ -79,9 +66,11 @@ public class ClassDetailsView extends BaseScreenView {
         });
 
         editButton = new Button("Chỉnh sửa");
+        editButton.setStyle("-fx-text-fill: black;");
         editButton.setOnAction(e -> handleAction("edit_class", null));
 
         deleteButton = new Button("Xóa");
+        deleteButton.setStyle("-fx-text-fill: black;");
         deleteButton.setOnAction(e -> handleAction("delete_class", null));
 
         // Box chứa các nút hành động
@@ -91,21 +80,30 @@ public class ClassDetailsView extends BaseScreenView {
 
         // Thêm các thành phần vào layout chính
         root.getChildren().addAll(titleLabel, errorLabel, detailsGrid, actionBox);
+    }
 
-        // Kiểm tra nếu đã có session được truyền vào từ main controller
+    @Override
+    public void onShow() {
+        // QUAN TRỌNG: Load session từ mainController mỗi khi view được hiển thị
+        System.out.println("ClassDetailsView.onShow() được gọi");
+
         if (mainController != null) {
+            System.out.println("mainController trong ClassDetailsView: CÓ GIÁ TRỊ");
             session = mainController.getSessionDetail();
+            System.out.println("Session đã được load: " +
+                    (session != null ? session.getCourseName() : "NULL"));
+        } else {
+            System.err.println("LỖI: mainController là null trong ClassDetailsView.onShow()");
         }
 
-        // Gọi refreshView để cập nhật giao diện
         refreshView();
-
-
     }
+
     @Override
     public void refreshView() {
-// Xóa nội dung grid hiện tại
+        // Xóa nội dung grid hiện tại
         detailsGrid.getChildren().clear();
+
         // Ẩn thông báo lỗi
         errorLabel.setVisible(false);
 
@@ -128,16 +126,16 @@ public class ClassDetailsView extends BaseScreenView {
         addDetailRow(detailsGrid, "Ngày học:", session.getFormattedDate(), row++);
         addDetailRow(detailsGrid, "Thứ:", session.getDayOfWeek(), row++);
         addDetailRow(detailsGrid, "Khung giờ:", session.getTimeSlot(), row++);
-
-
     }
+
     /**
-     Thêm một hàng thông tin vào grid
+     * Thêm một hàng thông tin vào grid
      */
     private void addDetailRow(GridPane grid, String labelText, String value, int rowIndex) {
         Label label = new Label(labelText);
-        label.setStyle("-fx-font-weight: bold;");
+        label.setStyle("-fx-font-weight: bold; -fx-text-fill: black;");
         Label valueLabel = new Label(value != null ? value : "");
+        valueLabel.setStyle("-fx-text-fill: black;");
         grid.add(label, 0, rowIndex);
         grid.add(valueLabel, 1, rowIndex);
     }
@@ -146,22 +144,24 @@ public class ClassDetailsView extends BaseScreenView {
     public boolean requiresAuthentication() {
         return true; // Yêu cầu đăng nhập để xem chi tiết lớp học
     }
+
     @Override
     public void handleSystemMessage(String message, Object data) {
         if ("class_updated".equals(message) && data instanceof ClassSession) {
             this.session = (ClassSession) data;
             refreshView();
         } else if ("class_deleted".equals(message)) {
-// Xử lý khi lớp học bị xóa - có thể quay lại màn hình trước
+            // Xử lý khi lớp học bị xóa - có thể quay lại màn hình trước
             if (navigationController != null) {
                 navigationController.goBack();
             }
         }
     }
+
     @Override
     public Object handleAction(String actionId, Object params) {
         if ("edit_class".equals(actionId)) {
-// Lưu trữ session hiện tại vào MainController trước khi chuyển trang
+            // Lưu trữ session hiện tại vào MainController trước khi chuyển trang
             if (mainController != null && session != null) {
                 mainController.setSessionDetail(session);
             }
@@ -188,8 +188,5 @@ public class ClassDetailsView extends BaseScreenView {
             }
         }
         return null;
-
-
     }
 }
-

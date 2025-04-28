@@ -9,8 +9,6 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import src.model.ClassSession;
-import src.controller.NavigationController;
-import src.controller.MainController;
 import src.controller.ScheduleController;
 import view.BaseScreenView;
 
@@ -24,9 +22,6 @@ import java.util.stream.Collectors;
  */
 public class ScheduleView extends BaseScreenView {
 
-    // Khai báo lại các biến để sử dụng trong class này
-    private NavigationController navigationController;
-    private MainController mainController;
 
     private ComboBox<String> teacherComboBox;
     private DatePicker fromDatePicker;
@@ -50,19 +45,6 @@ public class ScheduleView extends BaseScreenView {
         initializeView();
     }
 
-    // Ghi đè để lưu lại giá trị của NavigationController
-    @Override
-    public void setNavigationController(NavigationController navigationController) {
-        super.setNavigationController(navigationController);
-        this.navigationController = navigationController;
-    }
-
-    // Ghi đè để lưu lại giá trị của MainController
-    @Override
-    public void setMainController(MainController mainController) {
-        super.setMainController(mainController);
-        this.mainController = mainController;
-    }
 
     @Override
     public void initializeView() {
@@ -363,8 +345,23 @@ public class ScheduleView extends BaseScreenView {
 
         // Add click handler to show more details with proper checking using routeExists
         box.setOnMouseClicked(e -> {
-            mainController.setSessionDetail(session);
-            navigationController.navigateTo("classDetails");
+            System.out.println("========== CLICK VÀO LỊCH ==========");
+            System.out.println("Session được chọn: " + (session != null ? session.getCourseName() : "NULL"));
+            System.out.println("mainController trong ScheduleView: " + (mainController != null ? "CÓ GIÁ TRỊ" : "NULL"));
+
+            if (mainController != null) {
+                mainController.setSessionDetail(session);
+                System.out.println("Đã lưu session vào mainController");
+            } else {
+                System.err.println("LỖI: mainController là null trong ScheduleView");
+            }
+
+            if (navigationController != null) {
+                System.out.println("Chuyển đến màn hình classDetails");
+                navigationController.navigateTo("classDetails");
+            } else {
+                System.err.println("LỖI: navigationController là null trong ScheduleView");
+            }
         });
 
         // Thêm cursor pointer để chỉ ra rằng phần tử này có thể click

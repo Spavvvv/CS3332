@@ -94,6 +94,9 @@ public interface ScreenView {
      @return Kết quả xử lý (có thể là null)
      */
     Object handleAction(String actionId, Object params);
+
+
+    void onShow(); //For showing the screen when the user is on another screen
 }
 
 

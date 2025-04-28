@@ -57,6 +57,7 @@ public class MainController {
             if (view != null) {
                 // Cung cấp reference đến MainController cho view có thể sử dụng
                 view.setMainController(this);
+                System.out.println("MainController set for view: " + view.getTitle());
             }
         }
     }

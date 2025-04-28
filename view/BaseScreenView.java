@@ -160,4 +160,11 @@ public abstract class BaseScreenView implements ScreenView {
         // Mặc định trả về true
         return true;
     }
+
+    @Override
+    public void onShow() {
+        // Phương thức rỗng để các lớp con có thể ghi đè
+        System.out.println("BaseScreenView.onShow() cho " + viewId);
+    }
+
 }

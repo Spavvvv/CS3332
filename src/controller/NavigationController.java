@@ -49,24 +49,35 @@ public class NavigationController {
             ui.showError("Route không tồn tại: " + route);
             return false;
         }
+
         // Kiểm tra xem view hiện tại có cho phép rời đi không
         if (currentView != null && !currentView.onDeactivate()) {
             return false;
         }
+
         ScreenView targetView = viewsMap.get(route);
+
         // Cập nhật UI với nội dung của view mới
         ui.setContent(targetView.getRoot());
+
         // Lưu route hiện tại vào lịch sử
         if (!currentRoute.isEmpty()) {
             updateNavigationHistory(currentRoute);
         }
+
         // Lưu lại route và view hiện tại
         currentRoute = route;
         currentView = targetView;
+
+        // Gọi onShow() trước onActivate để chuẩn bị dữ liệu
+        targetView.onShow();
+
         // Thông báo cho view biết nó đã được kích hoạt
         targetView.onActivate();
+
         return true;
     }
+
 
     /**
      Cập nhật lịch sử điều hướng
