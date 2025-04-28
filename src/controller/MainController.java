@@ -1,7 +1,9 @@
 package src.controller;
 
+import src.model.ClassSession;
 import view.UI;
 import view.components.DashboardView;
+import view.components.ScheduleView;
 // import các view khác nếu cần
 
 /**
@@ -10,6 +12,7 @@ import view.components.DashboardView;
 public class MainController {
     private UI ui;
     private NavigationController navigationController;
+    private ClassSession currentSessionDetail; // Added to store current session detail
 
     /**
      * Constructor với UI và NavigationController
@@ -39,7 +42,7 @@ public class MainController {
         // TODO: Đăng ký thêm các views khác
         // Ví dụ:
         // navigationController.registerView("student/list", new StudentListView());
-        // navigationController.registerView("training/schedule", new ScheduleView());
+         navigationController.registerView("schedule", new ScheduleView());
     }
 
     /**
@@ -93,5 +96,21 @@ public class MainController {
     public void logout() {
         // TODO: Implement logout logic
         navigateTo("login");
+    }
+
+    /**
+     * Lưu trữ thông tin chi tiết của một buổi học
+     * @param session Buổi học cần lưu trữ
+     */
+    public void setSessionDetail(ClassSession session) {
+        this.currentSessionDetail = session;
+    }
+
+    /**
+     * Lấy thông tin chi tiết của buổi học đang được chọn
+     * @return Thông tin buổi học
+     */
+    public ClassSession getSessionDetail() {
+        return currentSessionDetail;
     }
 }

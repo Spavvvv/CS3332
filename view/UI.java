@@ -292,43 +292,40 @@ public class UI {
         HBox trainingHeader = createMenuHeaderWithToggle("Đào tạo", "training");
         trainingSubmenu = createSubmenu();
         trainingSubmenu.getChildren().addAll(
-                createSubmenuButton("Tổng quan đào tạo", "training-overview"),
-                createSubmenuButton("Lớp học", "classes"),
-                createSubmenuButton("Khóa học", "courses"),
-                createSubmenuButton("Giáo viên", "teachers"),
-                createSubmenuButton("Thời khóa biểu", "schedule")
+                createSubmenuButton("Lịch học", "schedule"),
+                createSubmenuButton("Điểm danh", "attendance"),
+                createSubmenuButton("Học tập", "learning"),
+                createSubmenuButton("Kỳ thi", "exams"),
+                createSubmenuButton("Chứng chỉ", "certificates")
         );
         trainingSubmenu.setVisible(false);
         trainingSubmenu.setManaged(false);
 
-        HBox studentHeader = createMenuHeaderWithToggle("Học viên", "student");
+        HBox studentHeader = createMenuHeaderWithToggle("Học viên", "students");
         studentSubmenu = createSubmenu();
         studentSubmenu.getChildren().addAll(
-                createSubmenuButton("Danh sách học viên", "student-list"),
-                createSubmenuButton("Đăng ký học", "registrations"),
-                createSubmenuButton("Điểm danh", "attendance"),
-                createSubmenuButton("Học phí", "tuition")
+                createSubmenuButton("Học viên", "student-list"),
+                createSubmenuButton("Lớp học", "classes")
         );
         studentSubmenu.setVisible(false);
         studentSubmenu.setManaged(false);
 
-        HBox reportHeader = createMenuHeaderWithToggle("Báo cáo", "report");
+        HBox reportHeader = createMenuHeaderWithToggle("Báo cáo", "reports");
         reportSubmenu = createSubmenu();
         reportSubmenu.getChildren().addAll(
-                createSubmenuButton("Báo cáo học viên", "student-reports"),
-                createSubmenuButton("Báo cáo lớp học", "class-reports"),
-                createSubmenuButton("Báo cáo tài chính", "financial-reports"),
-                createSubmenuButton("Báo cáo giáo viên", "teacher-reports")
+                createSubmenuButton("Tình hình học tập", "learning-reports"),
+                createSubmenuButton("Báo cáo công việc", "work-reports"),
+                createSubmenuButton("Thống kê giờ giảng", "teaching-statistics")
         );
         reportSubmenu.setVisible(false);
         reportSubmenu.setManaged(false);
 
-        HBox manageHeader = createMenuHeaderWithToggle("Quản lý", "manage");
+        HBox manageHeader = createMenuHeaderWithToggle("Quản lý", "management");
         manageSubmenu = createSubmenu();
         manageSubmenu.getChildren().addAll(
-                createSubmenuButton("Người dùng", "user-management"),
-                createSubmenuButton("Phân quyền", "role-management"),
-                createSubmenuButton("Cấu hình hệ thống", "system-config"),
+                createSubmenuButton("Phòng học", "classrooms"),
+                createSubmenuButton("Tin tức", "news"),
+                createSubmenuButton("Ngày nghỉ", "holidays"),
                 createSubmenuButton("Cài đặt", "settings")
         );
         manageSubmenu.setVisible(false);
@@ -603,7 +600,7 @@ public class UI {
         HBox footer = new HBox();
         footer.setPadding(new Insets(15));
         footer.setAlignment(Pos.CENTER);
-        footer.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-width: 5 0 0;");
+        footer.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-width: 3 0 0;");
 
         VBox footerContent = new VBox(5);
         footerContent.setAlignment(Pos.CENTER);

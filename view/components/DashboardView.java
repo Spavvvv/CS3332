@@ -181,15 +181,15 @@ public class DashboardView implements ScreenView {
         statsContainer.setAlignment(Pos.CENTER);
 
         // Statistics Card 1 - Tổng số học viên
-        VBox studentStats = createStatsCard("Tổng số học viên", "284", "#4CAF50");
+        VBox studentStats = createStatsCard("Tổng số học viên", "0", "#4CAF50");
         totalStudentsLabel = (Label) studentStats.getChildren().get(0);
 
         // Statistics Card 2 - Tổng số lớp học
-        VBox classStats = createStatsCard("Tổng số lớp học", "105", "#FF9800");
+        VBox classStats = createStatsCard("Tổng số lớp học", "0", "#FF9800");
         totalClassesLabel = (Label) classStats.getChildren().get(0);
 
         // Statistics Card 3 - Tỷ lệ đi học
-        VBox attendanceStats = createStatsCard("Tỷ lệ đi học", "90%", "#2196F3");
+        VBox attendanceStats = createStatsCard("Tỷ lệ đi học", "0%", "#2196F3");
         attendanceRateLabel = (Label) attendanceStats.getChildren().get(0);
 
         statsContainer.getChildren().addAll(studentStats, classStats, attendanceStats);
