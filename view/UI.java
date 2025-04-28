@@ -367,9 +367,9 @@ public class UI {
             String emoji = "";
             switch (iconName) {
                 case "training": emoji = "📚"; break;
-                case "student": emoji = "👥"; break;
-                case "report": emoji = "📊"; break;
-                case "manage": emoji = "⚙️"; break;
+                case "students": emoji = "👥"; break; // Sửa từ "student" thành "students"
+                case "reports": emoji = "📊"; break;  // Sửa từ "report" thành "reports"
+                case "management": emoji = "⚙️"; break; // Sửa từ "manage" thành "management"
                 default: emoji = "•";
             }
             Label iconLabel = new Label(emoji);
@@ -412,9 +412,9 @@ public class UI {
             VBox submenu = null;
             switch (iconName) {
                 case "training": submenu = trainingSubmenu; break;
-                case "student": submenu = studentSubmenu; break;
-                case "report": submenu = reportSubmenu; break;
-                case "manage": submenu = manageSubmenu; break;
+                case "students": submenu = studentSubmenu; break; // Sửa từ "student" thành "students"
+                case "reports": submenu = reportSubmenu; break;   // Sửa từ "report" thành "reports"
+                case "management": submenu = manageSubmenu; break; // Sửa từ "manage" thành "management"
             }
 
             if (submenu != null) {
@@ -450,6 +450,7 @@ public class UI {
 
         return header;
     }
+
 
     /**
      * Reset styles for all menu headers

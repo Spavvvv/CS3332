@@ -5,4 +5,5 @@ module CS3323 {
     requires java.sql;
     exports view;
     exports src.controller;
+    exports src.model;
 }

@@ -12,7 +12,7 @@ import src.model.ClassSession;
 import src.controller.NavigationController;
 import src.controller.MainController;
 import src.controller.ScheduleController;
-import view.ScreenView;
+import view.BaseScreenView;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -22,14 +22,11 @@ import java.util.stream.Collectors;
 /**
  * ScheduleView hiển thị lịch học theo tuần với các chức năng lọc và hiển thị thông tin lớp học.
  */
-public class ScheduleView implements ScreenView {
+public class ScheduleView extends BaseScreenView {
 
-    private VBox root;
-    private String title;
-    private String viewId;
+    // Khai báo lại các biến để sử dụng trong class này
     private NavigationController navigationController;
     private MainController mainController;
-    private ScheduleController scheduleController;
 
     private ComboBox<String> teacherComboBox;
     private DatePicker fromDatePicker;
@@ -38,6 +35,7 @@ public class ScheduleView implements ScreenView {
     private Button prevWeekButton;
     private Button nextWeekButton;
     private GridPane scheduleGrid;
+    private ScheduleController scheduleController;
 
     // List to store class sessions
     private List<ClassSession> classSessions;
@@ -45,16 +43,32 @@ public class ScheduleView implements ScreenView {
     private Map<String, String> classColorMap;
 
     public ScheduleView() {
-        this.title = "Lịch học";
-        this.viewId = "schedule";
-        this.root = new VBox();
+        super("Lịch học", "schedule");
         this.classColorMap = new HashMap<>();
         scheduleController = new ScheduleController();
+
         initializeView();
+    }
+
+    // Ghi đè để lưu lại giá trị của NavigationController
+    @Override
+    public void setNavigationController(NavigationController navigationController) {
+        super.setNavigationController(navigationController);
+        this.navigationController = navigationController;
+    }
+
+    // Ghi đè để lưu lại giá trị của MainController
+    @Override
+    public void setMainController(MainController mainController) {
+        super.setMainController(mainController);
+        this.mainController = mainController;
     }
 
     @Override
     public void initializeView() {
+        // Đảm bảo root đã được xóa sạch trước khi bắt đầu
+        root.getChildren().clear();
+
         root.setSpacing(10);
         root.setPadding(new Insets(20));
 
@@ -64,6 +78,7 @@ public class ScheduleView implements ScreenView {
         // Tạo lịch học
         scheduleGrid = createScheduleGrid();
 
+        // Chỉ thêm các thành phần này vào root một lần
         root.getChildren().addAll(controlPanel, scheduleGrid);
     }
 
@@ -188,6 +203,85 @@ public class ScheduleView implements ScreenView {
     }
 
     /**
+     * Điền dữ liệu lịch học vào bảng đã được tạo sẵn
+     */
+    private void populateSchedule() {
+        // Xóa tất cả các ô lịch trình (giữ lại tiêu đề)
+        clearScheduleGrid();
+
+        // Lấy ngày bắt đầu của tuần hiện tại
+        LocalDate startDate = fromDatePicker.getValue();
+        List<LocalDate> weekDates = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            weekDates.add(startDate.plusDays(i));
+        }
+
+        // Thêm nhãn ngày vào hàng ngày
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM");
+        for (int i = 0; i < 7; i++) {
+            Label dateLabel = new Label(weekDates.get(i).format(formatter));
+            dateLabel.setStyle("-fx-padding: 10;");
+            dateLabel.setAlignment(Pos.CENTER);
+            dateLabel.setPrefWidth(150);
+            scheduleGrid.add(dateLabel, i + 1, 1);
+        }
+
+        // Lấy các khoảng thời gian duy nhất và sắp xếp chúng
+        Set<String> timeSlots = new HashSet<>();
+        for (ClassSession session : classSessions) {
+            timeSlots.add(session.getTimeSlot());
+        }
+
+        List<String> sortedTimeSlots = new ArrayList<>(timeSlots);
+        Collections.sort(sortedTimeSlots);
+
+        // Tạo các hàng khoảng thời gian
+        int rowIndex = 2;
+        for (String timeSlot : sortedTimeSlots) {
+            Label timeLabel = new Label(timeSlot);
+            timeLabel.setStyle("-fx-padding: 10;");
+            timeLabel.setAlignment(Pos.CENTER);
+            scheduleGrid.add(timeLabel, 0, rowIndex);
+
+            // Thêm ô phiên cho mỗi ngày trong khoảng thời gian này
+            for (int day = 0; day < 7; day++) {
+                ScrollPane scrollPane = new ScrollPane();
+                scrollPane.setFitToWidth(true);
+                scrollPane.setStyle("-fx-background-color: transparent;");
+
+                VBox dayContainer = new VBox(5);
+                dayContainer.setPadding(new Insets(5));
+                scrollPane.setContent(dayContainer);
+
+                scheduleGrid.add(scrollPane, day + 1, rowIndex);
+
+                LocalDate currentDate = weekDates.get(day);
+
+                // Tìm các phiên cho ngày và khoảng thời gian này
+                List<ClassSession> daySessions = classSessions.stream()
+                        .filter(session -> session.getDate().equals(currentDate) &&
+                                session.getTimeSlot().equals(timeSlot))
+                        .collect(Collectors.toList());
+
+                for (ClassSession session : daySessions) {
+                    VBox box = createSessionBox(session);
+                    dayContainer.getChildren().add(box);
+                }
+            }
+
+            rowIndex++;
+        }
+
+        // Nếu không tìm thấy khoảng thời gian nào, thêm một hàng trống
+        if (timeSlots.isEmpty()) {
+            Label emptyLabel = new Label("Không có lịch học");
+            emptyLabel.setStyle("-fx-padding: 10; -fx-alignment: center;");
+            emptyLabel.setMaxWidth(Double.MAX_VALUE);
+            scheduleGrid.add(emptyLabel, 0, 2, 8, 1);
+        }
+    }
+
+    /**
      * Phương thức cập nhật giao diện lịch học
      */
     public void refreshView() {
@@ -213,90 +307,31 @@ public class ScheduleView implements ScreenView {
             }
         }
 
-        // Tạo lại bảng lịch học
-        scheduleGrid = createScheduleGrid();
+        // Cập nhật dữ liệu trong grid - KHÔNG tạo grid mới
         populateSchedule();
-
-        // Cập nhật giao diện
-        if (root.getChildren().size() > 1) {
-            root.getChildren().set(1, scheduleGrid);
-        } else {
-            root.getChildren().add(scheduleGrid);
-        }
     }
 
-    private void populateSchedule() {
-        // Get the current week's dates
-        LocalDate startDate = fromDatePicker.getValue();
-        List<LocalDate> weekDates = new ArrayList<>();
-        for (int i = 0; i < 7; i++) {
-            weekDates.add(startDate.plusDays(i));
-        }
+    /**
+     * Xóa dữ liệu trong bảng lịch học hiện tại để chuẩn bị điền dữ liệu mới
+     * Chỉ giữ lại 2 hàng đầu (hàng tiêu đề và hàng ngày)
+     */
+    private void clearScheduleGrid() {
+        // Lấy tất cả các node hiện tại trong grid
+        List<Node> toRemove = new ArrayList<>();
 
-        // Add date labels to date row
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM");
-        for (int i = 0; i < 7; i++) {
-            Label dateLabel = new Label(weekDates.get(i).format(formatter));
-            dateLabel.setStyle("-fx-padding: 10;");
-            dateLabel.setAlignment(Pos.CENTER);
-            dateLabel.setPrefWidth(150);
-            scheduleGrid.add(dateLabel, i + 1, 1);
-        }
-
-        // Get unique time slots and sort them
-        Set<String> timeSlots = new HashSet<>();
-        for (ClassSession session : classSessions) {
-            timeSlots.add(session.getTimeSlot());
-        }
-
-        List<String> sortedTimeSlots = new ArrayList<>(timeSlots);
-        Collections.sort(sortedTimeSlots);
-
-        // Create time slot rows
-        int rowIndex = 2;
-        for (String timeSlot : sortedTimeSlots) {
-            Label timeLabel = new Label(timeSlot);
-            timeLabel.setStyle("-fx-padding: 10;");
-            timeLabel.setAlignment(Pos.CENTER);
-            scheduleGrid.add(timeLabel, 0, rowIndex);
-
-            // Add session boxes for each day in this time slot
-            for (int day = 0; day < 7; day++) {
-                ScrollPane scrollPane = new ScrollPane();
-                scrollPane.setFitToWidth(true);
-                scrollPane.setStyle("-fx-background-color: transparent;");
-
-                VBox dayContainer = new VBox(5);
-                dayContainer.setPadding(new Insets(5));
-                scrollPane.setContent(dayContainer);
-
-                scheduleGrid.add(scrollPane, day + 1, rowIndex);
-
-                LocalDate currentDate = weekDates.get(day);
-
-                // Find sessions for this day and time slot
-                List<ClassSession> daySessions = classSessions.stream()
-                        .filter(session -> session.getDate().equals(currentDate) &&
-                                session.getTimeSlot().equals(timeSlot))
-                        .collect(Collectors.toList());
-
-                for (ClassSession session : daySessions) {
-                    VBox box = createSessionBox(session);
-                    dayContainer.getChildren().add(box);
-                }
+        // Xác định các node cần xóa - tất cả các node ở hàng > 1
+        for (Node node : scheduleGrid.getChildren()) {
+            Integer rowIndex = GridPane.getRowIndex(node);
+            if (rowIndex != null && rowIndex > 1) {
+                toRemove.add(node);
             }
-
-            rowIndex++;
         }
 
-        // If no time slots were found, add an empty row
-        if (timeSlots.isEmpty()) {
-            Label emptyLabel = new Label("Không có lịch học");
-            emptyLabel.setStyle("-fx-padding: 10;");
-            scheduleGrid.add(emptyLabel, 0, 2, 8, 1);
-        }
+        // Xóa các node đã xác định
+        scheduleGrid.getChildren().removeAll(toRemove);
     }
 
+    // Sửa phương thức createSessionBox để có kiểm tra
     private VBox createSessionBox(ClassSession session) {
         VBox box = new VBox(5);
         box.setPadding(new Insets(8));
@@ -315,15 +350,25 @@ public class ScheduleView implements ScreenView {
 
         box.getChildren().addAll(titleLabel, teacherLabel, roomLabel);
 
-        // Add click handler to show more details
+        // Thêm hiệu ứng khi hover
+        box.setOnMouseEntered(e ->
+                box.setStyle("-fx-background-color: " + getColorForClass(session.getClassName()) +
+                        "; -fx-background-radius: 5; -fx-border-radius: 5; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.4), 5, 0, 0, 0);")
+        );
+
+        box.setOnMouseExited(e ->
+                box.setStyle("-fx-background-color: " + getColorForClass(session.getClassName()) +
+                        "; -fx-background-radius: 5; -fx-border-radius: 5;")
+        );
+
+        // Add click handler to show more details with proper checking using routeExists
         box.setOnMouseClicked(e -> {
-            if (navigationController != null) {
-                // Store session details in main controller for access by details view
-                mainController.setSessionDetail(session);
-                // Navigate to session details view
-                navigationController.navigateTo("classDetails");
-            }
+            mainController.setSessionDetail(session);
+            navigationController.navigateTo("classDetails");
         });
+
+        // Thêm cursor pointer để chỉ ra rằng phần tử này có thể click
+        box.setCursor(javafx.scene.Cursor.HAND);
 
         return box;
     }
@@ -351,56 +396,17 @@ public class ScheduleView implements ScreenView {
         return "Chọn".equals(teacher) ? null : teacher;
     }
 
-    /**
-     * Thiết lập controller cho view
-     * @param scheduleController Controller quản lý lịch học
-     */
-    public void setScheduleController(ScheduleController scheduleController) {
-        this.scheduleController = scheduleController;
-    }
+    // BaseScreenView overrides
 
-    // ScreenView interface implementation
-
-    @Override
-    public Node getRoot() {
-        return root;
-    }
-
+    // Sửa phần onActivate để đảm bảo controllers được khởi tạo
     @Override
     public void onActivate() {
-        // Tải dữ liệu khi view được kích hoạt
         refreshView();
     }
 
     @Override
     public boolean onDeactivate() {
         // Return true to allow deactivation
-        return true;
-    }
-
-    @Override
-    public String getTitle() {
-        return title;
-    }
-
-    @Override
-    public void setNavigationController(NavigationController navigationController) {
-        this.navigationController = navigationController;
-    }
-
-    @Override
-    public void setMainController(MainController mainController) {
-        this.mainController = mainController;
-    }
-
-    @Override
-    public String getViewId() {
-        return viewId;
-    }
-
-    @Override
-    public boolean requiresAuthentication() {
-        // This view requires authentication
         return true;
     }
 

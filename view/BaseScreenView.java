@@ -4,6 +4,8 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.scene.Node;
 import javafx.scene.layout.VBox;
+import src.controller.NavigationController;
+import src.controller.MainController;
 
 /**
  * Lớp cơ sở triển khai interface ScreenView.
@@ -14,6 +16,9 @@ public abstract class BaseScreenView implements ScreenView {
 
     protected VBox root;
     protected StringProperty title = new SimpleStringProperty("Unnamed Screen");
+    protected String viewId = "base-view";
+    protected NavigationController navigationController;
+    protected MainController mainController;
 
     public BaseScreenView() {
         root = new VBox();
@@ -23,6 +28,11 @@ public abstract class BaseScreenView implements ScreenView {
     public BaseScreenView(String title) {
         this();
         this.title.set(title);
+    }
+
+    public BaseScreenView(String title, String viewId) {
+        this(title);
+        this.viewId = viewId;
     }
 
     @Override
@@ -48,8 +58,61 @@ public abstract class BaseScreenView implements ScreenView {
     }
 
     @Override
+    public abstract void initializeView();
+
+    @Override
     public String getTitle() {
         return title.get();
+    }
+
+    @Override
+    public void setNavigationController(NavigationController navigationController) {
+        this.navigationController = navigationController;
+    }
+
+    @Override
+    public void setMainController(MainController mainController) {
+        this.mainController = mainController;
+    }
+
+    /**
+     * Lấy đối tượng NavigationController
+     * @return đối tượng NavigationController đã được thiết lập
+     */
+    @Override
+    public NavigationController getNavigationController() {
+        return this.navigationController;
+    }
+
+    /**
+     * Lấy đối tượng MainController
+     * @return đối tượng MainController đã được thiết lập
+     */
+    @Override
+    public MainController getMainController() {
+        return this.mainController;
+    }
+
+    @Override
+    public String getViewId() {
+        return viewId;
+    }
+
+    @Override
+    public boolean requiresAuthentication() {
+        // Mặc định không yêu cầu xác thực
+        return false;
+    }
+
+    @Override
+    public void handleSystemMessage(String message, Object data) {
+        // Mặc định không xử lý, các lớp con có thể ghi đè
+    }
+
+    @Override
+    public Object handleAction(String actionId, Object params) {
+        // Mặc định không xử lý, các lớp con có thể ghi đè
+        return null;
     }
 
     /**

@@ -1,10 +1,10 @@
 package src.controller;
 
 import src.model.ClassSession;
+import view.ScreenView;
 import view.UI;
-import view.components.DashboardView;
-import view.components.ScheduleView;
-// import các view khác nếu cần
+import view.components.*;
+import view.BaseScreenView;
 
 /**
  * Controller chính của ứng dụng, quản lý logic nghiệp vụ
@@ -30,6 +30,8 @@ public class MainController {
      */
     private void initialize() {
         registerViews();
+        // Thiết lập main controller cho tất cả các view đã đăng ký
+        setMainControllerForAllViews();
     }
 
     /**
@@ -38,11 +40,35 @@ public class MainController {
     private void registerViews() {
         // Đăng ký các views với NavigationController
         navigationController.registerView("dashboard", new DashboardView());
-
         // TODO: Đăng ký thêm các views khác
         // Ví dụ:
         // navigationController.registerView("student/list", new StudentListView());
-         navigationController.registerView("schedule", new ScheduleView());
+        navigationController.registerView("schedule", new ScheduleView());
+        navigationController.registerView("classDetails", new ClassDetailsView());
+        //navigationController.registerView("chat", new ScheduleView());
+    }
+
+    /**
+     * Thiết lập MainController cho tất cả các view đã đăng ký
+     */
+    private void setMainControllerForAllViews() {
+        for (String route : navigationController.getRegisteredRoutes()) {
+            ScreenView view = navigationController.getViewByRoute(route);
+            if (view != null) {
+                // Cung cấp reference đến MainController cho view có thể sử dụng
+                view.setMainController(this);
+            }
+        }
+    }
+
+    /**
+     * Thiết lập MainController cho một view cụ thể
+     * @param view View cần thiết lập MainController
+     */
+    public void setMainControllerForView(BaseScreenView view) {
+        if (view != null) {
+            view.setMainController(this);
+        }
     }
 
     /**
@@ -66,7 +92,6 @@ public class MainController {
     public void onAppStart() {
         // Khởi tạo các tài nguyên, kết nối database, etc.
         System.out.println("Ứng dụng khởi động...");
-
         // Điều hướng đến màn hình mặc định
         navigateTo("dashboard");
     }
@@ -112,5 +137,62 @@ public class MainController {
      */
     public ClassSession getSessionDetail() {
         return currentSessionDetail;
+    }
+
+    /**
+     * Lấy thông tin chi tiết của buổi học theo ID
+     * @param id ID của buổi học
+     * @return Thông tin buổi học hoặc null nếu không tìm thấy
+     */
+    public ClassSession getClassSessionById(long id) {
+        // TODO: Implement - Truy vấn dữ liệu từ database dựa vào ID
+        // Giả lập: Nếu ID trùng với currentSessionDetail thì trả về
+        if (currentSessionDetail != null && id == currentSessionDetail.getId()) {
+            return currentSessionDetail;
+        }
+        return null;
+    }
+
+    /**
+     * Xóa một buổi học khỏi hệ thống
+     * @param id ID của buổi học cần xóa
+     * @return true nếu xóa thành công
+     */
+    public boolean deleteClassSession(long id) {
+        // TODO: Implement - Xóa session từ database
+        // Giả lập: Luôn trả về thành công
+        if (currentSessionDetail != null && id == currentSessionDetail.getId()) {
+            // Thông báo cho các view rằng session đã bị xóa
+            if (navigationController != null) {
+                navigationController.getCurrentView().handleSystemMessage("class_deleted", id);
+            }
+            currentSessionDetail = null;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Lấy instance của MainController
+     * @return Instance của MainController
+     */
+    public MainController getMainController() {
+        return this;
+    }
+
+    /**
+     * Lấy instance của NavigationController
+     * @return Instance của NavigationController
+     */
+    public NavigationController getNavigationController() {
+        return this.navigationController;
+    }
+
+    /**
+     * Lấy instance của UI
+     * @return Instance của UI
+     */
+    public UI getUI() {
+        return this.ui;
     }
 }
