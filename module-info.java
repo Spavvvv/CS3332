@@ -3,6 +3,8 @@ module CS3323 {
     requires javafx.controls;
     requires javafx.graphics;
     requires java.sql;
+    requires java.desktop;
+
     exports view;
     exports src.controller;
     exports src.model;

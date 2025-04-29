@@ -5,6 +5,9 @@ import view.ScreenView;
 import view.UI;
 import view.components.*;
 import view.BaseScreenView;
+import src.model.attendance.*;
+
+import java.util.List;
 
 /**
  * Controller chính của ứng dụng, quản lý logic nghiệp vụ
@@ -13,6 +16,10 @@ public class MainController {
     private UI ui;
     private NavigationController navigationController;
     private ClassSession currentSessionDetail; // Added to store current session detail
+
+    // Field to store attendance records for the current session
+    private List<Attendance> currentSessionAttendances;
+
 
     /**
      * Constructor với UI và NavigationController
@@ -47,7 +54,7 @@ public class MainController {
         navigationController.registerView("classDetails", new ClassDetailsView());
         navigationController.registerView("attendance", new AttendanceScreenView());
         navigationController.registerView("absence-call-view", new AbsenceCallView());
-        //navigationController.registerView("chat", new ScheduleView());
+        //navigationController.registerView("attendance-view", new ClassAttendanceView());
     }
 
     /**
@@ -198,4 +205,11 @@ public class MainController {
     public UI getUI() {
         return this.ui;
     }
+
+    public void setSessionAttendances(List<Attendance> attendances) {
+        // Store the attendance records for the current session
+        // This would typically be used when navigating from the attendance list to detailed attendance view
+        this.currentSessionAttendances = attendances;
+    }
+
 }

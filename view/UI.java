@@ -294,7 +294,6 @@ public class UI {
         trainingSubmenu.getChildren().addAll(
                 createSubmenuButton("Lịch học", "schedule"),
                 createSubmenuButton("Điểm danh", "attendance"),
-                createSubmenuButton("Học tập", "learning"),
                 createSubmenuButton("Kỳ thi", "exams"),
                 createSubmenuButton("Chứng chỉ", "certificates")
         );
