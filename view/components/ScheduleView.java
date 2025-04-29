@@ -113,6 +113,7 @@ public class ScheduleView extends BaseScreenView {
         nextWeekButton.setOnAction(e -> navigateToNextWeek());
         searchButton.setOnAction(e -> refreshView());
 
+
         return controlPanel;
     }
 

@@ -19,10 +19,12 @@ public abstract class BaseScreenView implements ScreenView {
     protected String viewId = "base-view";
     protected NavigationController navigationController;
     protected MainController mainController;
+    private boolean initialized = false;
 
     public BaseScreenView() {
         root = new VBox();
-        initializeView();
+        // Không gọi initializeView() ngay lập tức để tránh NullPointerException
+        // khi lớp con đang trong quá trình khởi tạo
     }
 
     public BaseScreenView(String title) {
@@ -37,12 +39,26 @@ public abstract class BaseScreenView implements ScreenView {
 
     @Override
     public Node getRoot() {
+        // Đảm bảo view đã được khởi tạo khi yêu cầu root
+        ensureInitialized();
         return root;
+    }
+
+    /**
+     * Đảm bảo view đã được khởi tạo. Phương thức này được gọi
+     * khi cần truy cập các thành phần đã khởi tạo của view.
+     */
+    protected void ensureInitialized() {
+        if (!initialized) {
+            initializeView();
+            initialized = true;
+        }
     }
 
     @Override
     public void onActivate() {
-        // Triển khai mặc định - các lớp con có thể ghi đè
+        // Đảm bảo view đã được khởi tạo trước khi active
+        ensureInitialized();
         refreshView();
     }
 
@@ -136,7 +152,7 @@ public abstract class BaseScreenView implements ScreenView {
      * Hiển thị thông báo lỗi cho người dùng
      * @param message Nội dung lỗi cần hiển thị
      */
-    protected void showError(String message) {
+    public void showError(String message) {
         // TODO: Triển khai hiển thị thông báo lỗi
         System.err.println("Error: " + message);
     }
@@ -145,7 +161,7 @@ public abstract class BaseScreenView implements ScreenView {
      * Hiển thị thông báo thành công cho người dùng
      * @param message Nội dung thông báo
      */
-    protected void showSuccess(String message) {
+    public void showSuccess(String message) {
         // TODO: Triển khai hiển thị thông báo thành công
         System.out.println("Success: " + message);
     }
@@ -163,8 +179,8 @@ public abstract class BaseScreenView implements ScreenView {
 
     @Override
     public void onShow() {
-        // Phương thức rỗng để các lớp con có thể ghi đè
+        // Đảm bảo view đã được khởi tạo trước khi hiển thị
+        ensureInitialized();
         System.out.println("BaseScreenView.onShow() cho " + viewId);
     }
-
 }

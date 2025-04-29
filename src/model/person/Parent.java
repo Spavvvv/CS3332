@@ -15,6 +15,8 @@ public class Parent extends Person {
         this.children = new ArrayList<>();
     }
 
+    public Parent() {}
+
     @Override
     public String getRole() {
         return "Parent";

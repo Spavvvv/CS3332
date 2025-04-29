@@ -601,7 +601,7 @@ public class UI {
         HBox footer = new HBox();
         footer.setPadding(new Insets(15));
         footer.setAlignment(Pos.CENTER);
-        footer.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-width: 3 0 0;");
+        footer.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-width: 2 5 0;");
 
         VBox footerContent = new VBox(5);
         footerContent.setAlignment(Pos.CENTER);

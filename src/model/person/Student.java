@@ -17,6 +17,10 @@ public class Student extends Person {
         this.parent = parent;
     }
 
+    public Student() {
+        super();
+    }
+
     @Override
     public String getRole() {
         return "Student";

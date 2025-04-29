@@ -22,6 +22,8 @@ public abstract class Person {
         this.status = "Active";
     }
 
+    public Person() {}
+
     // Abstract method that all subclasses must implement
     public abstract String getRole();
 

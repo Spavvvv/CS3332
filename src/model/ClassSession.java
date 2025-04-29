@@ -20,6 +20,10 @@ public class ClassSession {
         this.date = date;
         this.timeSlot = timeSlot;
     }
+
+    public ClassSession(){
+
+    }
     // Getters and setters
     public long getId() {
         return id;

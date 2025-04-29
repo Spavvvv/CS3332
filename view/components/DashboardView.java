@@ -257,7 +257,7 @@ public class DashboardView extends BaseScreenView {
         section.setPadding(new Insets(15));
         section.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
         Label sectionTitle = new Label("Khóa học");
-        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: Black;");
 // Tạo biểu đồ tròn
         courseChart = new PieChart();
         courseChart.setLabelsVisible(false);
@@ -334,7 +334,7 @@ public class DashboardView extends BaseScreenView {
         HBox headerBox = new HBox(10);
         headerBox.setAlignment(Pos.CENTER_LEFT);
         Label sectionTitle = new Label("Lịch hẹn");
-        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: Black;");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         Button addButton = new Button("+");
@@ -359,7 +359,7 @@ public class DashboardView extends BaseScreenView {
         section.setPadding(new Insets(15));
         section.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
         Label sectionTitle = new Label("Lớp học hôm nay");
-        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: Black;");
         todayClassesList = new VBox(15);
 // Lớp học 1
         HBox class1 = createClassItem("08:15", "Lớp 12A1", "#4CAF50");
@@ -431,7 +431,7 @@ public class DashboardView extends BaseScreenView {
      Cập nhật biểu đồ khóa học
      */
     private void updateCourseChart() {
-// Trong thực tế, dữ liệu này sẽ được lấy từ service hoặc controller
+    // Trong thực tế, dữ liệu này sẽ được lấy từ service hoặc controller
         ObservableList<PieChart.Data> updatedData = FXCollections.observableArrayList(
                 new PieChart.Data("Lớp chính - 8 buổi", 40),
                 new PieChart.Data("Lớp chính", 25),

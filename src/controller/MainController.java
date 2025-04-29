@@ -45,6 +45,8 @@ public class MainController {
         // navigationController.registerView("student/list", new StudentListView());
         navigationController.registerView("schedule", new ScheduleView());
         navigationController.registerView("classDetails", new ClassDetailsView());
+        navigationController.registerView("attendance", new AttendanceScreenView());
+        navigationController.registerView("absence-call-view", new AbsenceCallView());
         //navigationController.registerView("chat", new ScheduleView());
     }
 
