@@ -15,6 +15,10 @@ import javafx.stage.Stage;
 import src.controller.MainController;
 import src.controller.NavigationController;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Scanner;
+
 public class LoginUI {
     private Stage primaryStage;
     private TextField usernameField;
@@ -23,6 +27,7 @@ public class LoginUI {
     private String currentTheme = "light"; // Mặc định là theme sáng
     private NavigationController navigationController;
     private MainController mainController;
+    private final static String FILE_PATH = "C:\\Users\\Admin\\Documents\\University\\CS3332\\CS3332\\UserAccount";
 
     public LoginUI(Stage primaryStage) {
         this.primaryStage = primaryStage;
@@ -128,7 +133,7 @@ public class LoginUI {
         registerLabel.setStyle("-fx-text-fill: #555;");
         Hyperlink registerLink = new Hyperlink("Đăng ký ngay");
         registerLink.setStyle("-fx-text-fill: #0091EA; -fx-border-color: transparent;");
-        registerLink.setOnAction(e -> showRegisterDialog());
+        registerLink.setOnAction(e -> gotoRegister());
         registerBox.getChildren().addAll(registerLabel, registerLink);
 
         card.getChildren().addAll(logoBox, title, form, themeBox, registerBox);
@@ -261,30 +266,53 @@ public class LoginUI {
     private void handleLogin() {
         String username = usernameField.getText();
         String password = passwordField.getText();
+        String filePath = FILE_PATH + "\\" + username + ".txt";
+        File file = new File(filePath);
 
         if (username.isEmpty() || password.isEmpty()) {
             showAlert("Lỗi đăng nhập", "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu");
             return;
         }
 
-        // Xử lý logic đăng nhập ở đây
-        System.out.println("Login attempted with: " + username + "/" + password);
+        if (!file.exists()) {
+            showAlert("Lỗi đăng nhập", "Tên đăng nhập không tồn tại");
+            return;
+        }
 
-        // Giả lập đăng nhập thành công
-        boolean loginSuccess = true;
+        try (Scanner scanner = new Scanner(file)) {
+            if (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                String[] parts = line.split(",");
+                if (parts.length >= 2 && parts[0].equals(username) && parts[1].equals(password)) {
+                    // Đăng nhập thành công
+                    System.out.println("Đăng nhập thành công!");
+                    primaryStage.close();
 
-        if (loginSuccess) {
-            // Đóng màn hình đăng nhập và mở màn hình chính
-            primaryStage.close();
-            // Điều hướng đến dashboard sau khi đăng nhập thành công
-            mainController.navigateTo("dashboard");
-        } else {
-            showAlert("Lỗi đăng nhập", "Tên đăng nhập hoặc mật khẩu không đúng");
+                    // Khởi tạo và hiển thị UI chính
+                    Stage uiStage = new Stage();
+                    UI ui = new UI();
+                    ui.setControllers(mainController, navigationController);
+
+                    Scene uiScene = ui.createScene();
+                    uiStage.setScene(uiScene);
+                    uiStage.setTitle("Hệ thống quản lý trung tâm");
+                    uiStage.show();
+
+                    return;
+                }
+            }
+            showAlert("Lỗi đăng nhập", "Mật khẩu không đúng");
+        } catch (FileNotFoundException e) {
+            showAlert("Lỗi đăng nhập", "Không tìm thấy file tài khoản");
         }
     }
 
-    private void showRegisterDialog() {
-        // ... (Giữ nguyên phần này)
+
+    private void gotoRegister() {
+        primaryStage.close();
+        Stage registerStage = new Stage();
+        RegisterUI registerUI = new RegisterUI(registerStage);
+        registerUI.setControllers(mainController, navigationController);
     }
 
     public void setControllers(MainController mainController, NavigationController navigationController) {

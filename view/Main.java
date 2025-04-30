@@ -10,19 +10,19 @@ public class Main extends Application {
     @Override
     public void start(Stage primaryStage) {
         // Khởi tạo LoginUI (chỉ một lần)
-        LoginUI loginUI = new LoginUI(primaryStage);
+        RegisterUI registerUI = new RegisterUI(primaryStage);
 
         // Khởi tạo NavigationController với LoginUI
-        NavigationController navigationController = new NavigationController(loginUI);
+        NavigationController navigationController = new NavigationController(registerUI);
 
         // Khởi tạo MainController với LoginUI và NavigationController
-        MainController mainController = new MainController(loginUI, navigationController);
+        MainController mainController = new MainController(registerUI, navigationController);
 
         // Thiết lập các controller cho LoginUI
-        loginUI.setControllers(mainController, navigationController);
+        registerUI.setControllers(mainController, navigationController);
 
         // Hiển thị LoginUI
-        LoginUI.show(primaryStage);
+        RegisterUI.show(primaryStage);
 
         // Thiết lập xử lý khi đóng ứng dụng
         primaryStage.setOnCloseRequest(event -> {

@@ -1,18 +1,16 @@
 package src.controller;
 
 import src.model.ClassSession;
-import view.ScreenView;
-import view.LoginUI;
-import view.UI;
+import view.*;
 import view.components.*;
-import view.BaseScreenView;
 
 /**
  * Controller chính của ứng dụng, quản lý logic nghiệp vụ
- */Ư
+ */
 public class MainController {
     private UI ui;
     private LoginUI loginUI;
+    private RegisterUI registerUI;
     private NavigationController navigationController;
     private ClassSession currentSessionDetail; // Added to store current session detail
 
@@ -28,6 +26,11 @@ public class MainController {
     }
     public MainController(LoginUI ui, NavigationController navigationController) {
         this.loginUI = ui;
+        this.navigationController = navigationController;
+        initialize();
+    }
+    public MainController(RegisterUI ui, NavigationController navigationController) {
+        this.registerUI = ui;
         this.navigationController = navigationController;
         initialize();
     }
