@@ -6,7 +6,7 @@ import java.sql.SQLException;
 import java.sql.ResultSet;
 import java.sql.PreparedStatement;
 
-public class DatabaseUtil {
+public class DatabaseConnection {
     private static final String URL = "jdbc:mysql://localhost:3306/education_management?useSSL=false&serverTimezone=UTC";
     private static final String USERNAME = "root"; // Thay đổi nếu cần
     private static final String PASSWORD = "123456"; // Thay đổi mật khẩu của bạn

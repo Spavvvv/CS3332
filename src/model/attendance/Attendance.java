@@ -401,4 +401,74 @@ public class Attendance {
         }
         this.session.setId(sessionId);
     }
+
+    /**
+     * Lấy loại vắng mặt của học sinh
+     *
+     * @return Loại vắng mặt (có phép/không phép)
+     */
+    public String getAbsenceType() {
+        if (present) {
+            return "Có mặt";
+        } else if (hasPermission) {
+            return "Vắng có phép";
+        } else {
+            return "Vắng không phép";
+        }
+    }
+
+    /**
+     * Kiểm tra có phải vắng mặt hay không
+     *
+     * @return true nếu học sinh vắng mặt (không có mặt), ngược lại là false
+     */
+    public boolean isAbsent() {
+        return !present;
+    }
+
+    /**
+     * Lấy trạng thái gọi điện dưới dạng văn bản
+     *
+     * @return Trạng thái gọi điện (Đã gọi/Chưa gọi)
+     */
+    public String getCallStatus() {
+        return called ? "Đã gọi" : "Chưa gọi";
+    }
+
+    /**
+     * Lấy thông tin lớp học
+     *
+     * @return Tên lớp học
+     */
+    public String getClassName() {
+        return session != null ? session.getClassName() : "";
+    }
+
+    /**
+     * Lấy thông tin môn học
+     *
+     * @return Tên môn học
+     */
+    public String getSubjectName() {
+        return session != null ? session.getCourseName() : "";
+    }
+
+    /**
+     * Lấy thông tin ngày vắng dưới dạng văn bản có định dạng
+     *
+     * @return Ngày vắng dưới dạng chuỗi đã định dạng
+     */
+    public String getFormattedDate() {
+        return session != null ? session.getFormattedDate() : "";
+    }
+
+    /**
+     * Lấy ngày trong tuần của buổi học
+     *
+     * @return Ngày trong tuần (Thứ 2, Thứ 3, v.v.)
+     */
+    public String getDayOfWeek() {
+        return session != null ? session.getDayOfWeek() : "";
+    }
+
 }

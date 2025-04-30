@@ -736,7 +736,7 @@ public class AttendanceScreenView extends BaseScreenView {
                 }
 
                 // Navigate to the attendance view
-                mainController.navigateTo("attendance-view");
+                mainController.navigateTo("absence-call-table");
             } else {
                 // If mainController is null, show an error dialog
                 showError("Không thể truy cập điểm danh: Main Controller Missing !!.");
