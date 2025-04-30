@@ -3,8 +3,10 @@ package src.controller;
 import src.model.ClassSession;
 import src.model.attendance.Attendance;
 import src.model.person.Student;
+import src.dao.AttendanceDAO;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -23,12 +25,25 @@ public class AttendanceController {
     // Tham chiếu đến MainController để lấy dữ liệu
     private MainController mainController;
 
+    private AttendanceDAO attendanceDAO;
+
     /**
      * Constructor mặc định
      */
     public AttendanceController() {
         sessionAttendanceMap = new HashMap<>();
+        this.attendanceDAO = new AttendanceDAO();
     }
+
+    /**
+     * Constructor với AttendanceDAO
+     *
+     * @param attendanceDAO DAO để tương tác với dữ liệu điểm danh
+     */
+    public AttendanceController(AttendanceDAO attendanceDAO) {
+        this.attendanceDAO = attendanceDAO;
+    }
+
 
     /**
      * Constructor với MainController
@@ -533,16 +548,71 @@ public class AttendanceController {
     }
 
     /**
-     * Bổ sung phương thức isNotified (alias cho isCalled)
+     * Updates an existing attendance record in the database
+     *
+     * @param attendance The attendance record to update
+     * @return true if update was successful, false otherwise
      */
-    public boolean isNotified(Attendance attendance) {
-        return attendance.isCalled();
+    /**
+     * Cập nhật thông tin điểm danh
+     *
+     * @param attendance Đối tượng điểm danh cần cập nhật
+     * @return true nếu cập nhật thành công, ngược lại là false
+     */
+    public boolean updateAttendance(Attendance attendance) {
+        if (attendance == null || !attendance.isValid()) {
+            return false;
+        }
+
+        try {
+            // Cập nhật thời gian ghi nhận
+            attendance.setRecordTime(LocalDateTime.now());
+
+            // Lưu vào cơ sở dữ liệu
+            return attendanceDAO.update(attendance);
+        } catch (Exception e) {
+            System.err.println("Lỗi khi cập nhật điểm danh: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**
-     * Bổ sung phương thức setNotified (alias cho setCalled)
+     * Lấy danh sách điểm danh theo buổi học
+     *
+     * @param sessionId ID của buổi học
+     * @return Map chứa danh sách điểm danh của buổi học, với key là ID lớp
      */
-    public void setNotified(Attendance attendance, boolean notified) {
-        attendance.setCalled(notified);
+    public Map<Long, List<Attendance>> getAttendanceBySessionId(long sessionId) {
+        // TODO: Thực hiện truy vấn dữ liệu từ DAO
+        Map<Long, List<Attendance>> result = new HashMap<>();
+        try {
+            List<Attendance> attendances = attendanceDAO.getBySessionId(sessionId);
+            // Phân loại theo lớp học
+            long classId = -1; // Giả sử tất cả cùng một lớp
+            result.put(classId, attendances);
+        } catch (Exception e) {
+            System.err.println("Lỗi khi lấy dữ liệu điểm danh: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return result;
+    }
+
+    /**
+     * Lấy AttendanceDAO
+     *
+     * @return AttendanceDAO instance
+     */
+    public AttendanceDAO getAttendanceDAO() {
+        return attendanceDAO;
+    }
+
+    /**
+     * Thiết lập AttendanceDAO
+     *
+     * @param attendanceDAO AttendanceDAO instance
+     */
+    public void setAttendanceDAO(AttendanceDAO attendanceDAO) {
+        this.attendanceDAO = attendanceDAO;
     }
 }
