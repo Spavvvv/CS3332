@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import view.LoginUI;
+import view.RegisterUI;
 import view.UI;
 import view.ScreenView;
 
@@ -12,6 +15,8 @@ import view.ScreenView;
  */
 public class NavigationController {
     private UI ui;
+    private LoginUI loginUI;
+    private RegisterUI registerUI;
     private Map<String, ScreenView> viewsMap;
     private String currentRoute = "";
     private ScreenView currentView = null;
@@ -23,6 +28,16 @@ public class NavigationController {
      */
     public NavigationController(UI ui) {
         this.ui = ui;
+        this.viewsMap = new HashMap<>();
+        this.navigationHistory = new ArrayList<>();
+    }
+    public NavigationController(LoginUI ui) {
+        this.loginUI = ui;
+        this.viewsMap = new HashMap<>();
+        this.navigationHistory = new ArrayList<>();
+    }
+    public NavigationController(RegisterUI ui) {
+        this.registerUI = ui;
         this.viewsMap = new HashMap<>();
         this.navigationHistory = new ArrayList<>();
     }

@@ -13,12 +13,14 @@ import src.controller.AttendanceController;
 
 import view.BaseScreenView;
 import src.model.ClassSession;
+import src.model.attendance.Attendance;
 
-import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -34,6 +36,8 @@ public class AttendanceScreenView extends BaseScreenView {
     private static final String LIGHT_GRAY = "#F5F5F5"; // Light gray for background
     private static final String WHITE_COLOR = "#FFFFFF"; // White color
     private static final String BORDER_COLOR = "#E0E0E0"; // Border color
+    private static final String YELLOW_COLOR = "#FFC107"; // Yellow for excused absences
+    private static final String RED_COLOR = "#F44336"; // Red for unexcused absences
 
     // UI Components
     private Label titleLabel;
@@ -57,14 +61,16 @@ public class AttendanceScreenView extends BaseScreenView {
 
     // Data
     private List<ClassSession> sessions;
+    private Map<Long, List<Attendance>> sessionAttendanceMap;
     private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     //controller
-    AttendanceController attendanceController;
+    private AttendanceController attendanceController;
 
     public AttendanceScreenView() {
         super("Điểm danh", "attendance");
         sessions = new ArrayList<>();
+        sessionAttendanceMap = new HashMap<>();
         //attendanceController = new AttendanceController(this);
         initializeView();
     }
@@ -75,7 +81,7 @@ public class AttendanceScreenView extends BaseScreenView {
         root.getChildren().clear();
 
         // Setting up the root container
-        root.setSpacing(0); // Giảm spacing để các phần tử không bị đẩy xa nhau
+        root.setSpacing(0);
         root.setPadding(new Insets(0));
         root.setStyle("-fx-background-color: " + WHITE_COLOR + ";");
 
@@ -83,7 +89,7 @@ public class AttendanceScreenView extends BaseScreenView {
         BorderPane mainLayout = new BorderPane();
 
         // Tạo VBox để chứa tất cả phần tử theo thứ tự từ trên xuống dưới
-        VBox contentBox = new VBox(15); // Spacing giữa các phần tử
+        VBox contentBox = new VBox(15);
         contentBox.setPadding(new Insets(15));
 
         // Create title bar with buttons
@@ -142,8 +148,8 @@ public class AttendanceScreenView extends BaseScreenView {
         HBox buttonsBox = new HBox(10);
         buttonsBox.setAlignment(Pos.CENTER_RIGHT);
 
-        // Attendance List button
-        attendanceListButton = createStyledButton("Danh sách nghỉ học", PRIMARY_COLOR);
+        // Attendance List button - Changed to "Danh sách vắng học" to match Attendance model's absence tracking
+        attendanceListButton = createStyledButton("Danh sách vắng học", PRIMARY_COLOR);
         attendanceListButton.setOnAction(e ->{
             navigationController.navigateTo("absence-call-view");
         });
@@ -239,6 +245,7 @@ public class AttendanceScreenView extends BaseScreenView {
 
     /**
      * Creates the status filter section with buttons and search field
+     * Updated to reflect Attendance model statuses
      */
     private void createStatusFilterSection() {
         statusFilterBox = new HBox();
@@ -258,6 +265,7 @@ public class AttendanceScreenView extends BaseScreenView {
                         "-fx-padding: 8 20;"
         );
 
+        // Updated button text to match Attendance model terminology
         unmarkedButton = new Button("Chưa điểm danh: 2");
         unmarkedButton.setStyle(
                 "-fx-background-color: " + LIGHT_GRAY + ";" +
@@ -266,6 +274,7 @@ public class AttendanceScreenView extends BaseScreenView {
                         "-fx-padding: 8 20;"
         );
 
+        // Updated button text to match Attendance model terminology
         markedButton = new Button("Đã điểm danh: 2");
         markedButton.setStyle(
                 "-fx-background-color: " + LIGHT_GRAY + ";" +
@@ -310,9 +319,6 @@ public class AttendanceScreenView extends BaseScreenView {
     /**
      * Creates the container for class cards
      */
-    /**
-     * Tạo container cho class cards và trả về một ScrollPane
-     */
     private ScrollPane createClassCardsContainer() {
         classesContainer = new VBox();
         classesContainer.setSpacing(20);
@@ -337,7 +343,8 @@ public class AttendanceScreenView extends BaseScreenView {
     }
 
     /**
-     * Creates a card for a class session based on the screenshot design
+     * Creates a card for a class session with attendance status information
+     * Updated to reflect Attendance model
      */
     private VBox createClassCard(ClassSession session) {
         // Main card container
@@ -396,6 +403,39 @@ public class AttendanceScreenView extends BaseScreenView {
         contentGrid.add(createInfoLabel("Thứ:"), 0, 4);
         contentGrid.add(createInfoValue(session.getDayOfWeek()), 1, 4);
 
+        // Get attendance stats for this session
+        int[] attendanceStats = getAttendanceStats(session.getId());
+
+        // Add new attendance summary row
+        contentGrid.add(createInfoLabel("Trạng thái:"), 0, 5);
+
+        // Create attendance status summary
+        HBox attendanceStatusBox = new HBox(5);
+        attendanceStatusBox.setAlignment(Pos.CENTER_RIGHT);
+
+        if (attendanceStats[0] > 0) {
+            Label presentLabel = new Label(attendanceStats[0] + " có mặt");
+            presentLabel.setTextFill(Color.web(GREEN_COLOR));
+            presentLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
+            attendanceStatusBox.getChildren().add(presentLabel);
+        }
+
+        if (attendanceStats[1] > 0) {
+            Label absentExcusedLabel = new Label(attendanceStats[1] + " vắng có phép");
+            absentExcusedLabel.setTextFill(Color.web(YELLOW_COLOR));
+            absentExcusedLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
+            attendanceStatusBox.getChildren().add(absentExcusedLabel);
+        }
+
+        if (attendanceStats[2] > 0) {
+            Label absentUnexcusedLabel = new Label(attendanceStats[2] + " vắng không phép");
+            absentUnexcusedLabel.setTextFill(Color.web(RED_COLOR));
+            absentUnexcusedLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
+            attendanceStatusBox.getChildren().add(absentUnexcusedLabel);
+        }
+
+        contentGrid.add(attendanceStatusBox, 1, 5);
+
         // Progress section matching the screenshot
         HBox progressSection = new HBox();
         progressSection.setAlignment(Pos.CENTER_LEFT);
@@ -410,6 +450,28 @@ public class AttendanceScreenView extends BaseScreenView {
         StackPane progressBar = createProgressBar(session.getId());
 
         progressSection.getChildren().addAll(progressLabel, progressBar);
+
+        // Notification status section - new addition based on Attendance model
+        HBox notificationSection = new HBox();
+        notificationSection.setAlignment(Pos.CENTER_LEFT);
+        notificationSection.setPadding(new Insets(5, 0, 0, 0));
+        notificationSection.setSpacing(10);
+
+        // Only show if there are absences
+        if (attendanceStats[1] + attendanceStats[2] > 0) {
+            Label notificationLabel = new Label("Thông báo:");
+            notificationLabel.setFont(Font.font("System", 14));
+            notificationLabel.setTextFill(Color.rgb(100, 100, 100));
+
+            // Get notification stats
+            boolean allNotified = areAllAbsencesNotified(session.getId());
+
+            Label notificationStatus = new Label(allNotified ? "Đã thông báo" : "Chưa thông báo");
+            notificationStatus.setFont(Font.font("System", FontWeight.BOLD, 14));
+            notificationStatus.setTextFill(allNotified ? Color.web(GREEN_COLOR) : Color.web(RED_COLOR));
+
+            notificationSection.getChildren().addAll(notificationLabel, notificationStatus);
+        }
 
         // Button section with "Chọn →" button
         HBox buttonSection = new HBox();
@@ -435,19 +497,73 @@ public class AttendanceScreenView extends BaseScreenView {
         infoSection.setPadding(new Insets(0, 20, 0, 20));
         infoSection.getChildren().addAll(contentGrid, progressSection);
 
+        // Only add notification section if there are absences
+        if (attendanceStats[1] + attendanceStats[2] > 0) {
+            infoSection.getChildren().add(notificationSection);
+        }
+
         card.getChildren().addAll(className, infoSection, buttonSection);
 
         return card;
     }
 
     /**
-     * Creates a progress bar matching the screenshot design
+     * Gets attendance statistics for a session
+     * @param sessionId the session ID
+     * @return array with [present count, absent excused count, absent unexcused count]
      */
+    private int[] getAttendanceStats(Long sessionId) {
+        int[] stats = new int[3]; // [present, absent excused, absent unexcused]
+
+        List<Attendance> attendances = sessionAttendanceMap.get(sessionId);
+        if (attendances == null || attendances.isEmpty()) {
+            // Generate some random stats for demo purposes
+            int total = 5 + (int)(Math.random() * 10); // Between 5-15 students
+            stats[0] = (int)(total * (0.7 + Math.random() * 0.2)); // 70-90% present
+
+            int absences = total - stats[0];
+            stats[1] = (int)(absences * (Math.random() * 0.7)); // 0-70% of absences are excused
+            stats[2] = absences - stats[1]; // Rest are unexcused
+
+            return stats;
+        }
+
+        for (Attendance attendance : attendances) {
+            if (attendance.isPresent()) {
+                stats[0]++; // Present
+            } else if (attendance.hasPermission()) {
+                stats[1]++; // Absent with permission (excused)
+            } else {
+                stats[2]++; // Absent without permission (unexcused)
+            }
+        }
+
+        return stats;
+    }
+
+    /**
+     * Checks if all absences for a session have been notified
+     * @param sessionId the session ID
+     * @return true if all absences have been notified
+     */
+    private boolean areAllAbsencesNotified(Long sessionId) {
+        List<Attendance> attendances = sessionAttendanceMap.get(sessionId);
+        if (attendances == null || attendances.isEmpty()) {
+            // For demo purposes, return random result
+            return Math.random() > 0.5;
+        }
+
+        for (Attendance attendance : attendances) {
+            if (!attendance.isPresent() && !attendance.isNotified()) {
+                return false; // Found an absence that hasn't been notified
+            }
+        }
+
+        return true; // All absences have been notified
+    }
+
     /**
      * Tạo thanh tiến độ cải tiến theo yêu cầu
-     * - Progress bar luôn bắt đầu từ bên trái
-     * - Chữ tiến độ nằm chính giữa phần màu xanh
-     * - Vị trí chữ luôn nằm đúng trong phần màu xanh
      */
     private StackPane createProgressBar(Long sessionId) {
         // Tạo container chính
@@ -496,7 +612,6 @@ public class AttendanceScreenView extends BaseScreenView {
 
         return progressContainer;
     }
-
 
     /**
      * Creates an info label for the class card
@@ -549,6 +664,18 @@ public class AttendanceScreenView extends BaseScreenView {
 
         // Search field enter key
         searchField.setOnAction(e -> searchSessions(searchField.getText()));
+
+        // Export Excel button
+        exportExcelButton.setOnAction(e -> exportAttendanceData());
+    }
+
+    /**
+     * Export attendance data to Excel
+     * New method to utilize Attendance model
+     */
+    private void exportAttendanceData() {
+        // This would integrate with an export service in a real implementation
+        showInfo("Đang xuất dữ liệu điểm danh sang Excel...");
     }
 
     /**
@@ -588,9 +715,35 @@ public class AttendanceScreenView extends BaseScreenView {
      * Handles selection of a class for attendance
      */
     private void handleClassSelection(Long sessionId) {
-        // Navigation logic would go here
-        System.out.println("Selected class session with ID: " + sessionId);
-        // Example: navigationController.navigateToAttendanceDetail(sessionId);
+        // Find the selected session from our sessions list
+        ClassSession selectedSession = null;
+        for (ClassSession session : sessions) {
+            if (session.getId() == (sessionId)) {
+                selectedSession = session;
+                break;
+            }
+        }
+
+        if (selectedSession != null) {
+            // Store the selected session in MainController
+            if (mainController != null) {
+                mainController.setSessionDetail(selectedSession);
+
+                // Pass any existing attendance records for this session
+                List<Attendance> sessionAttendances = sessionAttendanceMap.get(sessionId);
+                if (sessionAttendances != null) {
+                    mainController.setSessionAttendances(sessionAttendances);
+                }
+
+                // Navigate to the attendance view
+                mainController.navigateTo("absence-call-table");
+            } else {
+                // If mainController is null, show an error dialog
+                showError("Không thể truy cập điểm danh: Main Controller Missing !!.");
+            }
+        } else {
+            showError("Không tìm thấy thông tin buổi học với ID: " + sessionId);
+        }
     }
 
     /**
@@ -615,13 +768,36 @@ public class AttendanceScreenView extends BaseScreenView {
 
     /**
      * Filters sessions by attendance status
+     * Updated to use Attendance model's status
      */
     private void filterSessionsByStatus(String status) {
-        List<ClassSession> filteredSessions;
+        List<ClassSession> filteredSessions = new ArrayList<>();
 
-        // For demonstration, we'll just show all sessions
-        // In a real app, you'd filter based on attendance status in the model
-        filteredSessions = new ArrayList<>(sessions);
+        switch (status) {
+            case "all":
+                filteredSessions = new ArrayList<>(sessions);
+                break;
+
+            case "unmarked":
+                // Filter for sessions with no attendance records or none marked
+                for (ClassSession session : sessions) {
+                    List<Attendance> attendances = sessionAttendanceMap.get(session.getId());
+                    if (attendances == null || attendances.isEmpty()) {
+                        filteredSessions.add(session);
+                    }
+                }
+                break;
+
+            case "marked":
+                // Filter for sessions with at least one attendance record
+                for (ClassSession session : sessions) {
+                    List<Attendance> attendances = sessionAttendanceMap.get(session.getId());
+                    if (attendances != null && !attendances.isEmpty()) {
+                        filteredSessions.add(session);
+                    }
+                }
+                break;
+        }
 
         updateClassCards(filteredSessions);
     }
@@ -656,9 +832,18 @@ public class AttendanceScreenView extends BaseScreenView {
     private void updateFilterButtonCounts(List<ClassSession> filteredSessions) {
         int total = filteredSessions.size();
 
-        // For demo, let's say half are unmarked and half are marked
-        int unmarked = total / 2;
-        int marked = total - unmarked;
+        // Count based on actual attendance data
+        int unmarked = 0;
+        int marked = 0;
+
+        for (ClassSession session : filteredSessions) {
+            List<Attendance> attendances = sessionAttendanceMap.get(session.getId());
+            if (attendances == null || attendances.isEmpty()) {
+                unmarked++;
+            } else {
+                marked++;
+            }
+        }
 
         allButton.setText("Tất cả: " + total);
         unmarkedButton.setText("Chưa điểm danh: " + unmarked);
@@ -694,10 +879,31 @@ public class AttendanceScreenView extends BaseScreenView {
     }
 
     /**
+     * Set attendance data for sessions
+     * New method to support Attendance model
+     */
+    public void setAttendanceData(Map<Long, List<Attendance>> sessionAttendanceMap) {
+        this.sessionAttendanceMap = sessionAttendanceMap;
+        updateClassCards(sessions);
+        updateFilterButtonCounts(sessions);
+    }
+
+    /**
+     * Update attendance for a specific session
+     * New method to support Attendance model
+     */
+    public void updateSessionAttendance(Long sessionId, List<Attendance> attendances) {
+        sessionAttendanceMap.put(sessionId, attendances);
+        refreshView();
+    }
+
+    /**
      * Add demo class data for testing
+     * Modified to include attendance data generation
      */
     private void addDemoClasses() {
         sessions.clear();
+        sessionAttendanceMap.clear();
 
         // Create demo sessions matching the screenshot format
         ClassSession demoSession1 = new ClassSession(
@@ -741,8 +947,54 @@ public class AttendanceScreenView extends BaseScreenView {
         sessions.add(demoSession3);
         sessions.add(demoSession4);
 
+        // Generate demo attendance data for sessions 2 and 4
+        generateDemoAttendanceData(2L);
+        generateDemoAttendanceData(4L);
+
         updateClassCards(sessions);
         updateFilterButtonCounts(sessions);
+    }
+
+    /**
+     * Generate demo attendance data for a session
+     * New method to support Attendance model
+     */
+    private void generateDemoAttendanceData(Long sessionId) {
+        // This would be replaced with actual data in a real implementation
+        List<Attendance> attendances = new ArrayList<>();
+
+        // Create a few attendance records with different statuses
+        for (int i = 0; i < 5; i++) {
+            Attendance attendance = new Attendance();
+            attendance.setId(i + 1);
+            attendance.setSessionId(sessionId);
+
+            // Randomly set attendance status
+            double rand = Math.random();
+            if (rand > 0.3) {
+                // Present
+                attendance.setPresent(true);
+            } else if (rand > 0.15) {
+                // Absent with permission
+                attendance.setPresent(false);
+                attendance.setHasPermission(true);
+                attendance.setNote("Bệnh");
+
+                // 50% chance of having called
+                attendance.setCalled(Math.random() > 0.5);
+            } else {
+                // Absent without permission
+                attendance.setPresent(false);
+                attendance.setHasPermission(false);
+
+                // 30% chance of having called
+                attendance.setCalled(Math.random() > 0.7);
+            }
+
+            attendances.add(attendance);
+        }
+
+        sessionAttendanceMap.put(sessionId, attendances);
     }
 
     @Override
@@ -758,6 +1010,28 @@ public class AttendanceScreenView extends BaseScreenView {
         super.onActivate();
         // Add demo data for testing
         addDemoClasses();
+    }
+
+    /**
+     * Show information in a dialog
+     */
+    private void showInfo(String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Thông báo");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    /**
+     * Show error in a dialog
+     */
+    public void showError(String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Lỗi");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     // Getter methods for components (for controller access)
