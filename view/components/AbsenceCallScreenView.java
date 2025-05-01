@@ -8,8 +8,10 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.control.cell.TextFieldTableCell;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.collections.FXCollections;
@@ -102,28 +104,55 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
     private HBox createHeader() {
         HBox header = new HBox();
-        header.setAlignment(Pos.CENTER_LEFT);
+        header.setPadding(new Insets(0, 0, 15, 0));
         header.setSpacing(20);
 
+        Label titleLabel = new Label("Danh sách vắng học");
+        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 24));
+        titleLabel.setTextFill(Color.valueOf("#333333"));
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        // backButton button - sử dụng text "←" làm icon
         backButton = new Button("← Quay lại");
-        backButton.setStyle("-fx-background-color: transparent; -fx-text-fill: " + PRIMARY_COLOR + "; -fx-font-weight: bold;");
+        backButton.setStyle(
+                "-fx-background-color: " + PRIMARY_COLOR + ";" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 10 20;" +
+                        "-fx-background-radius: 20;" +
+                        "-fx-alignment: CENTER;" +  // Canh giữa nội dung
+                        "-fx-content-display: CENTER"  // Hiển thị nội dung ở giữa
+        );
+        backButton.setGraphic(createButtonIcon("arrow-left", "white"));
         backButton.setOnAction(e -> {
             if (navigationController != null) {
                 navigationController.goBack();
             }
         });
 
-        Label titleLabel = new Label("Danh sách vắng học");
-        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 24));
-        titleLabel.setTextFill(Color.valueOf("#333333"));
-
         exportExcelButton = new Button("Xuất Excel");
-        exportExcelButton.setStyle("-fx-background-color: " + PRIMARY_COLOR + "; -fx-text-fill: white;");
-        HBox.setMargin(exportExcelButton, new Insets(0, 0, 0, 20));
+        exportExcelButton.setStyle("-fx-background-color: " + "#39ce1e" + ";" +
+                "-fx-text-fill: white;" +
+                "-fx-font-weight: bold;" +
+                "-fx-padding: 10 20;" +
+                "-fx-background-radius: 20;" +
+                "-fx-alignment: CENTER;" +  // Canh giữa nội dung
+                "-fx-content-display: CENTER"  // Hiển thị nội dung ở giữa
+        );
+        // Sửa lại đoạn này: từ backButton thành exportExcelButton
+        exportExcelButton.setGraphic(createButtonIcon("excel", "white"));
 
-        header.getChildren().addAll(backButton, titleLabel, exportExcelButton);
+        HBox buttons = new HBox(10);
+        buttons.getChildren().addAll(backButton, exportExcelButton);
+        buttons.setAlignment(Pos.CENTER_RIGHT);
+
+        // Sửa đoạn này: thay thế các nút bằng spacer và buttons
+        header.getChildren().addAll(titleLabel, spacer, buttons);
         return header;
     }
+
 
     private HBox createFilterSection() {
         HBox filterSection = new HBox();
@@ -455,5 +484,20 @@ public class AbsenceCallScreenView extends BaseScreenView {
         if ("attendance_updated".equals(message)) {
             loadAbsenceData();
         }
+    }
+
+    private ImageView createButtonIcon(String iconName, String color) {
+        // Trong ứng dụng thực tế, bạn sẽ load icon thực tế
+        // Đây chỉ là placeholder
+        Rectangle rect = new Rectangle(16, 16);
+        rect.setFill(Color.web(color));
+
+        ImageView imageView = new ImageView();
+        imageView.setFitHeight(16);
+        imageView.setFitWidth(16);
+
+        // Trong ứng dụng thực tế: imageView.setImage(new Image("/icons/" + iconName + ".png"));
+
+        return imageView;
     }
 }
