@@ -121,7 +121,8 @@ public class AbsenceCallView extends BaseScreenView {
         buttons.getChildren().addAll(returnButton, saveButton);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
-        titleBar.getChildren().addAll(titleLabel, spacer, buttons);
+        titleBar.getChildren().addAll(titleLabel, spacer, returnButton, saveButton);
+
         return titleBar;
     }
 
