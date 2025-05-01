@@ -64,4 +64,5 @@ public class Student extends Person {
                 ", Number of Current Courses: " + (currentCourses != null ? currentCourses.size() : 0) +
                 ", Parent: " + (parent != null ? parent.getName() : "None");
     }
+
 }

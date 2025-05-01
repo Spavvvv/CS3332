@@ -1,289 +1,618 @@
 package src.controller;
 
-import view.components.AttendanceScreenView;
 import src.model.ClassSession;
-import view.components.AbsenceCallView;
+import src.model.attendance.Attendance;
+import src.model.person.Student;
+import src.dao.AttendanceDAO;
 
 import java.time.LocalDate;
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Controller cho màn hình điểm danh kết nối với MainController và NavigationController
- * để quản lý luồng dữ liệu và giao diện người dùng
+ * Controller quản lý chức năng điểm danh
+ * Xử lý nghiệp vụ liên quan đến việc điểm danh học sinh và quản lý dữ liệu điểm danh
  */
 public class AttendanceController {
 
-    private AttendanceScreenView attendanceView;
-    private List<ClassSession> allSessions;
-    private Map<Long, Boolean> sessionAttendanceStatus;
+    // Lưu trữ dữ liệu điểm danh tạm thời (trong thực tế sẽ lưu vào database)
+    private Map<Long, List<Attendance>> sessionAttendanceMap;
 
-    // Reference đến các controller chính
+    // Tham chiếu đến MainController để lấy dữ liệu
     private MainController mainController;
-    private NavigationController navigationController;
+
+    private AttendanceDAO attendanceDAO;
 
     /**
-     * Constructor khởi tạo controller với view đã được cung cấp
-     * @param attendanceView View điểm danh
+     * Constructor mặc định
      */
-    public AttendanceController(AttendanceScreenView attendanceView) {
-        this.attendanceView = attendanceView;
-        this.allSessions = new ArrayList<>();
-        this.sessionAttendanceStatus = new HashMap<>();
-
-        // Lấy reference từ view đã được thiết lập bởi MainController
-        this.mainController = attendanceView.getMainController();
-        this.navigationController = attendanceView.getNavigationController();
-
-        // Khởi tạo dữ liệu mẫu và thiết lập sự kiện
-        initialize();
+    public AttendanceController() {
+        sessionAttendanceMap = new HashMap<>();
+        this.attendanceDAO = new AttendanceDAO();
     }
 
     /**
-     * Khởi tạo dữ liệu và thiết lập sự kiện
+     * Constructor với AttendanceDAO
+     *
+     * @param attendanceDAO DAO để tương tác với dữ liệu điểm danh
      */
-    private void initialize() {
-        // Tải dữ liệu mẫu
-        loadSampleData();
+    public AttendanceController(AttendanceDAO attendanceDAO) {
+        this.attendanceDAO = attendanceDAO;
+    }
 
-        // Cập nhật giao diện
-        updateAttendanceView();
 
-        // Thiết lập các sự kiện
-        setupEventHandlers();
+    /**
+     * Constructor với MainController
+     * @param mainController Controller chính của ứng dụng
+     */
+    public AttendanceController(MainController mainController) {
+        this.mainController = mainController;
+        sessionAttendanceMap = new HashMap<>();
     }
 
     /**
-     * Tải dữ liệu mẫu cho màn hình điểm danh
+     * Thiết lập MainController
+     * @param mainController Controller chính của ứng dụng
      */
-    private void loadSampleData() {
-        allSessions.clear();
-        sessionAttendanceStatus.clear();
-
-        // Tạo dữ liệu mẫu cho buổi học
-        allSessions.add(new ClassSession(1L, "LC Lớp 11A1", "Trần Trung Hải", "A101",
-                LocalDate.of(2025, 5, 1), "Thứ 2 - 18:00, Thứ 5 - 18:00"));
-        allSessions.add(new ClassSession(2L, "LC Lớp 12A1", "Nguyễn Văn An", "B202",
-                LocalDate.of(2025, 5, 2), "Thứ 3 - 18:00, Thứ 7 - 18:00"));
-        allSessions.add(new ClassSession(3L, "Toán Cao Cấp", "Lê Quang Huy", "C303",
-                LocalDate.of(2025, 5, 3), "Thứ 4 - 19:30, Thứ 6 - 19:30"));
-        allSessions.add(new ClassSession(4L, "IELTS 6.5+", "Vũ Nhật Quang", "D404",
-                LocalDate.of(2025, 5, 2), "Thứ 5 - 17:30, Chủ nhật - 9:00"));
-
-        // Thiết lập trạng thái điểm danh mặc định (ID chẵn = đã điểm danh, ID lẻ = chưa điểm danh)
-        for (ClassSession session : allSessions) {
-            sessionAttendanceStatus.put(session.getId(), session.getId() % 2 == 0);
-        }
+    public void setMainController(MainController mainController) {
+        this.mainController = mainController;
     }
 
     /**
-     * Cập nhật giao diện điểm danh với dữ liệu hiện tại
+     * Lấy danh sách điểm danh cho một buổi học
+     * @param session Buổi học cần lấy dữ liệu
+     * @return Danh sách điểm danh
      */
-    private void updateAttendanceView() {
-        // Cập nhật danh sách buổi học
-        attendanceView.setSessions(allSessions);
-    }
+    public List<Attendance> getAttendanceForSession(ClassSession session) {
+        if (session == null) return new ArrayList<>();
 
-    /**
-     * Thiết lập các trình xử lý sự kiện cho giao diện
-     */
-    private void setupEventHandlers() {
-        // Tìm kiếm
-        attendanceView.getSearchButton().setOnAction(e -> {
-            String keyword = attendanceView.getSearchField().getText();
-            searchSessions(keyword);
-        });
+        Long sessionId = session.getId();
 
-        attendanceView.getSearchField().setOnAction(e -> {
-            String keyword = attendanceView.getSearchField().getText();
-            searchSessions(keyword);
-        });
-
-        // Xuất Excel
-        attendanceView.getExportExcelButton().setOnAction(e -> exportExcel());
-
-        // Xem danh sách vắng mặt
-        attendanceView.getAttendanceListButton().setOnAction(e -> navigateToAbsenceList());
-    }
-
-    /**
-     * Tìm kiếm buổi học theo từ khóa
-     * @param keyword Từ khóa tìm kiếm
-     */
-    private void searchSessions(String keyword) {
-        List<ClassSession> filteredSessions;
-
-        if (keyword == null || keyword.trim().isEmpty()) {
-            filteredSessions = new ArrayList<>(allSessions);
+        // Nếu có dữ liệu điểm danh rồi thì trả về
+        if (sessionAttendanceMap.containsKey(sessionId)) {
+            return sessionAttendanceMap.get(sessionId);
         } else {
-            String lowerKeyword = keyword.toLowerCase();
-            filteredSessions = allSessions.stream()
-                    .filter(session ->
-                            session.getCourseName().toLowerCase().contains(lowerKeyword) ||
-                                    session.getTeacher().toLowerCase().contains(lowerKeyword) ||
-                                    session.getRoom().toLowerCase().contains(lowerKeyword))
-                    .collect(Collectors.toList());
-        }
-
-        // Cập nhật giao diện với kết quả tìm kiếm
-        attendanceView.setSessions(filteredSessions);
-    }
-
-    /**
-     * Xuất dữ liệu điểm danh ra file Excel
-     */
-    private void exportExcel() {
-        try {
-            // TODO: Implement actual Excel export logic here
-            System.out.println("Đang xuất dữ liệu điểm danh ra Excel...");
-
-            // Hiển thị thông báo thành công
-            attendanceView.showSuccess("Đã xuất dữ liệu điểm danh thành công!");
-        } catch (Exception e) {
-            attendanceView.showError("Lỗi khi xuất file Excel: " + e.getMessage());
+            List<Attendance> newAttendanceList = createAttendanceListFromClassSession(session);
+            sessionAttendanceMap.put(sessionId, newAttendanceList);
+            return newAttendanceList;
         }
     }
 
     /**
-     * Chuyển đến màn hình danh sách vắng mặt
+     * Tạo danh sách điểm danh dựa trên buổi học
+     * @param session Buổi học cần tạo danh sách điểm danh
+     * @return Danh sách điểm danh
      */
-    private void navigateToAbsenceList() {
-        // Sử dụng NavigationController để chuyển đến màn hình danh sách vắng
-        navigationController.navigateTo("absence-call");
-    }
+    private List<Attendance> createAttendanceListFromClassSession(ClassSession session) {
+        List<Attendance> attendanceList = new ArrayList<>();
 
-    /**
-     * Xử lý khi chọn một lớp học cụ thể
-     * @param sessionId ID của buổi học được chọn
-     */
-    public void handleClassSelection(Long sessionId) {
-        // Tìm buổi học được chọn
-        ClassSession selectedSession = allSessions.stream()
-                .filter(session -> session.getId() == (sessionId))
-                .findFirst()
-                .orElse(null);
+        if (session == null) {
+            return attendanceList;
+        }
 
-        if (selectedSession != null) {
-            // Lưu thông tin buổi học vào MainController để sử dụng tại các màn hình khác
-            mainController.setSessionDetail(selectedSession);
-
-            // Chuyển đến màn hình chi tiết điểm danh
-            if (navigationController.routeExists("attendance-detail")) {
-                navigationController.navigateTo("attendance-detail");
-            } else {
-                // Nếu không có route cụ thể, có thể chuyển sang một view chung về danh sách học sinh
-                attendanceView.showError("Chức năng xem chi tiết điểm danh chưa được triển khai");
+        // Lấy thông tin buổi học đầy đủ từ MainController
+        ClassSession fullSession = session;
+        if (mainController != null) {
+            ClassSession tempSession = mainController.getSessionDetail();
+            if (tempSession != null && tempSession.getId() == session.getId()) {
+                fullSession = tempSession;
             }
-        } else {
-            attendanceView.showError("Không tìm thấy thông tin buổi học với ID: " + sessionId);
         }
+
+        // Lấy danh sách học sinh từ buổi học
+        List<Student> students = fullSession.getStudents();
+        if (students == null || students.isEmpty()) {
+            return attendanceList;
+        }
+
+        // Tạo dữ liệu điểm danh dựa trên danh sách học sinh
+        for (Student student : students) {
+            Attendance attendance = new Attendance();
+            attendance.setStudent(student);
+            attendance.setSession(session);
+            attendance.setPresent(true); // Mặc định tất cả học sinh đều có mặt
+            attendance.setHasPermission(false);
+            attendance.setCalled(false);
+            attendance.setNote("");
+
+            attendanceList.add(attendance);
+        }
+
+        return attendanceList;
     }
 
     /**
-     * Lọc buổi học theo ngày trong tuần
-     * @param day Ngày cần lọc (Tất cả, Thứ 2, Thứ 3, v.v.)
+     * Lưu dữ liệu điểm danh cho một buổi học
+     * @param session Buổi học cần lưu dữ liệu
+     * @param attendanceList Danh sách điểm danh
+     * @return true nếu lưu thành công
      */
-    public void filterSessionsByDay(String day) {
-        List<ClassSession> filteredSessions;
+    public boolean saveAttendanceData(ClassSession session, List<Attendance> attendanceList) {
+        if (session == null || attendanceList == null) return false;
 
-        if ("Tất cả".equals(day)) {
-            filteredSessions = new ArrayList<>(allSessions);
-        } else {
-            filteredSessions = allSessions.stream()
-                    .filter(session ->
-                            session.getTimeSlot().contains(day) ||
-                                    getDayOfWeekFromDate(session.getDate()).equals(day))
-                    .collect(Collectors.toList());
+        try {
+            // Cập nhật ngày điểm danh
+            for (Attendance attendance : attendanceList) {
+                if (attendance.getSession() == null) {
+                    attendance.setSession(session);
+                }
+            }
+
+            // Lưu vào map
+            sessionAttendanceMap.put(session.getId(), attendanceList);
+
+            // Trong thực tế sẽ lưu vào database
+            System.out.println("Đã lưu dữ liệu điểm danh cho buổi " + session.getId() + " - " + attendanceList.size() + " học sinh");
+
+            return true;
+        } catch (Exception e) {
+            System.err.println("Lỗi khi lưu dữ liệu điểm danh: " + e.getMessage());
+            return false;
         }
-
-        attendanceView.setSessions(filteredSessions);
     }
 
     /**
-     * Lọc buổi học theo trạng thái điểm danh
-     * @param status Trạng thái cần lọc (all, marked, unmarked)
+     * Gửi thông báo cho học sinh vắng mặt
+     * @param attendanceList Danh sách điểm danh
+     * @return Số lượng thông báo đã gửi
      */
-    public void filterSessionsByStatus(String status) {
-        List<ClassSession> filteredSessions;
+    public int sendAbsenceNotifications(List<Attendance> attendanceList) {
+        if (attendanceList == null || attendanceList.isEmpty()) return 0;
 
-        switch (status) {
-            case "all":
-                filteredSessions = new ArrayList<>(allSessions);
-                break;
-            case "marked":
-                filteredSessions = allSessions.stream()
-                        .filter(session -> sessionAttendanceStatus.getOrDefault(session.getId(), false))
-                        .collect(Collectors.toList());
-                break;
-            case "unmarked":
-                filteredSessions = allSessions.stream()
-                        .filter(session -> !sessionAttendanceStatus.getOrDefault(session.getId(), false))
-                        .collect(Collectors.toList());
-                break;
-            default:
-                filteredSessions = new ArrayList<>(allSessions);
+        // Lọc danh sách học sinh vắng mặt chưa được thông báo
+        List<Attendance> absentStudents = attendanceList.stream()
+                .filter(a -> !a.isPresent() && !a.isCalled())
+                .collect(Collectors.toList());
+
+        // Đánh dấu đã thông báo
+        for (Attendance attendance : absentStudents) {
+            attendance.setCalled(true);
         }
 
-        attendanceView.setSessions(filteredSessions);
+        // Trong thực tế sẽ gửi thông báo qua SMS, email, v.v.
+        System.out.println("Đã gửi thông báo cho " + absentStudents.size() + " học sinh vắng mặt");
+
+        return absentStudents.size();
     }
 
     /**
-     * Lấy tên thứ trong tuần từ ngày
-     * @param date Ngày cần lấy thứ
-     * @return Tên thứ trong tuần (Thứ 2, Thứ 3, v.v.)
-     */
-    private String getDayOfWeekFromDate(LocalDate date) {
-        int dayOfWeek = date.getDayOfWeek().getValue();
-        switch (dayOfWeek) {
-            case 1: return "Thứ 2";
-            case 2: return "Thứ 3";
-            case 3: return "Thứ 4";
-            case 4: return "Thứ 5";
-            case 5: return "Thứ 6";
-            case 6: return "Thứ 7";
-            case 7: return "Chủ nhật";
-            default: return "";
-        }
-    }
-
-    /**
-     * Cập nhật trạng thái điểm danh cho một buổi học
+     * Lấy thông tin điểm danh của một học sinh cho một buổi học
      * @param sessionId ID của buổi học
-     * @param marked Trạng thái điểm danh (true = đã điểm danh, false = chưa điểm danh)
+     * @param studentId ID của học sinh
+     * @return Thông tin điểm danh hoặc null nếu không tìm thấy
      */
-    public void updateAttendanceStatus(Long sessionId, boolean marked) {
-        sessionAttendanceStatus.put(sessionId, marked);
+    public Attendance getStudentAttendance(long sessionId, String studentId) {
+        if (!sessionAttendanceMap.containsKey(sessionId)) return null;
 
-        // Cập nhật lại hiển thị
-        attendanceView.refreshView();
+        List<Attendance> attendanceList = sessionAttendanceMap.get(sessionId);
+        for (Attendance attendance : attendanceList) {
+            if (attendance.getStudent().getId().equals(studentId)) {
+                return attendance;
+            }
+        }
+
+        return null;
     }
 
     /**
-     * Lấy danh sách tất cả các buổi học
-     * @return Danh sách các buổi học
-     */
-    public List<ClassSession> getAllSessions() {
-        return new ArrayList<>(allSessions);
-    }
-
-    /**
-     * Kiểm tra trạng thái điểm danh của một buổi học
+     * Cập nhật thông tin điểm danh của một học sinh
      * @param sessionId ID của buổi học
-     * @return true nếu đã điểm danh, false nếu chưa
+     * @param studentId ID của học sinh
+     * @param isPresent Trạng thái hiện diện (true = có mặt, false = vắng)
+     * @param hasPermission Có phép hay không
+     * @param note Ghi chú
+     * @return true nếu cập nhật thành công
      */
-    public boolean isSessionMarked(Long sessionId) {
-        return sessionAttendanceStatus.getOrDefault(sessionId, false);
+    public boolean updateStudentAttendance(long sessionId, String studentId, boolean isPresent, boolean hasPermission, String note) {
+        Attendance attendance = getStudentAttendance(sessionId, studentId);
+        if (attendance == null) return false;
+
+        attendance.setPresent(isPresent);
+        attendance.setHasPermission(hasPermission);
+        attendance.setNote(note);
+
+        return true;
     }
 
     /**
-     * Làm mới dữ liệu từ nguồn
+     * Lấy số lượng học sinh vắng mặt trong một buổi học
+     * @param sessionId ID của buổi học
+     * @return Số lượng học sinh vắng mặt
      */
-    public void refreshData() {
-        // Trong một ứng dụng thực tế, đây là nơi bạn sẽ tải lại dữ liệu từ database
-        loadSampleData();
-        updateAttendanceView();
+    public int getAbsentCount(long sessionId) {
+        if (!sessionAttendanceMap.containsKey(sessionId)) return 0;
+
+        List<Attendance> attendanceList = sessionAttendanceMap.get(sessionId);
+        int count = 0;
+
+        for (Attendance attendance : attendanceList) {
+            if (!attendance.isPresent()) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /**
+     * Lấy danh sách học sinh vắng mặt trong một buổi học
+     * @param sessionId ID của buổi học
+     * @return Danh sách học sinh vắng mặt
+     */
+    public List<Student> getAbsentStudents(long sessionId) {
+        if (!sessionAttendanceMap.containsKey(sessionId)) return new ArrayList<>();
+
+        List<Attendance> attendanceList = sessionAttendanceMap.get(sessionId);
+        List<Student> absentStudents = new ArrayList<>();
+
+        for (Attendance attendance : attendanceList) {
+            if (!attendance.isPresent()) {
+                absentStudents.add(attendance.getStudent());
+            }
+        }
+
+        return absentStudents;
+    }
+
+    /**
+     * Lấy thông tin tỷ lệ điểm danh cho một buổi học
+     * @param sessionId ID của buổi học
+     * @return Tỷ lệ học sinh có mặt (0.0 - 1.0)
+     */
+    public double getAttendanceRate(long sessionId) {
+        if (!sessionAttendanceMap.containsKey(sessionId)) return 0.0;
+
+        List<Attendance> attendanceList = sessionAttendanceMap.get(sessionId);
+        if (attendanceList.isEmpty()) return 0.0;
+
+        int presentCount = 0;
+        for (Attendance attendance : attendanceList) {
+            if (attendance.isPresent()) {
+                presentCount++;
+            }
+        }
+
+        return (double) presentCount / attendanceList.size();
+    }
+
+    /**
+     * Lấy danh sách học sinh trong lớp từ thông tin buổi học
+     * @param classId ID của lớp
+     * @return Danh sách học sinh
+     */
+    public List<Student> getStudentsInClass(long classId) {
+        // Vì chưa có chức năng lấy danh sách học sinh theo classId từ MainController
+        // nên sẽ trích xuất từ sessionAttendanceMap nếu có buổi học của lớp đó
+        List<Student> students = new ArrayList<>();
+
+        // Duyệt qua tất cả các buổi học
+        for (Map.Entry<Long, List<Attendance>> entry : sessionAttendanceMap.entrySet()) {
+            Long sessionId = entry.getKey();
+            List<Attendance> attendanceList = entry.getValue();
+
+            if (!attendanceList.isEmpty()) {
+                ClassSession session = attendanceList.get(0).getSession();
+
+                // Kiểm tra xem buổi học có thuộc lớp này không
+                if (session != null && session.getClassId() == classId) {
+                    // Lấy danh sách học sinh từ buổi học này
+                    for (Attendance attendance : attendanceList) {
+                        Student student = attendance.getStudent();
+
+                        // Kiểm tra xem học sinh đã có trong danh sách chưa
+                        boolean exists = students.stream()
+                                .anyMatch(s -> s.getId().equals(student.getId()));
+
+                        if (!exists) {
+                            students.add(student);
+                        }
+                    }
+
+                    // Đã có danh sách học sinh, không cần kiểm tra thêm
+                    if (!students.isEmpty()) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return students;
+    }
+
+    /**
+     * Lấy dữ liệu điểm danh trong khoảng thời gian
+     * @param classId ID của lớp học
+     * @param startDate Ngày bắt đầu
+     * @param endDate Ngày kết thúc
+     * @return Danh sách buổi học có dữ liệu điểm danh
+     */
+    public Map<Long, List<Attendance>> getAttendanceDataInRange(long classId, LocalDate startDate, LocalDate endDate) {
+        Map<Long, List<Attendance>> result = new HashMap<>();
+
+        // Lặp qua tất cả các buổi học đã có dữ liệu điểm danh
+        for (Map.Entry<Long, List<Attendance>> entry : sessionAttendanceMap.entrySet()) {
+            Long sessionId = entry.getKey();
+            List<Attendance> attendanceList = entry.getValue();
+
+            if (!attendanceList.isEmpty()) {
+                ClassSession session = attendanceList.get(0).getSession();
+
+                // Kiểm tra xem buổi học có thuộc lớp này và nằm trong khoảng thời gian không
+                if (session != null && session.getClassId() == classId) {
+                    LocalDate sessionDate = session.getDate();
+
+                    if ((sessionDate.isEqual(startDate) || sessionDate.isAfter(startDate)) &&
+                            (sessionDate.isEqual(endDate) || sessionDate.isBefore(endDate))) {
+                        result.put(sessionId, attendanceList);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Thống kê số buổi vắng học của từng học sinh trong một lớp
+     * @param classId ID của lớp học
+     * @return Map chứa ID học sinh và số buổi vắng học
+     */
+    public Map<String, Integer> getAbsenceStatistics(long classId) {
+        // Lấy danh sách học sinh trong lớp
+        List<Student> students = getStudentsInClass(classId);
+        Map<String, Integer> absenceCount = new HashMap<>();
+
+        // Khởi tạo số buổi vắng mặt ban đầu là 0 cho mỗi học sinh
+        for (Student student : students) {
+            absenceCount.put(student.getId(), 0);
+        }
+
+        // Lặp qua tất cả các buổi học đã có dữ liệu điểm danh
+        for (Map.Entry<Long, List<Attendance>> entry : sessionAttendanceMap.entrySet()) {
+            Long sessionId = entry.getKey();
+            List<Attendance> attendanceList = entry.getValue();
+
+            if (!attendanceList.isEmpty()) {
+                ClassSession session = attendanceList.get(0).getSession();
+
+                // Kiểm tra xem buổi học có thuộc lớp này không
+                if (session != null && session.getClassId() == classId) {
+                    for (Attendance attendance : attendanceList) {
+                        String studentId = attendance.getStudent().getId();
+
+                        if (!attendance.isPresent() && absenceCount.containsKey(studentId)) {
+                            absenceCount.put(studentId, absenceCount.get(studentId) + 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        return absenceCount;
+    }
+
+    /**
+     * Kiểm tra học sinh có nguy cơ nghỉ học (vắng mặt nhiều buổi liên tiếp)
+     * @param classId ID của lớp học
+     * @param threshold Ngưỡng số buổi vắng mặt liên tiếp
+     * @return Danh sách học sinh có nguy cơ
+     */
+    public List<Student> getStudentsAtRisk(long classId, int threshold) {
+        List<Student> studentsAtRisk = new ArrayList<>();
+
+        // Lấy danh sách học sinh trong lớp
+        List<Student> students = getStudentsInClass(classId);
+        if (students.isEmpty()) {
+            return studentsAtRisk;
+        }
+
+        Map<String, Integer> consecutiveAbsences = new HashMap<>();
+
+        // Khởi tạo map với số buổi vắng mặt liên tiếp ban đầu là 0
+        for (Student student : students) {
+            consecutiveAbsences.put(student.getId(), 0);
+        }
+
+        // Lấy danh sách buổi học và sắp xếp theo thời gian
+        List<ClassSession> sessions = new ArrayList<>();
+
+        // Lặp qua tất cả các buổi học đã có dữ liệu điểm danh
+        for (Map.Entry<Long, List<Attendance>> entry : sessionAttendanceMap.entrySet()) {
+            Long sessionId = entry.getKey();
+            List<Attendance> attendanceList = entry.getValue();
+
+            if (!attendanceList.isEmpty()) {
+                ClassSession session = attendanceList.get(0).getSession();
+
+                // Kiểm tra xem buổi học có thuộc lớp này không
+                if (session != null && session.getClassId() == classId) {
+                    sessions.add(session);
+                }
+            }
+        }
+
+        if (sessions.isEmpty()) {
+            return studentsAtRisk;
+        }
+
+        // Sắp xếp theo ngày
+        sessions.sort((s1, s2) -> s1.getDate().compareTo(s2.getDate()));
+
+        // Duyệt qua tất cả các buổi học và đếm số buổi vắng mặt liên tiếp
+        for (ClassSession session : sessions) {
+            Long sessionId = session.getId();
+
+            if (sessionAttendanceMap.containsKey(sessionId)) {
+                List<Attendance> attendanceList = sessionAttendanceMap.get(sessionId);
+
+                for (Attendance attendance : attendanceList) {
+                    String studentId = attendance.getStudent().getId();
+
+                    if (!attendance.isPresent()) {
+                        // Tăng số buổi vắng mặt liên tiếp
+                        if (consecutiveAbsences.containsKey(studentId)) {
+                            consecutiveAbsences.put(studentId, consecutiveAbsences.get(studentId) + 1);
+
+                            // Kiểm tra nếu số buổi vắng mặt liên tiếp vượt ngưỡng
+                            if (consecutiveAbsences.get(studentId) >= threshold) {
+                                // Thêm học sinh vào danh sách nguy cơ nếu chưa có
+                                boolean alreadyAdded = studentsAtRisk.stream()
+                                        .anyMatch(s -> s.getId().equals(studentId));
+
+                                if (!alreadyAdded) {
+                                    studentsAtRisk.add(attendance.getStudent());
+                                }
+                            }
+                        }
+                    } else {
+                        // Reset số buổi vắng mặt liên tiếp
+                        if (consecutiveAbsences.containsKey(studentId)) {
+                            consecutiveAbsences.put(studentId, 0);
+                        }
+                    }
+                }
+            }
+        }
+
+        return studentsAtRisk;
+    }
+
+    /**
+     * Kiểm tra học sinh có tỷ lệ đi học thấp
+     * @param classId ID của lớp học
+     * @param minAttendanceRate Tỷ lệ đi học tối thiểu
+     * @return Danh sách học sinh có tỷ lệ đi học thấp
+     */
+    public List<Student> getStudentsWithLowAttendance(long classId, double minAttendanceRate) {
+        List<Student> studentsWithLowAttendance = new ArrayList<>();
+
+        // Lấy danh sách học sinh trong lớp
+        List<Student> students = getStudentsInClass(classId);
+        if (students.isEmpty()) {
+            return studentsWithLowAttendance;
+        }
+
+        Map<String, Integer> totalSessions = new HashMap<>();
+        Map<String, Integer> presentSessions = new HashMap<>();
+
+        // Khởi tạo maps
+        for (Student student : students) {
+            totalSessions.put(student.getId(), 0);
+            presentSessions.put(student.getId(), 0);
+        }
+
+        // Lặp qua tất cả các buổi học đã có dữ liệu điểm danh
+        for (Map.Entry<Long, List<Attendance>> entry : sessionAttendanceMap.entrySet()) {
+            Long sessionId = entry.getKey();
+            List<Attendance> attendanceList = entry.getValue();
+
+            if (!attendanceList.isEmpty()) {
+                ClassSession session = attendanceList.get(0).getSession();
+
+                // Kiểm tra xem buổi học có thuộc lớp này không
+                if (session != null && session.getClassId() == classId) {
+                    for (Attendance attendance : attendanceList) {
+                        String studentId = attendance.getStudent().getId();
+
+                        if (totalSessions.containsKey(studentId)) {
+                            totalSessions.put(studentId, totalSessions.get(studentId) + 1);
+
+                            if (attendance.isPresent()) {
+                                presentSessions.put(studentId, presentSessions.get(studentId) + 1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Kiểm tra học sinh có tỷ lệ đi học thấp
+        for (Student student : students) {
+            String studentId = student.getId();
+            int total = totalSessions.getOrDefault(studentId, 0);
+
+            if (total > 0) {
+                double attendanceRate = (double) presentSessions.getOrDefault(studentId, 0) / total;
+
+                if (attendanceRate < minAttendanceRate) {
+                    studentsWithLowAttendance.add(student);
+                }
+            }
+        }
+
+        return studentsWithLowAttendance;
+    }
+
+    /**
+     * Updates an existing attendance record in the database
+     *
+     * @param attendance The attendance record to update
+     * @return true if update was successful, false otherwise
+     */
+    /**
+     * Cập nhật thông tin điểm danh
+     *
+     * @param attendance Đối tượng điểm danh cần cập nhật
+     * @return true nếu cập nhật thành công, ngược lại là false
+     */
+    public boolean updateAttendance(Attendance attendance) {
+        if (attendance == null || !attendance.isValid()) {
+            return false;
+        }
+
+        try {
+            // Cập nhật thời gian ghi nhận
+            attendance.setRecordTime(LocalDateTime.now());
+
+            // Lưu vào cơ sở dữ liệu
+            return attendanceDAO.update(attendance);
+        } catch (Exception e) {
+            System.err.println("Lỗi khi cập nhật điểm danh: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * Lấy danh sách điểm danh theo buổi học
+     *
+     * @param sessionId ID của buổi học
+     * @return Map chứa danh sách điểm danh của buổi học, với key là ID lớp
+     */
+    public Map<Long, List<Attendance>> getAttendanceBySessionId(long sessionId) {
+        // TODO: Thực hiện truy vấn dữ liệu từ DAO
+        Map<Long, List<Attendance>> result = new HashMap<>();
+        try {
+            List<Attendance> attendances = attendanceDAO.getBySessionId(sessionId);
+            // Phân loại theo lớp học
+            long classId = -1; // Giả sử tất cả cùng một lớp
+            result.put(classId, attendances);
+        } catch (Exception e) {
+            System.err.println("Lỗi khi lấy dữ liệu điểm danh: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return result;
+    }
+
+    /**
+     * Lấy AttendanceDAO
+     *
+     * @return AttendanceDAO instance
+     */
+    public AttendanceDAO getAttendanceDAO() {
+        return attendanceDAO;
+    }
+
+    /**
+     * Thiết lập AttendanceDAO
+     *
+     * @param attendanceDAO AttendanceDAO instance
+     */
+    public void setAttendanceDAO(AttendanceDAO attendanceDAO) {
+        this.attendanceDAO = attendanceDAO;
     }
 }

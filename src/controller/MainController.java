@@ -3,6 +3,9 @@ package src.controller;
 import src.model.ClassSession;
 import view.*;
 import view.components.*;
+import src.model.attendance.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Controller chính của ứng dụng, quản lý logic nghiệp vụ
@@ -13,6 +16,11 @@ public class MainController {
     private RegisterUI registerUI;
     private NavigationController navigationController;
     private ClassSession currentSessionDetail; // Added to store current session detail
+
+    // Field to store attendance records for the current session
+    private List<Attendance> currentSessionAttendances;
+    private AttendanceController attendanceController;
+
 
     /**
      * Constructor với UI và NavigationController
@@ -56,7 +64,7 @@ public class MainController {
         navigationController.registerView("classDetails", new ClassDetailsView());
         navigationController.registerView("attendance", new AttendanceScreenView());
         navigationController.registerView("absence-call-view", new AbsenceCallView());
-        //navigationController.registerView("chat", new ScheduleView());
+        navigationController.registerView("absence-call-table", new AbsenceCallScreenView());
     }
 
     /**
@@ -206,5 +214,82 @@ public class MainController {
      */
     public UI getUI() {
         return this.ui;
+    }
+
+    public void setSessionAttendances(List<Attendance> attendances) {
+        // Store the attendance records for the current session
+        // This would typically be used when navigating from the attendance list to detailed attendance view
+        this.currentSessionAttendances = attendances;
+    }
+
+    /**
+     * Gets the attendance controller instance
+     * @return The AttendanceController instance
+     */
+    public AttendanceController getAttendanceController() {
+        // If you already have an attendance controller as a field, return it
+        return this.attendanceController;
+
+        // Or if you need to create it:
+        // if (attendanceController == null) {
+        //     attendanceController = new AttendanceController();
+        // }
+        // return attendanceController;
+    }
+
+    /**
+     * Gets the list of class IDs assigned to the current teacher
+     *
+     * @return List of class IDs associated with the current teacher
+     */
+    public List<Long> getTeacherClassIds() {
+        // This would typically involve a database query to fetch classes assigned to the current teacher
+        // For now, we'll create a placeholder implementation that you can expand later
+
+        List<Long> teacherClassIds = new ArrayList<>();
+
+        // TODO: Replace with actual database query to get teacher's classes
+        // Example implementation:
+        // 1. Get the current logged-in teacher/user ID
+        // 2. Query the database for classes assigned to this teacher
+        // 3. Extract and return the class IDs
+
+        // Mock data for demonstration
+        // In a real implementation, you would query your database or service layer
+        teacherClassIds.add(1L);
+        teacherClassIds.add(2L);
+        teacherClassIds.add(3L);
+
+        return teacherClassIds;
+    }
+
+    /**
+     * Sets the AttendanceController for this MainController
+     *
+     * @param attendanceController The AttendanceController instance
+     */
+    public void setAttendanceController(AttendanceController attendanceController) {
+        this.attendanceController = attendanceController;
+    }
+
+    /**
+     * Gets the list of attendance records for the current session
+     *
+     * @return List of attendance records
+     */
+    public List<Attendance> getCurrentSessionAttendances() {
+        return this.currentSessionAttendances;
+    }
+
+    /**
+     * Gets the current class ID based on the selected session
+     *
+     * @return The current class ID or -1 if no session is selected
+     */
+    public long getCurrentClassId() {
+        if (currentSessionDetail != null) {
+            return currentSessionDetail.getClassId();
+        }
+        return -1;
     }
 }
