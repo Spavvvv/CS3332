@@ -32,7 +32,7 @@ public class RegisterUI {
 
     // File path for storing user accounts
     private String ACCOUNTS_FILE;
-    private final static String FILE_PATH = "C:\\Users\\Admin\\Documents\\University\\CS3332\\CS3332\\UserAccount";
+    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
 
     public RegisterUI(Stage primaryStage) {
         this.primaryStage = primaryStage;

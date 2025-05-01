@@ -9,8 +9,8 @@ module CS3323 {
     exports src.controller;
     exports src.model;
 
-    //opens src.controller to javafx.fxml;
-    //opens src.model to javafx.fxml;
+    opens src.controller to javafx.fxml;
+    opens src.model to javafx.fxml;
     opens view.components to javafx.base, javafx.fxml;
 
 }

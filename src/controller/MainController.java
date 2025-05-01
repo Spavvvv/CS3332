@@ -35,12 +35,12 @@ public class MainController {
     public MainController(LoginUI ui, NavigationController navigationController) {
         this.loginUI = ui;
         this.navigationController = navigationController;
-        initialize();
+        //initialize();
     }
     public MainController(RegisterUI ui, NavigationController navigationController) {
         this.registerUI = ui;
         this.navigationController = navigationController;
-        initialize();
+        //initialize();
     }
     /**
      * Khởi tạo controller và đăng ký các màn hình
@@ -65,6 +65,8 @@ public class MainController {
         navigationController.registerView("attendance", new AttendanceScreenView());
         navigationController.registerView("absence-call-view", new AbsenceCallView());
         navigationController.registerView("absence-call-table", new AbsenceCallScreenView());
+        navigationController.registerView("exams", new ExamsView());
+        navigationController.registerView("details-view", new DetailsView());
     }
 
     /**

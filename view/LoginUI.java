@@ -27,7 +27,7 @@ public class LoginUI {
     private String currentTheme = "light"; // Mặc định là theme sáng
     private NavigationController navigationController;
     private MainController mainController;
-    private final static String FILE_PATH = "C:\\Users\\Admin\\Documents\\University\\CS3332\\CS3332\\UserAccount";
+    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
 
     public LoginUI(Stage primaryStage) {
         this.primaryStage = primaryStage;
@@ -291,13 +291,24 @@ public class LoginUI {
                     // Khởi tạo và hiển thị UI chính
                     Stage uiStage = new Stage();
                     UI ui = new UI();
-                    ui.setControllers(mainController, navigationController);
+
+                    NavigationController navigationController1 = new NavigationController(ui);
+                    MainController mainController1 = new MainController(ui, navigationController1);
+
+                    // Liên kết UI với các controller
+                    ui.setControllers(mainController1, navigationController1);
+
+
+                    //ui.setControllers(mainController, navigationController);
+
 
                     Scene uiScene = ui.createScene();
                     uiStage.setScene(uiScene);
                     uiStage.setTitle("Hệ thống quản lý trung tâm");
                     uiStage.show();
 
+
+                    mainController1.onAppStart();
                     return;
                 }
             }
