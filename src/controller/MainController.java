@@ -1,12 +1,9 @@
 package src.controller;
 
 import src.model.ClassSession;
-import view.ScreenView;
-import view.UI;
+import view.*;
 import view.components.*;
-import view.BaseScreenView;
 import src.model.attendance.*;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,6 +12,8 @@ import java.util.List;
  */
 public class MainController {
     private UI ui;
+    private LoginUI loginUI;
+    private RegisterUI registerUI;
     private NavigationController navigationController;
     private ClassSession currentSessionDetail; // Added to store current session detail
 
@@ -33,7 +32,16 @@ public class MainController {
         this.navigationController = navigationController;
         initialize();
     }
-
+    public MainController(LoginUI ui, NavigationController navigationController) {
+        this.loginUI = ui;
+        this.navigationController = navigationController;
+        initialize();
+    }
+    public MainController(RegisterUI ui, NavigationController navigationController) {
+        this.registerUI = ui;
+        this.navigationController = navigationController;
+        initialize();
+    }
     /**
      * Khởi tạo controller và đăng ký các màn hình
      */
