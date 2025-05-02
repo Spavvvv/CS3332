@@ -67,6 +67,11 @@ public class MainController {
         navigationController.registerView("absence-call-table", new AbsenceCallScreenView());
         navigationController.registerView("exams", new ExamsView());
         navigationController.registerView("details-view", new DetailsView());
+        navigationController.registerView("learning-reports", new ReportView());
+        navigationController.registerView("teaching-statistics", new TeachingStatistics());
+        navigationController.registerView("monthly-teaching", new MonthlyTeachingStatistics());
+        navigationController.registerView("quarterly-teaching", new QuarterlyTeachingStatistics());
+        navigationController.registerView("yearly-teaching", new YearlyTeachingStatistics());
     }
 
     /**

@@ -313,7 +313,7 @@ public class UI {
         reportSubmenu = createSubmenu();
         reportSubmenu.getChildren().addAll(
                 createSubmenuButton("Tình hình học tập", "learning-reports"),
-                createSubmenuButton("Báo cáo công việc", "work-reports"),
+                //createSubmenuButton("Báo cáo công việc", "work-reports"),
                 createSubmenuButton("Thống kê giờ giảng", "teaching-statistics")
         );
         reportSubmenu.setVisible(false);

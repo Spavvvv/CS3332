@@ -22,6 +22,10 @@ public class NavigationController {
     private ScreenView currentView = null;
     private List<String> navigationHistory;
     private static final int MAX_HISTORY_SIZE = 10;
+
+    // Map để lưu trữ trạng thái của các toggle buttons
+    private Map<String, String> toggleStates = new HashMap<>();
+
     /**
      Constructor với UI
      @param ui Interface người dùng
@@ -220,5 +224,47 @@ public class NavigationController {
             }
         }
         return null;
+    }
+
+    /**
+     * Lưu trạng thái của một toggle button
+     * @param key Khóa để lưu trạng thái
+     * @param value Giá trị trạng thái
+     */
+    public void saveToggleState(String key, String value) {
+        toggleStates.put(key, value);
+    }
+
+    /**
+     * Lấy trạng thái đã lưu của một toggle button
+     * @param key Khóa để lấy trạng thái
+     * @return Giá trị trạng thái, null nếu không tồn tại
+     */
+    public String getSavedToggleState(String key) {
+        return toggleStates.get(key);
+    }
+
+    /**
+     * Kiểm tra xem một trạng thái có tồn tại không
+     * @param key Khóa cần kiểm tra
+     * @return true nếu trạng thái tồn tại, false nếu không
+     */
+    public boolean hasToggleState(String key) {
+        return toggleStates.containsKey(key);
+    }
+
+    /**
+     * Xóa một trạng thái đã lưu
+     * @param key Khóa của trạng thái cần xóa
+     */
+    public void clearToggleState(String key) {
+        toggleStates.remove(key);
+    }
+
+    /**
+     * Xóa tất cả các trạng thái đã lưu
+     */
+    public void clearAllToggleStates() {
+        toggleStates.clear();
     }
 }

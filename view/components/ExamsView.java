@@ -317,8 +317,8 @@ public class ExamsView extends BaseScreenView {
 
     private void showScores(ClassSession session) {
         System.out.println("Show scores for session: " + session.getCourseName());
-        navigationController.navigateTo("details-view");
         mainController.setSessionDetail(session);
+        navigationController.navigateTo("details-view");
     }
 
     private void performSearch() {
