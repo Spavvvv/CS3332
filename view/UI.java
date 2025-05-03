@@ -323,7 +323,6 @@ public class UI {
         manageSubmenu = createSubmenu();
         manageSubmenu.getChildren().addAll(
                 createSubmenuButton("Phòng học", "classrooms"),
-                createSubmenuButton("Tin tức", "news"),
                 createSubmenuButton("Ngày nghỉ", "holidays"),
                 createSubmenuButton("Cài đặt", "settings")
         );

@@ -72,6 +72,8 @@ public class MainController {
         navigationController.registerView("monthly-teaching", new MonthlyTeachingStatistics());
         navigationController.registerView("quarterly-teaching", new QuarterlyTeachingStatistics());
         navigationController.registerView("yearly-teaching", new YearlyTeachingStatistics());
+        navigationController.registerView("classrooms", new RoomView());
+        navigationController.registerView("holidays", new HolidaysView());
     }
 
     /**
