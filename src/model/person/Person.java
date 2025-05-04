@@ -10,9 +10,10 @@ public abstract class Person {
     protected String birthday;
     protected int age;
     protected String status;
+    protected String email;
 
     // Constructor
-    public Person(String id, String name, String gender, String contactNumber, String birthday) {
+    public Person(String id, String name, String gender, String contactNumber, String birthday, String email) {
         this.id = id;
         this.name = name;
         this.gender = gender;
@@ -20,6 +21,7 @@ public abstract class Person {
         this.birthday = birthday;
         calculateAge(); // Calculate age based on birthday
         this.status = "Active";
+        this.email = email;
     }
 
     public Person() {}
@@ -60,6 +62,13 @@ public abstract class Person {
 
     public void setGender(String gender) {
         this.gender = gender;
+    }
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.gender = email;
     }
 
     public String getContactNumber() {

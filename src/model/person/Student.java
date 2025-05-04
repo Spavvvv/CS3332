@@ -11,8 +11,9 @@ public class Student extends Person {
     private List<Course> currentCourses;
     private Parent parent;
 
-    public Student(String id, String name, String gender, String contactNumber, String birthday, Parent parent) {
-        super(id, name, gender, contactNumber, birthday);
+    public Student(String id, String name, String gender, String contactNumber, String birthday,
+                   String email, Parent parent) {
+        super(id, name, gender, contactNumber, birthday, email);
         this.currentCourses = new ArrayList<>();
         this.parent = parent;
     }
