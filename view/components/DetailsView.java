@@ -343,14 +343,11 @@ public class DetailsView extends BaseScreenView {
         barChart.setCategoryGap(5);
         barChart.setHorizontalGridLinesVisible(true);
         barChart.setHorizontalZeroLineVisible(true);
+        barChart.setAlternativeRowFillVisible(false);
+        barChart.setAlternativeColumnFillVisible(false);
+        barChart.setStyle("-fx-horizontal-grid-line-color: #cccccc; -fx-horizontal-grid-line-opacity: 1.0;");
 
-        // Thêm CSS cho đường lưới để làm cho chúng rõ ràng hơn
-        barChart.setStyle("-fx-background-color: transparent; -fx-legend-visible: true; " +
-                "-fx-horizontal-grid-lines-visible: true; " +
-                "-fx-horizontal-grid-line-color: #cccccc; " +  // Màu đường lưới
-                "-fx-horizontal-grid-line-opacity: 0.8; " +    // Độ mờ
-                "-fx-horizontal-zero-line-visible: true; " +
-                "-fx-horizontal-zero-line-color: #666666;");   // Màu đường zero
+
 
         // Thiết lập các giá trị mặc định cho trục X (các mức điểm từ 0 đến 10)
         ObservableList<String> categories = FXCollections.observableArrayList();
@@ -386,7 +383,7 @@ public class DetailsView extends BaseScreenView {
     private void setupEventHandlers() {
         backButton.setOnAction(e -> {
             // Handle back button click - navigate back to previous screen
-            System.out.println("Back button clicked");
+            //System.out.println("Back button clicked");
             navigationController.goBack();
         });
 
