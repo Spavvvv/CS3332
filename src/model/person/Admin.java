@@ -2,13 +2,11 @@
 package src.model.person;
 
 public class Admin extends Person {
-    private String adminId;
     private String accessLevel;
 
-    public Admin(String id, String name, String gender, String contactNumber, String birthday,
-                 String adminId, String accessLevel) {
-        super(id, name, gender, contactNumber, birthday);
-        this.adminId = adminId;
+    public Admin(String id, String name, String gender, String contactNumber, String birthday, String email,
+                  String accessLevel) {
+        super(id, name, gender, contactNumber, birthday,email);
         this.accessLevel = accessLevel;
     }
 
@@ -30,13 +28,7 @@ public class Admin extends Person {
     }
 
     // Getters and Setters
-    public String getAdminId() {
-        return adminId;
-    }
 
-    public void setAdminId(String adminId) {
-        this.adminId = adminId;
-    }
 
     public String getAccessLevel() {
         return accessLevel;
@@ -50,7 +42,7 @@ public class Admin extends Person {
     public String toString() {
         return super.toString() +
                 ", Role: " + getRole() +
-                ", Admin ID: " + adminId +
+                ", Admin ID: " + id +
                 ", Access Level: " + accessLevel;
     }
 }

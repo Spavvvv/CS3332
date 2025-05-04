@@ -2,6 +2,7 @@ package view;
 
 import src.controller.MainController;
 import src.controller.NavigationController;
+import src.model.person.Person;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -20,11 +21,15 @@ import javafx.scene.text.TextAlignment;
 public class UI {
     private BorderPane root;
     private VBox mainContent;
-    private final String currentUser = "Dummy";
+    private String currentUserName = "Dummy";
+    private String currentUserContact = "";
+    private String currentUserEmail = "";
+    private String currentUserRole = "";
     private NavigationController navigationController;
     private MainController mainController;
     private Label pageTitleLabel;
     private Label breadcrumbPathLabel;
+    private Label userLabel;
 
     // Biến để lưu trạng thái hiển thị submenu
     private VBox sidebar;
@@ -49,6 +54,52 @@ public class UI {
     public void setControllers(MainController mainController, NavigationController navigationController) {
         this.mainController = mainController;
         this.navigationController = navigationController;
+    }
+
+    /**
+     * Thiết lập thông tin người dùng hiện tại
+     * @param person Đối tượng Person chứa thông tin người dùng
+     */
+    public void setCurrentUser(Person person) {
+        if (person != null) {
+            this.currentUserName = person.getName();
+            this.currentUserContact = person.getContactNumber();
+            this.currentUserEmail = person.getEmail();
+            this.currentUserRole = determineUserRole(person);
+
+            // Cập nhật UI nếu đã được khởi tạo
+            updateUserDisplay();
+        }
+    }
+
+    /**
+     * Xác định vai trò người dùng từ loại đối tượng
+     * @param person Đối tượng người dùng
+     * @return Chuỗi mô tả vai trò
+     */
+    private String determineUserRole(Person person) {
+        String className = person.getClass().getSimpleName();
+        switch (className) {
+            case "Admin":
+                return "Quản trị viên";
+            case "Teacher":
+                return "Giáo viên";
+            case "Student":
+                return "Học viên";
+            case "Parent":
+                return "Phụ huynh";
+            default:
+                return "";
+        }
+    }
+
+    /**
+     * Cập nhật thông tin người dùng trên giao diện
+     */
+    private void updateUserDisplay() {
+        if (userLabel != null) {
+            userLabel.setText(currentUserName);
+        }
     }
 
     /**
@@ -212,7 +263,8 @@ public class UI {
         HBox userProfileBox = new HBox(10);
         userProfileBox.setAlignment(Pos.CENTER);
 
-        Label userLabel = new Label(currentUser);
+        // Tham chiếu đến userLabel để có thể cập nhật sau này
+        userLabel = new Label(currentUserName);
         userLabel.setStyle("-fx-text-fill: #333;");
 
         try {
@@ -245,6 +297,15 @@ public class UI {
                 navigationController.navigateTo("profile");
             }
         });
+
+        // Thêm tooltip để hiển thị thông tin chi tiết người dùng
+        Tooltip userTooltip = new Tooltip(
+                "Họ tên: " + currentUserName + "\n" +
+                        "Vai trò: " + currentUserRole + "\n" +
+                        "SĐT: " + currentUserContact + "\n" +
+                        "Email: " + currentUserEmail
+        );
+        Tooltip.install(userProfileBox, userTooltip);
 
         // Notification button
         Button notifButton = new Button();
@@ -304,7 +365,7 @@ public class UI {
         studentSubmenu = createSubmenu();
         studentSubmenu.getChildren().addAll(
                 createSubmenuButton("Học viên", "student-list"),
-                createSubmenuButton("Lớp học", "classes")
+                createSubmenuButton("Lớp học", "ClassListView")
         );
         studentSubmenu.setVisible(false);
         studentSubmenu.setManaged(false);
@@ -365,9 +426,9 @@ public class UI {
             String emoji = "";
             switch (iconName) {
                 case "training": emoji = "📚"; break;
-                case "students": emoji = "👥"; break; // Sửa từ "student" thành "students"
-                case "reports": emoji = "📊"; break;  // Sửa từ "report" thành "reports"
-                case "management": emoji = "⚙️"; break; // Sửa từ "manage" thành "management"
+                case "students": emoji = "👥"; break;
+                case "reports": emoji = "📊"; break;
+                case "management": emoji = "⚙️"; break;
                 default: emoji = "•";
             }
             Label iconLabel = new Label(emoji);
@@ -410,9 +471,9 @@ public class UI {
             VBox submenu = null;
             switch (iconName) {
                 case "training": submenu = trainingSubmenu; break;
-                case "students": submenu = studentSubmenu; break; // Sửa từ "student" thành "students"
-                case "reports": submenu = reportSubmenu; break;   // Sửa từ "report" thành "reports"
-                case "management": submenu = manageSubmenu; break; // Sửa từ "manage" thành "management"
+                case "students": submenu = studentSubmenu; break;
+                case "reports": submenu = reportSubmenu; break;
+                case "management": submenu = manageSubmenu; break;
             }
 
             if (submenu != null) {
@@ -448,7 +509,6 @@ public class UI {
 
         return header;
     }
-
 
     /**
      * Reset styles for all menu headers
@@ -700,6 +760,30 @@ public class UI {
     }
 
     /**
+     * Lấy tên người dùng hiện tại
+     * @return Tên người dùng
+     */
+    public String getCurrentUserName() {
+        return currentUserName;
+    }
+
+    /**
+     * Lấy thông tin liên hệ của người dùng hiện tại
+     * @return Số điện thoại liên hệ
+     */
+    public String getCurrentUserContact() {
+        return currentUserContact;
+    }
+
+    /**
+     * Lấy email của người dùng hiện tại
+     * @return Email người dùng
+     */
+    public String getCurrentUserEmail() {
+        return currentUserEmail;
+    }
+
+    /**
      * Circle class for avatar placeholder (if image not available)
      */
     private class Circle extends StackPane {
@@ -710,7 +794,7 @@ public class UI {
             javafx.scene.shape.Circle circle = new javafx.scene.shape.Circle(radius);
             circle.setFill(color);
 
-            Text text = new Text(currentUser.substring(0, 1).toUpperCase());
+            Text text = new Text(currentUserName.substring(0, 1).toUpperCase());
             text.setStyle("-fx-font-size: 16px; -fx-fill: white;");
             text.setTextAlignment(TextAlignment.CENTER);
 

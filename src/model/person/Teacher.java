@@ -9,9 +9,9 @@ public class Teacher extends Person {
     private List<String> subjects;
     private String position;
 
-    public Teacher(String id, String name, String gender, String contactNumber, String birthday,
+    public Teacher(String id, String name, String gender, String contactNumber, String birthday, String email,
                    String teacherId, String position) {
-        super(id, name, gender, contactNumber, birthday);
+        super(id, name, gender, contactNumber, birthday, email);
         this.teacherId = teacherId;
         this.position = position;
         this.subjects = new ArrayList<>();

@@ -1,5 +1,4 @@
 package view;
-
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -11,32 +10,52 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 import src.controller.MainController;
 import src.controller.NavigationController;
-
 import java.io.*;
+import java.time.LocalDate;
+import java.time.Year;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Random;
 import java.util.Scanner;
+import java.util.prefs.Preferences;
 
 public class RegisterUI {
     private Stage primaryStage;
+    private StackPane root;
+    private VBox registerCard;
     private TextField usernameField;
     private TextField emailField;
     private TextField fullNameField;
     private TextField phoneField;
+    private DatePicker dobPicker; // DatePicker cho ngày sinh
+    private TextField dobTextField; // TextField thêm cho nhập tay ngày sinh
     private PasswordField passwordField;
     private PasswordField confirmPasswordField;
     private ComboBox<String> roleComboBox;
     private CheckBox termsCheckBox;
     private NavigationController navigationController;
     private MainController mainController;
-
+    private String currentTheme = "light"; // Mặc định là theme sáng
     // File path for storing user accounts
     private String ACCOUNTS_FILE;
-    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
+    private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
+
+    // Định dạng ngày tháng
+    private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     public RegisterUI(Stage primaryStage) {
         this.primaryStage = primaryStage;
+        loadThemePreference(); // Tải theme đã lưu
         setupStage();
+    }
+
+    // Tải theme từ preferences
+    private void loadThemePreference() {
+        Preferences prefs = Preferences.userNodeForPackage(LoginUI.class);
+        currentTheme = prefs.get("theme", "light");
     }
 
     // Create accounts file if it doesn't exist
@@ -45,6 +64,11 @@ public class RegisterUI {
         File file = new File(FILE_PATH, ACCOUNTS_FILE);
         if (!file.exists()) {
             try {
+                // Tạo thư mục nếu chưa tồn tại
+                File directory = new File(FILE_PATH);
+                if (!directory.exists()) {
+                    directory.mkdirs();
+                }
                 file.createNewFile();
                 System.out.println("Created new accounts file: " + ACCOUNTS_FILE);
             } catch (IOException e) {
@@ -56,61 +80,119 @@ public class RegisterUI {
     // Check if username already exists in the file
     private boolean isUsernameTaken(String username) {
         ACCOUNTS_FILE = username + ".txt";
-        try (Scanner scanner = new Scanner(new File(FILE_PATH,ACCOUNTS_FILE))) {
-            while (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                String[] parts = line.split(",");
-                if (parts.length >= 2 && parts[0].trim().equalsIgnoreCase(username.trim())) {
-                    return true;
-                }
-            }
-        } catch (FileNotFoundException e) {
-            System.err.println("Error checking username: " + e.getMessage());
-        }
-        return false;
+        File file = new File(FILE_PATH, ACCOUNTS_FILE);
+        return file.exists();
     }
 
     // Check if email already exists in the file
     private boolean isEmailTaken(String email) {
-        ACCOUNTS_FILE = usernameField.getText() + ".txt";
-        try (Scanner scanner = new Scanner(new File(FILE_PATH,ACCOUNTS_FILE))) {
-            while (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                String[] parts = line.split(",");
-                if (parts.length >= 4 && parts[3].trim().equalsIgnoreCase(email.trim())) {
-                    return true;
+        File directory = new File(FILE_PATH);
+        if (!directory.exists() || !directory.isDirectory()) {
+            return false;
+        }
+
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return false;
+        }
+
+        for (File file : files) {
+            if (file.isFile() && file.getName().endsWith(".txt")) {
+                try (Scanner scanner = new Scanner(file)) {
+                    while (scanner.hasNextLine()) {
+                        String line = scanner.nextLine();
+                        String[] parts = line.split(",");
+                        if (parts.length >= 4 && parts[3].trim().equalsIgnoreCase(email.trim())) {
+                            return true;
+                        }
+                    }
+                } catch (FileNotFoundException e) {
+                    System.err.println("Error checking email: " + e.getMessage());
                 }
             }
-        } catch (FileNotFoundException e) {
-            System.err.println("Error checking email: " + e.getMessage());
         }
         return false;
     }
 
+    // Kiểm tra xem ID đã tồn tại trong hệ thống chưa
+    private boolean isIDTaken(String id) {
+        File directory = new File(FILE_PATH);
+        if (!directory.exists() || !directory.isDirectory()) {
+            return false;
+        }
+
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return false;
+        }
+
+        for (File file : files) {
+            if (file.isFile() && file.getName().endsWith(".txt")) {
+                try (Scanner scanner = new Scanner(file)) {
+                    while (scanner.hasNextLine()) {
+                        String line = scanner.nextLine();
+                        String[] parts = line.split(",");
+                        if (parts.length >= 9 && parts[8].trim().equals(id.trim())) {
+                            return true;
+                        }
+                    }
+                } catch (FileNotFoundException e) {
+                    System.err.println("Error checking ID: " + e.getMessage());
+                }
+            }
+        }
+        return false;
+    }
+
+    // Tạo ID ngẫu nhiên 6 chữ số dựa trên vai trò
+    private String generateUniqueID(String role) {
+        // Xác định số đầu tiên dựa trên vai trò
+        String firstDigit;
+        if (role.equals("Giáo viên")) {
+            firstDigit = "1";
+        } else if (role.equals("Học viên")) {
+            firstDigit = "2";
+        } else { // Phụ huynh
+            firstDigit = "3";
+        }
+
+        // Tạo 5 chữ số còn lại ngẫu nhiên
+        StringBuilder randomDigits = new StringBuilder();
+        Random random = new Random();
+        for (int i = 0; i < 5; i++) {
+            randomDigits.append(random.nextInt(10));
+        }
+
+        return firstDigit + randomDigits.toString();
+    }
+
     // Save a new account to the file
-    private void saveAccount(String username, String password, String fullName, String email, String phone, String role) {
-        ACCOUNTS_FILE = usernameField.getText() + ".txt";
-        File file = new File(FILE_PATH,ACCOUNTS_FILE);
+    private void saveAccount(String username, String password, String fullName, String email, String phone, String role, LocalDate dob, int age, String userId) {
+        ACCOUNTS_FILE = username + ".txt";
+        File file = new File(FILE_PATH, ACCOUNTS_FILE);
+
         try (FileWriter writer = new FileWriter(file, true)) {
-            // Format: username,password,fullName,email,phone,role
-            String accountInfo = String.format("%s,%s,%s,%s,%s,%s%n",
-                    username.trim(), password, fullName.trim(), email.trim(), phone.trim(), role.trim());
+            // Format: username,password,fullName,email,phone,role,dob,age,userId
+            String dobString = dob != null ? dob.format(DATE_FORMATTER) : "";
+            String accountInfo = String.format("%s,%s,%s,%s,%s,%s,%s,%d,%s%n",
+                    username.trim(), password, fullName.trim(), email.trim(), phone.trim(), role.trim(), dobString, age, userId);
             writer.write(accountInfo);
-            System.out.println("Account saved: " + username);
+            System.out.println("Account saved: " + username + " with ID: " + userId);
         } catch (IOException e) {
             System.err.println("Error saving account: " + e.getMessage());
         }
     }
 
     private void setupStage() {
-        StackPane root = new StackPane();
-        root.setStyle("-fx-background-color: #f5f5f5;"); // Light theme background
+        root = new StackPane();
+        applyTheme(root, currentTheme); // Áp dụng theme
 
-        VBox registerCard = createRegisterCard();
+        registerCard = createRegisterCard();
         registerCard.setEffect(new javafx.scene.effect.DropShadow(10, Color.gray(0.4)));
+        applyCardStyle(currentTheme, registerCard); // Áp dụng style cho card theo theme
 
         root.getChildren().add(registerCard);
-        Scene scene = new Scene(root, 800, 650);
+        Scene scene = new Scene(root, 800, 700);
         primaryStage.setScene(scene);
         primaryStage.setTitle("Đăng ký - Hệ thống quản lý trung tâm");
         primaryStage.show();
@@ -221,6 +303,73 @@ public class RegisterUI {
             }
         });
 
+        // Date of Birth - Cải tiến với kết hợp DatePicker và TextField
+        Label dobLabel = new Label("Ngày sinh:");
+        dobLabel.setStyle("-fx-text-fill: #555;");
+
+        // Tạo HBox để chứa cả DatePicker và TextField
+        HBox dobInputBox = new HBox(5);
+
+        // TextField cho nhập tay
+        dobTextField = new TextField();
+        dobTextField.setPromptText("DD/MM/YYYY");
+        dobTextField.setPrefHeight(35);
+        HBox.setHgrow(dobTextField, Priority.ALWAYS); // Cho phép mở rộng để lấp đầy không gian
+        styleTextField(dobTextField);
+
+        // DatePicker cho chọn từ lịch
+        dobPicker = new DatePicker();
+        dobPicker.setPrefHeight(35);
+        dobPicker.setPrefWidth(40);
+        // Ẩn phần text, chỉ hiển thị nút lịch
+        dobPicker.getEditor().setVisible(false);
+        dobPicker.getEditor().setManaged(false);
+        dobPicker.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ddd;");
+
+        // Định dạng date picker để hiển thị theo format DD/MM/YYYY
+        StringConverter<LocalDate> converter = new StringConverter<LocalDate>() {
+            @Override
+            public String toString(LocalDate date) {
+                if (date != null) {
+                    return DATE_FORMATTER.format(date);
+                } else {
+                    return "";
+                }
+            }
+
+            @Override
+            public LocalDate fromString(String string) {
+                if (string != null && !string.isEmpty()) {
+                    try {
+                        return LocalDate.parse(string, DATE_FORMATTER);
+                    } catch (DateTimeParseException e) {
+                        return null;
+                    }
+                } else {
+                    return null;
+                }
+            }
+        };
+        dobPicker.setConverter(converter);
+
+        // Khi chọn từ date picker, cập nhật giá trị vào text field
+        dobPicker.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                dobTextField.setText(DATE_FORMATTER.format(newVal));
+                validateDateInput();
+            }
+        });
+
+        // Khi nhập tay, cập nhật giá trị vào date picker
+        dobTextField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (!newVal) { // Khi mất focus
+                validateDateInput();
+            }
+        });
+
+        // Thêm vào HBox
+        dobInputBox.getChildren().addAll(dobTextField, dobPicker);
+
         // Vai trò
         Label roleLabel = new Label("Vai trò:");
         roleLabel.setStyle("-fx-text-fill: #555;");
@@ -301,6 +450,9 @@ public class RegisterUI {
         form.add(usernameField, 0, 3);
         form.add(emailLabel, 0, 4);
         form.add(emailField, 0, 5);
+        form.add(dobLabel, 0, 6); // Date of birth label
+        form.add(dobInputBox, 0, 7); // Date of birth input
+
         // Cột 2
         form.add(phoneLabel, 1, 0);
         form.add(phoneField, 1, 1);
@@ -308,10 +460,11 @@ public class RegisterUI {
         form.add(roleComboBox, 1, 3);
         form.add(passLabel, 1, 4);
         form.add(passwordField, 1, 5);
+        form.add(confirmPassLabel, 1, 6);
+        form.add(confirmPasswordField, 1, 7);
 
         // Row span toàn bộ chiều rộng form
-        form.add(confirmPassLabel, 0, 6, 2, 1);
-        form.add(confirmPasswordField, 0, 7, 2, 1);
+        // Không thêm themeBox vào trang đăng ký, chỉ đọc theme từ Login
         form.add(termsCheckBox, 0, 8, 2, 1);
         form.add(termsLink, 0, 9, 2, 1);
         form.add(registerBtn, 0, 10, 2, 1);
@@ -337,6 +490,127 @@ public class RegisterUI {
         card.getChildren().addAll(logoBox, title, form, loginBox);
 
         return card;
+    }
+
+    // Kiểm tra và xác thực đầu vào ngày tháng
+    private void validateDateInput() {
+        String dateText = dobTextField.getText().trim();
+        try {
+            if (!dateText.isEmpty()) {
+                LocalDate date = LocalDate.parse(dateText, DATE_FORMATTER);
+                if (date.isAfter(LocalDate.now())) {
+                    dobTextField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+                    showTooltip(dobTextField, "Ngày sinh không hợp lệ");
+                } else {
+                    dobTextField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #00aa00; -fx-text-fill: #555;");
+                    dobPicker.setValue(date);
+                }
+            }
+        } catch (DateTimeParseException e) {
+            dobTextField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+            showTooltip(dobTextField, "Định dạng ngày không hợp lệ (DD/MM/YYYY)");
+        }
+    }
+
+    private void applyTheme(javafx.scene.Parent parent, String theme) {
+        String backgroundColor = "#f5f5f5"; // Default light background
+        String textColor = "#333"; // Default text color
+
+        switch (theme) {
+            case "dark":
+                backgroundColor = "#2d2d2d";
+                textColor = "#fff";
+                break;
+            case "blue":
+                backgroundColor = "#e0ffff";
+                textColor = "#00008b";
+                break;
+            case "purple":
+                backgroundColor = "#e6e6ff";
+                textColor = "#4b0082";
+                break;
+            case "green":
+                backgroundColor = "#f0fff0";
+                textColor = "#006400";
+                break;
+            case "orange":
+                backgroundColor = "#faebd7";
+                textColor = "#a0522d";
+                break;
+            case "red":
+                backgroundColor = "#ffe4e1";
+                textColor = "#8b0000";
+                break;
+        }
+
+        parent.setStyle("-fx-background-color: " + backgroundColor + "; -fx-text-fill: " + textColor + ";");
+    }
+
+    private void applyCardStyle(String theme, VBox card) {
+        String cardColor = "white";
+        String textColor = "#555"; // Màu chữ mặc định
+        switch (theme) {
+            case "dark":
+                cardColor = "#333";
+                textColor = "white"; // Chuyển chữ sang màu trắng khi theme là dark
+                break;
+            case "blue":
+                cardColor = "#f0ffff";
+                break;
+            case "purple":
+                cardColor = "#f0e6ff";
+                break;
+            case "green":
+                cardColor = "#f5fffa";
+                break;
+            case "orange":
+                cardColor = "#fffaf0";
+                break;
+            case "red":
+                cardColor = "#fff0f5";
+                break;
+        }
+        card.setStyle("-fx-background-color: " + cardColor + "; -fx-background-radius: 10;");
+
+        // Áp dụng màu chữ cho các label trong card
+        for (javafx.scene.Node node : card.getChildren()) {
+            if (node instanceof Label) {
+                ((Label) node).setStyle("-fx-text-fill: " + textColor + ";");
+            } else if (node instanceof GridPane) {
+                GridPane form = (GridPane) node;
+                for (javafx.scene.Node formNode : form.getChildren()) {
+                    if (formNode instanceof Label) {
+                        ((Label) formNode).setStyle("-fx-text-fill: " + textColor + ";");
+                    } else if (formNode instanceof TextField) {
+                        ((TextField) formNode).setStyle("-fx-text-fill: " + textColor + ";");
+                    } else if (formNode instanceof PasswordField) {
+                        ((PasswordField) formNode).setStyle("-fx-text-fill: " + textColor + ";");
+                    } else if (formNode instanceof Hyperlink) {
+                        ((Hyperlink) formNode).setStyle("-fx-text-fill: " + textColor + ";");
+                    } else if (formNode instanceof CheckBox) {
+                        ((CheckBox) formNode).setStyle("-fx-text-fill: " + textColor + ";");
+                    } else if (formNode instanceof HBox) {
+                        for (javafx.scene.Node hboxNode : ((HBox) formNode).getChildren()) {
+                            if (hboxNode instanceof Label) {
+                                ((Label) hboxNode).setStyle("-fx-text-fill: " + textColor + ";");
+                            } else if (hboxNode instanceof TextField) {
+                                ((TextField) hboxNode).setStyle("-fx-text-fill: " + textColor + ";");
+                            }
+                        }
+                    }
+                }
+            } else if (node instanceof CheckBox) {
+                ((CheckBox) node).setStyle("-fx-text-fill: " + textColor + ";");
+            } else if (node instanceof Hyperlink) {
+                ((Hyperlink) node).setStyle("-fx-text-fill: " + textColor + ";");
+            } else if (node instanceof HBox) {
+                for (javafx.scene.Node hboxNode : ((HBox) node).getChildren()) {
+                    if (hboxNode instanceof Label) {
+                        ((Label) hboxNode).setStyle("-fx-text-fill: " + textColor + ";");
+                    }
+                }
+            }
+        }
     }
 
     private void styleTextField(TextField textField) {
@@ -371,7 +645,8 @@ public class RegisterUI {
                 emailField.getText().isEmpty() ||
                 phoneField.getText().isEmpty() ||
                 passwordField.getText().isEmpty() ||
-                confirmPasswordField.getText().isEmpty()) {
+                confirmPasswordField.getText().isEmpty() ||
+                dobTextField.getText().isEmpty()) {
 
             showAlert("Lỗi đăng ký", "Vui lòng điền đầy đủ thông tin đăng ký");
             return;
@@ -407,6 +682,25 @@ public class RegisterUI {
             return;
         }
 
+        // Kiểm tra và phân tích ngày sinh
+        LocalDate dob = null;
+        try {
+            dob = LocalDate.parse(dobTextField.getText(), DATE_FORMATTER);
+
+            if (dob.isAfter(LocalDate.now())) {
+                showAlert("Lỗi đăng ký", "Ngày sinh không hợp lệ");
+                return;
+            }
+        } catch (DateTimeParseException e) {
+            showAlert("Lỗi đăng ký", "Định dạng ngày sinh không hợp lệ (DD/MM/YYYY)");
+            return;
+        }
+
+        // Tính tuổi dựa trên năm hiện tại (2025)
+        int birthYear = dob.getYear();
+        int currentYear = Year.now().getValue();
+        int age = currentYear - birthYear;
+
         String username = usernameField.getText();
         // Kiểm tra tên đăng nhập đã tồn tại
         if (isUsernameTaken(username)) {
@@ -422,20 +716,33 @@ public class RegisterUI {
             return;
         }
 
+        // Lấy vai trò người dùng
+        String role = roleComboBox.getValue();
+
+        // Tạo ID độc nhất cho người dùng dựa trên vai trò
+        String userId;
+        do {
+            userId = generateUniqueID(role);
+        } while (isIDTaken(userId));
+
         // Sau khi đã kiểm tra hết, thì mới tạo file
         createAccountsFileIfNotExists(username);
-        // Lưu tài khoản mới vào file
+
+        // Lưu tài khoản mới vào file (bao gồm ngày sinh, tuổi và ID)
         saveAccount(
                 username,
                 passwordField.getText(),
                 fullNameField.getText(),
                 emailField.getText(),
                 phoneField.getText(),
-                roleComboBox.getValue()
+                role,
+                dob,
+                age,
+                userId
         );
 
-        // Hiển thị thông báo đăng ký thành công
-        showSuccessDialog();
+        // Hiển thị thông báo đăng ký thành công kèm theo ID
+        showSuccessDialog(userId);
     }
 
     private boolean isValidEmail(String email) {
@@ -449,11 +756,11 @@ public class RegisterUI {
         return phone.matches(phoneRegex);
     }
 
-    private void showSuccessDialog() {
+    private void showSuccessDialog(String userId) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Đăng ký thành công");
         alert.setHeaderText(null);
-        alert.setContentText("Chúc mừng! Bạn đã đăng ký tài khoản thành công.\nVui lòng đăng nhập để sử dụng hệ thống.");
+        alert.setContentText("Chúc mừng! Bạn đã đăng ký tài khoản thành công.\nID của bạn là: " + userId + "\nVui lòng đăng nhập để sử dụng hệ thống.");
 
         // Thêm nút đến trang đăng nhập
         ButtonType loginButton = new ButtonType("Đến trang đăng nhập");

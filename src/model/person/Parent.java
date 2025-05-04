@@ -9,8 +9,8 @@ public class Parent extends Person {
     private String relationship; // e.g., "Father", "Mother", "Guardian"
 
     public Parent(String id, String name, String gender, String contactNumber, String birthday,
-                  String relationship) {
-        super(id, name, gender, contactNumber, birthday);
+                  String email, String relationship) {
+        super(id, name, gender, contactNumber, birthday, email);
         this.relationship = relationship;
         this.children = new ArrayList<>();
     }
