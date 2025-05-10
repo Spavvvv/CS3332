@@ -12,6 +12,7 @@ import src.model.person.Teacher;
 import src.model.person.Parent;
 import javafx.scene.control.Alert;
 import view.components.ClassList.ClassListScreenView;
+import view.components.StudentList.StudentListScreenView;
 
 /**
  Controller chính của ứng dụng, quản lý logic nghiệp vụ
@@ -71,6 +72,7 @@ public class MainController {
         navigationController.registerView("exams", new ExamsView());
         navigationController.registerView("details-view", new DetailsView());
         navigationController.registerView("ClassListView", new ClassListScreenView());
+        navigationController.registerView("StudentListView", new StudentListScreenView());
         navigationController.registerView("learning-reports", new ReportView());
         navigationController.registerView("teaching-statistics", new TeachingStatistics());
         navigationController.registerView("monthly-teaching", new MonthlyTeachingStatistics());

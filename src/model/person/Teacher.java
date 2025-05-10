@@ -18,8 +18,8 @@ public class Teacher extends Person {
     }
 
     @Override
-    public String getRole() {
-        return "Teacher";
+    public Role getRole() {
+        return Role.TEACHER;
     }
 
     // Teacher-specific methods

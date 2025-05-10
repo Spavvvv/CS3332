@@ -364,7 +364,7 @@ public class UI {
         HBox studentHeader = createMenuHeaderWithToggle("Học viên", "students");
         studentSubmenu = createSubmenu();
         studentSubmenu.getChildren().addAll(
-                createSubmenuButton("Học viên", "student-list"),
+                createSubmenuButton("Học viên", "StudentListView"),
                 createSubmenuButton("Lớp học", "ClassListView")
         );
         studentSubmenu.setVisible(false);

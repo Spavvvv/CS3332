@@ -1,5 +1,8 @@
-package view.components.ClassList;
-
+package view.components.StudentList;
+import javafx.stage.Stage;
+import src.controller.MainController;
+import src.model.person.Person;
+import view.components.StudentList.AddStudentDialog;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -12,6 +15,9 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import view.BaseScreenView;
+import src.model.person.Permission; // Import enum Permission (đảm bảo đường dẫn đúng)
+import src.model.person.RolePermissions;
+
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -20,8 +26,6 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Màn hình Học viên
@@ -49,6 +53,7 @@ public class StudentListScreenView extends BaseScreenView {
     private TextField searchField;
     private Button searchButton;
     private Button exportExcelButton;
+    private Button addStudentButton;
     private ComboBox<String> pageSizeComboBox;
     private ComboBox<String> filterComboBox;
     private TableView<StudentInfo> studentsTable;
@@ -218,6 +223,21 @@ public class StudentListScreenView extends BaseScreenView {
      * Creates the title bar with title and action buttons
      */
     private HBox createTitleBar() {
+        Person currentUser = getCurrentUser(); // Fetch the current user
+        boolean canAddStudent = false;
+
+// Check the ADD_STUDENT permission
+        if (currentUser != null && currentUser.getRole() != null) {
+            canAddStudent = RolePermissions.hasPermission(
+                    currentUser.getRole(),
+                    Permission.ADD_STUDENT
+            );
+        }
+
+// Set visibility based on permission
+        addStudentButton = new Button();
+        addStudentButton.setVisible(canAddStudent);
+        addStudentButton.setManaged(canAddStudent);
         HBox titleBar = new HBox();
         titleBar.setPadding(new Insets(0, 0, 15, 0));
         titleBar.setAlignment(Pos.CENTER_LEFT);
@@ -231,8 +251,28 @@ public class StudentListScreenView extends BaseScreenView {
         // Add a spacer to push the button to the right
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
+        addStudentButton.setStyle(
+                "-fx-background-color: " + GREEN_COLOR + ";" +
+                        "-fx-text-fill: white;" +
+                        "-fx-background-radius: 30;" +
+                        "-fx-padding: 10 20;" +
+                        "-fx-cursor: hand;" +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 2, 0, 0, 1);"
+        );
 
+// Icon cho nút Thêm học viên
+        Label addIcon = new Label("➕");
+        addIcon.setTextFill(Color.WHITE);
+        HBox addContent = new HBox(7);
+        addContent.setAlignment(Pos.CENTER);
+        addContent.getChildren().addAll(addIcon, new Label("Thêm học viên"));
+        addStudentButton.setGraphic(addContent);
+
+// Thêm khoảng cách giữa các nút
+        Region buttonSpacer = new Region();
+        buttonSpacer.setPrefWidth(10);
         // Export Excel button
+
         exportExcelButton = new Button();
         exportExcelButton.setStyle(
                 "-fx-background-color: " + PRIMARY_COLOR + ";" +
@@ -251,7 +291,7 @@ public class StudentListScreenView extends BaseScreenView {
         exportContent.getChildren().addAll(excelIcon, new Label("Thực hiện"));
         exportExcelButton.setGraphic(exportContent);
 
-        titleBar.getChildren().addAll(titleLabel, spacer, exportExcelButton);
+        titleBar.getChildren().addAll(titleLabel, spacer, addStudentButton, buttonSpacer, exportExcelButton);
         return titleBar;
     }
 
@@ -667,14 +707,42 @@ public class StudentListScreenView extends BaseScreenView {
         // Search functionality
         searchButton.setOnAction(e -> searchStudents(searchField.getText()));
         searchField.setOnAction(e -> searchStudents(searchField.getText()));
+        addStudentButton.setOnAction(e -> {
+            showAddStudentDialog();
+        });
+
 
         // Page size change
         pageSizeComboBox.setOnAction(e -> updatePageSize());
     }
+    private void showAddStudentDialog() {
+        // Lấy Stage từ Node gốc của màn hình hiện tại
+        Stage primaryStage = (Stage) root.getScene().getWindow();
 
+        // Tạo dialog với tham số là stage chính
+        AddStudentDialog dialog = new AddStudentDialog(primaryStage);
+
+        // Hiển thị dialog
+        dialog.showAndWait();
+
+        // Cập nhật lại danh sách học viên sau khi đóng dialog
+        refreshStudentData();
+    }
     /**
      * Show action menu for Export button
      */
+
+
+    /**
+     * Cập nhật hiển thị thống kê
+     */
+    private void updateStatisticsDisplay() {
+        // Code cập nhật hiển thị thống kê ở đây (nếu cần)
+        // Ví dụ: cập nhật số lượng học viên theo trạng thái
+        statisticsContainer.getChildren().clear();
+        statisticsContainer.getChildren().add(createStatisticsSection());
+    }
+
     private void showActions() {
         ContextMenu contextMenu = new ContextMenu();
         MenuItem addItem = new MenuItem("Thêm học viên");
@@ -895,4 +963,6 @@ public class StudentListScreenView extends BaseScreenView {
             this.selected = selected;
         }
     }
+
+
 }

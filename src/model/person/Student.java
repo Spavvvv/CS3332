@@ -10,7 +10,6 @@ import src.model.system.course.Course;
 public class Student extends Person {
     private List<Course> currentCourses;
     private Parent parent;
-
     public Student(String id, String name, String gender, String contactNumber, String birthday,
                    String email, Parent parent) {
         super(id, name, gender, contactNumber, birthday, email);
@@ -23,8 +22,8 @@ public class Student extends Person {
     }
 
     @Override
-    public String getRole() {
-        return "Student";
+    public Role getRole() {
+        return Role.STUDENT;
     }
 
     // Student-specific methods
@@ -57,7 +56,6 @@ public class Student extends Person {
     public void setParent(Parent parent) {
         this.parent = parent;
     }
-
     @Override
     public String toString() {
         return super.toString() +

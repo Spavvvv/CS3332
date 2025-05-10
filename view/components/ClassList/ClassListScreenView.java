@@ -1,4 +1,9 @@
 package view.components.ClassList;
+import src.controller.MainController;
+import src.model.person.Person; // Import lớp Person (đảm bảo đường dẫn đúng với project của bạn)
+import src.model.person.Role; // Import enum Role (đảm bảo đường dẫn đúng)
+import src.model.person.Permission; // Import enum Permission (đảm bảo đường dẫn đúng)
+import src.model.person.RolePermissions; // Import lớp RolePermissions (đảm bảo đường dẫn đúng)
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -11,8 +16,16 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import view.BaseScreenView;
+import src.model.system.course.Course;
+import view.components.ClassList.CreateClassScreenView;
+import src.model.system.course.CourseDate;
 
+import java.io.*;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
 /**
  Màn hình Lớp học
  Hiển thị danh sách các lớp học và cho phép quản lý lớp học
@@ -33,9 +46,12 @@ public class ClassListScreenView extends BaseScreenView {
     private TextField searchField;
     private Button searchButton;
     private Button exportExcelButton;
+    private Button createClassButton; // Khai báo nút tạo lớp học ở cấp độ lớp
     private ComboBox<String> pageSizeComboBox;
     private ComboBox<String> filterComboBox;
     private TableView<ClassInfo> classesTable;
+    private MainController mainController; // Để tham chiếu đến MainController
+
     // Data
     private ObservableList<ClassInfo> classes = FXCollections.observableArrayList();
     private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -44,23 +60,12 @@ public class ClassListScreenView extends BaseScreenView {
         initializeData();
         initializeView();
     }
-    private void initializeData() {
-// database
-        classes.add(new ClassInfo(1, "HS 1-1 Linh", "HS 1-1 Linh Phương", "Đang học", "0/100",
-                "02/04/2025", "17/03/2026", "Admin Iclass", "Thứ 2 - 8:00\nThứ 3 - 8:00"));
-        classes.add(new ClassInfo(2, "HS 1-1 Nguyễn Cao Xuân Phúc", "HS 1-1 Nguyễn Cao Xuân Phúc", "Đang học", "0/100",
-                "01/04/2025", "16/03/2026", "Admin Iclass", "Thứ 2 - 8:00\nThứ 3 - 8:00"));
-        classes.add(new ClassInfo(3, "HS 1-1 Nguyễn Đức Minh", "HS 1-1 Nguyễn Đức Minh", "Đang học", "0/100",
-                "13/04/2025", "24/03/2026", "Admin Iclass", "Thứ 2 - 8:00\nThứ 3 - 8:00"));
-        classes.add(new ClassInfo(4, "HS 1-1 Hoàng Hữu Nhật", "HS 1-1 Hoàng Hữu Nhật", "Đang học", "0/100",
-                "02/04/2025", "17/03/2026", "Admin Iclass", "Thứ 2 - 8:00\nThứ 3 - 8:00"));
-        classes.add(new ClassInfo(5, "HS 1-1 Hoàng Anh Khoa", "HS 1-1 Hoàng Anh Khoa TA", "Đang học", "0/50",
-                "03/04/2025", "23/09/2025", "Admin Iclass", "Thứ 2 - 8:00\nThứ 3 - 8:00"));
-        // Thêm trạng thái "Đang học" cho mỗi dòng
-        for (ClassInfo info : classes) {
-            info.setStatusLabel("Đang học");
-        }
 
+
+
+    private void initializeData() {
+        // Xóa dữ liệu mẫu
+        classes = FXCollections.observableArrayList();
 
     }
     @Override
@@ -136,14 +141,49 @@ public class ClassListScreenView extends BaseScreenView {
         titleBar.setPadding(new Insets(0, 0, 15, 0));
         titleBar.setAlignment(Pos.CENTER_LEFT);
         titleBar.setStyle("-fx-border-color: transparent transparent " + BORDER_COLOR + " transparent; -fx-border-width: 0 0 1 0; -fx-padding: 0 0 10 0;");
-// Title
+        // Title
         titleLabel = new Label("Lớp học");
         titleLabel.setFont(Font.font("System", FontWeight.BOLD, 24));
         titleLabel.setTextFill(Color.web(PRIMARY_COLOR));
-// Add a spacer to push the button to the right
+        // Add a spacer to push the button to the right
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-// Export Excel button
+
+        // Nút tạo lớp học mới
+        createClassButton = new Button();
+        createClassButton.setStyle(
+                "-fx-background-color: " + GREEN_COLOR + ";" +
+                        "-fx-text-fill: white;" +
+                        "-fx-background-radius: 30;" +
+                        "-fx-padding: 10 20;" +
+                        "-fx-cursor: hand;" +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 2, 0, 0, 1);"
+        );
+
+        Label plusIcon = new Label("➕");
+        plusIcon.setTextFill(Color.WHITE);
+        HBox createContent = new HBox(7);
+        createContent.setAlignment(Pos.CENTER);
+        createContent.getChildren().addAll(plusIcon, new Label("Tạo lớp học"));
+        createClassButton.setGraphic(createContent);
+        createClassButton.setOnAction(e -> showCreateClassDialog());
+        Person currentUser = getCurrentUser();
+
+// Kiểm tra quyền CREATE_CLASS
+        boolean canCreateClass = false;
+        if (currentUser != null && currentUser.getRole() != null) {
+            canCreateClass = RolePermissions.hasPermission(currentUser.getRole(), Permission.CREATE_CLASS);
+        } else {
+            canCreateClass = false; // Không cho phép nếu user hoặc role không hợp lệ
+        }
+
+// Ẩn hoặc hiện nút dựa trên quyền
+        createClassButton.setVisible(canCreateClass);
+        createClassButton.setManaged(canCreateClass); // Quan trọng để không chiếm không gian khi ẩn
+// ------------------------------------
+
+
+        // Export Excel button
         exportExcelButton = new Button();
         exportExcelButton.setStyle(
                 "-fx-background-color: " + PRIMARY_COLOR + ";" +
@@ -153,16 +193,18 @@ public class ClassListScreenView extends BaseScreenView {
                         "-fx-cursor: hand;" +
                         "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 2, 0, 0, 1);"
         );
-// Icon cho nút Export
+        // Icon cho nút Export
         Label excelIcon = new Label("📊");
         excelIcon.setTextFill(Color.WHITE);
         HBox exportContent = new HBox(7);
         exportContent.setAlignment(Pos.CENTER);
         exportContent.getChildren().addAll(excelIcon, new Label("Xuất Excel"));
         exportExcelButton.setGraphic(exportContent);
-        titleBar.getChildren().addAll(titleLabel, spacer, exportExcelButton);
+
+        titleBar.getChildren().addAll(titleLabel, spacer, createClassButton, exportExcelButton);
         return titleBar;
     }
+
     /**
      Create statistics cards for the top of the screen
      */
@@ -650,6 +692,9 @@ public class ClassListScreenView extends BaseScreenView {
 
         // Page size change
         pageSizeComboBox.setOnAction(e -> updatePageSize());
+        if (createClassButton.isVisible()) {
+            createClassButton.setOnAction(e -> showCreateClassDialog());
+        }
     }
 
 
@@ -703,7 +748,19 @@ public class ClassListScreenView extends BaseScreenView {
         MenuItem detailsItem = new MenuItem("Xem chi tiết");
 
         editItem.setOnAction(e -> showInfo("Chỉnh sửa lớp: " + classInfo.getName()));
-        deleteItem.setOnAction(e -> showInfo("Xóa lớp: " + classInfo.getName()));
+
+        deleteItem.setOnAction(e -> {
+            Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
+            confirmAlert.setTitle("Xác nhận xóa");
+            confirmAlert.setHeaderText("Xóa lớp học");
+            confirmAlert.setContentText("Bạn có chắc chắn muốn xóa lớp " + classInfo.getName() + "?");
+
+            Optional<ButtonType> result = confirmAlert.showAndWait();
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                showInfo("Đã xóa lớp: " + classInfo.getName());
+            }
+        });
+
         detailsItem.setOnAction(e -> showInfo("Xem chi tiết lớp: " + classInfo.getName()));
 
         contextMenu.getItems().addAll(editItem, deleteItem, new SeparatorMenuItem(), detailsItem);
@@ -711,8 +768,73 @@ public class ClassListScreenView extends BaseScreenView {
         Button source = (Button) ((HBox) classesTable.getScene().getFocusOwner()).getChildren().get(0);
         contextMenu.show(source, javafx.geometry.Side.BOTTOM, 0, 0);
     }
+    private void addCourseToTableView(Course course) {
+        addCourseToTableView(course, classes.size() + 1);
+    }
 
+    // Thêm phương thức addCourseToTableView với tham số stt
+    private void addCourseToTableView(Course course, int stt) {
+        // Lấy thông tin từ course
+        String progress = "0/100"; // Mặc định
+        if (course.getProgress() > 0) {
+            progress = Math.round(course.getProgress()) + "/100";
+        }
 
+        // Định dạng ngày
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        String startDate = course.getDate().getStartDate().format(formatter);
+        String endDate = course.getDate().getEndDate().format(formatter);
+
+        // Tạo thông tin cho lịch học (placeholder)
+        String classDate = "Chưa có lịch học";
+
+        // Giáo viên
+        String teacher = course.getTeacher() != null ? course.getTeacher().toString() : "Chưa phân công";
+
+        // Tạo đối tượng ClassInfo và thêm vào danh sách
+        ClassInfo classInfo = new ClassInfo(
+                stt,
+                course.getCourseId(),
+                course.getCourseName(),
+                "Đang học",
+                progress,
+                startDate,
+                endDate,
+                teacher,
+                classDate
+        );
+
+        classes.add(classInfo);
+        classesTable.refresh();
+    }
+    // Thêm phương thức loadCoursesFromFile (không phải static)
+    @SuppressWarnings("unchecked")
+    // Thêm phương thức showCreateClassDialog
+    private void showCreateClassDialog() {
+        Person currentUser = getCurrentUser();
+        boolean canCreateClass = false;
+        if (currentUser != null) {
+            canCreateClass = RolePermissions.hasPermission(currentUser.getRole(), Permission.CREATE_CLASS);
+        }
+
+        if (!canCreateClass) {
+            // Mặc dù UI đã ẩn nút, kiểm tra ở đây giúp bảo vệ khỏi việc gọi hàm trái phép
+            showInfo("Bạn không có quyền tạo lớp học mới.");
+            return; // Không hiển thị dialog nếu không có quyền
+        }
+        CreateClassScreenView createClassScreen = new CreateClassScreenView(new CreateClassScreenView.CreateClassCallback() {
+            @Override
+            public void onCourseCreated(Course course) {
+                // Lưu course vào file
+                // Thêm vào danh sách hiển thị
+                addCourseToTableView(course);
+
+                showInfo("Đã tạo lớp học thành công: " + course.getCourseName());
+            }
+        });
+
+        createClassScreen.show();
+    }
     @Override
     public void refreshView() {
         // Refresh the table data

@@ -27,7 +27,7 @@ public abstract class Person {
     public Person() {}
 
     // Abstract method that all subclasses must implement
-    public abstract String getRole();
+    public abstract Role getRole();
 
     // Common methods
     public void calculateAge() {

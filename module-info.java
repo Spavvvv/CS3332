@@ -15,5 +15,7 @@ module CS3323 {
     opens src.model to javafx.fxml;
     opens view.components to javafx.base, javafx.fxml;
     opens view.components.ClassList to javafx.base, javafx.fxml;
+    opens src.model.system.course to javafx.base, javafx.fxml;
+    opens view.components.StudentList to javafx.base, javafx.fxml;
 
 }

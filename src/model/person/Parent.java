@@ -18,8 +18,8 @@ public class Parent extends Person {
     public Parent() {}
 
     @Override
-    public String getRole() {
-        return "Parent";
+    public Role getRole() {
+        return Role.PARENT;
     }
 
     // Parent-specific methods

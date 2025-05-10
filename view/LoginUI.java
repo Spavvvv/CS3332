@@ -20,14 +20,12 @@ import src.model.person.Parent;
 import src.model.person.Student;
 import src.model.person.Teacher;
 import src.model.person.Person;
-import src.model.person.UserRole;
+import src.model.person.Role;
+
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Scanner;
 import java.util.prefs.Preferences;
 
@@ -43,6 +41,10 @@ public class LoginUI {
     private NavigationController navigationController;
     private MainController mainController;
     private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
+    private final static String TEACHER_FOLDER = FILE_PATH + "\\Teacher";
+    private final static String STUDENT_FOLDER = FILE_PATH + "\\Student";
+    private final static String PARENT_FOLDER = FILE_PATH + "\\Parent";
+    private final static String ADMIN_FOLDER = FILE_PATH + "\\Admin";
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
@@ -452,15 +454,29 @@ public class LoginUI {
         }
 
         // Đường dẫn đến file tài khoản
-        String filePath = FILE_PATH + "\\" + username + ".txt";
-        File file = new File(filePath);
+        File teacherFile = new File(TEACHER_FOLDER, username + ".txt");
+        File studentFile = new File(STUDENT_FOLDER, username + ".txt");
+        File parentFile = new File(PARENT_FOLDER, username + ".txt");
+        File adminFile = new File(ADMIN_FOLDER, username + ".txt");
 
-        if (!file.exists()) {
+
+// Kiểm tra xem file tồn tại trong thư mục nào
+        File accountFile = null;
+        if (teacherFile.exists()) {
+            accountFile = teacherFile;
+        } else if (studentFile.exists()) {
+            accountFile = studentFile;
+        } else if (parentFile.exists()) {
+            accountFile = parentFile;
+        } else accountFile = adminFile;
+
+        if (accountFile == null) {
             showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Tên đăng nhập không tồn tại");
             return;
         }
 
-        try (Scanner scanner = new Scanner(file)) {
+
+        try (Scanner scanner = new Scanner(accountFile)) {
             if (scanner.hasNextLine()) {
                 String line = scanner.nextLine();
                 String[] parts = line.split(",");
@@ -475,7 +491,27 @@ public class LoginUI {
                     String fullName = parts[2].trim(); // Họ tên
                     String email = parts[3].trim(); // Email
                     String phone = parts[4].trim(); // Số điện thoại
-                    String role = parts[5].trim(); // Vai trò
+                    Role role;
+                    String role1;
+                    try {
+                        role1 = parts[5].trim();
+                        switch (role1) {
+                            case "Admin":
+                                role = Role.ADMIN;
+                                break;
+                            case "Học viên":
+                                role = Role.STUDENT;
+                                break;
+                            case "Giáo viên":
+                                role = Role.TEACHER;
+                                break;
+                            default: role = Role.PARENT;
+                        }
+                    } catch (IllegalArgumentException e) {
+                        showAlert(Alert.AlertType.ERROR, "Lỗi vai trò", "Vai trò không xác định: " + parts[5]);
+                        return;
+                    }
+
                     String dobString = parts[6].trim(); // Ngày sinh
 
                     // Lấy giới tính nếu có, mặc định là "Nam" nếu không có thông tin
@@ -556,7 +592,7 @@ public class LoginUI {
 
     /**
      * Tạo đối tượng người dùng dựa trên vai trò
-     * @param roleString Vai trò người dùng
+     * @param role Vai trò người dùng
      * @param userId ID người dùng
      * @param fullName Tên đầy đủ
      * @param gender Giới tính
@@ -565,33 +601,33 @@ public class LoginUI {
      * @param email Email
      * @return Đối tượng Person phù hợp với vai trò
      */
-    private Person createPersonObject(String roleString, String userId, String fullName, String gender,
+    private Person createPersonObject(Role role, String userId, String fullName, String gender,
                                       String phone, String dobString, String email) {
         // Xác định vai trò
-        switch (roleString.toLowerCase()) {
-            case "admin":
+        switch (role) {
+            case Role.ADMIN:
                 // Tạo đối tượng Admin
                 String accessLevel = "1"; // Cấp độ truy cập mặc định
                 return new Admin(userId, fullName, gender, phone, dobString, email, accessLevel);
 
-            case "giáo viên":
+            case Role.TEACHER:
                 // Tạo đối tượng Teacher
                 String teacherId = userId; // Sử dụng userId làm teacherId
-                String position = "Giáo viên"; // Vị trí mặc định
+                String position = ""; // Vị trí mặc định
                 return new Teacher(userId, fullName, gender, phone, dobString, email, teacherId, position);
 
-            case "học viên":
+            case Role.STUDENT:
                 // Tạo đối tượng Student với Parent rỗng
                 return new Student(userId, fullName, gender, phone, dobString, email, null);
 
-            case "phụ huynh":
+            case Role.PARENT:
                 // Tạo đối tượng Parent
                 String relationship = ""; // Mặc định mối quan hệ rỗng
                 return new Parent(userId, fullName, gender, phone, dobString, email, relationship);
 
             default:
                 // Nếu không xác định được vai trò, ném ngoại lệ
-                throw new IllegalArgumentException("Vai trò không xác định: " + roleString);
+                throw new IllegalArgumentException("Vai trò không xác định: ");
         }
     }
 
