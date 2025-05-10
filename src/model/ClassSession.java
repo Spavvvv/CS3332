@@ -570,6 +570,30 @@ public class ClassSession {
     }
 
 
+    /**
+     * Trả về mã trạng thái hiện tại của buổi học
+     * @return mã trạng thái: 0 = đã diễn ra, 1 = đang diễn ra, 2 = sắp diễn ra
+     */
+    public int getStatus() {
+        if (isPast()) {
+            return 0; // Đã diễn ra
+        } else if (isOngoing()) {
+            return 1; // Đang diễn ra
+        } else {
+            return 2; // Sắp diễn ra
+        }
+    }
+
+    public String getSessionDate() {
+        return date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
+
+    public String getSchedule() {
+        return timeSlot;
+    }
+
+
+
 //    public String getSessionNumber() {
 //        return
 //    }

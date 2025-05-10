@@ -1,22 +1,40 @@
 package src.controller;
 
 import src.model.ClassSession;
+import src.model.system.schedule.Schedule;
+import src.model.system.schedule.RoomSchedule;
+import src.model.system.schedule.StudentSchedule;
+import src.dao.ScheduleDAO;
+
+import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
  * Controller quản lý dữ liệu lịch học
+ * Updated to use ScheduleDAO for database operations
  */
 public class ScheduleController {
+    private static final Logger LOGGER = Logger.getLogger(ScheduleController.class.getName());
+    private final ScheduleDAO scheduleDAO;
 
-    // Giả lập dữ liệu - trong thực tế sẽ lấy từ database
-    private List<ClassSession> sessions;
+    // Map to cache ClassSession objects by ID for quick lookups
+    private final Map<Long, ClassSession> sessionCache;
 
     public ScheduleController() {
-        // Khởi tạo dữ liệu mẫu
-        initSampleData();
+        this.scheduleDAO = new ScheduleDAO();
+        this.sessionCache = new HashMap<>();
+        // No need to initialize sample data as we'll use the database
     }
 
     /**
@@ -27,11 +45,25 @@ public class ScheduleController {
      * @return Danh sách các buổi học
      */
     public List<ClassSession> getSchedule(LocalDate fromDate, LocalDate toDate, String teacherName) {
-        // Filter sessions by date range and teacher (if specified)
-        return sessions.stream()
-                .filter(session -> session.isInDateRange(fromDate, toDate))
-                .filter(session -> teacherName == null || session.isTaughtBy(teacherName))
-                .collect(Collectors.toList());
+        try {
+            LocalDateTime startDateTime = fromDate.atStartOfDay();
+            LocalDateTime endDateTime = toDate.plusDays(1).atStartOfDay();
+
+            List<Schedule> schedules = scheduleDAO.findByTimeRange(startDateTime, endDateTime);
+            List<ClassSession> sessions = convertToClassSessions(schedules);
+
+            // Filter by teacher if specified
+            if (teacherName != null && !teacherName.isEmpty()) {
+                sessions = sessions.stream()
+                        .filter(session -> session.isTaughtBy(teacherName))
+                        .collect(Collectors.toList());
+            }
+
+            return sessions;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error retrieving schedules", e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -39,11 +71,16 @@ public class ScheduleController {
      * @return Danh sách tên giáo viên
      */
     public List<String> getTeachers() {
-        // Extract unique teacher names
-        return sessions.stream()
-                .map(ClassSession::getTeacher)
-                .distinct()
-                .collect(Collectors.toList());
+        try {
+            List<Schedule> allSchedules = scheduleDAO.findAll();
+            return convertToClassSessions(allSchedules).stream()
+                    .map(ClassSession::getTeacher)
+                    .distinct()
+                    .collect(Collectors.toList());
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error retrieving teachers", e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -59,10 +96,16 @@ public class ScheduleController {
      * @return Danh sách phòng học
      */
     public List<String> getRooms() {
-        return sessions.stream()
-                .map(ClassSession::getRoom)
-                .distinct()
-                .collect(Collectors.toList());
+        try {
+            List<Schedule> allSchedules = scheduleDAO.findAll();
+            return convertToClassSessions(allSchedules).stream()
+                    .map(ClassSession::getRoom)
+                    .distinct()
+                    .collect(Collectors.toList());
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error retrieving rooms", e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -70,10 +113,16 @@ public class ScheduleController {
      * @return Danh sách tên khóa học
      */
     public List<String> getCourses() {
-        return sessions.stream()
-                .map(ClassSession::getCourseName)
-                .distinct()
-                .collect(Collectors.toList());
+        try {
+            List<Schedule> allSchedules = scheduleDAO.findAll();
+            return convertToClassSessions(allSchedules).stream()
+                    .map(ClassSession::getCourseName)
+                    .distinct()
+                    .collect(Collectors.toList());
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error retrieving courses", e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -82,10 +131,22 @@ public class ScheduleController {
      * @return ClassSession nếu tìm thấy, null nếu không
      */
     public ClassSession getSessionById(long sessionId) {
-        return sessions.stream()
-                .filter(session -> session.getId() == sessionId)
-                .findFirst()
-                .orElse(null);
+        // Check cache first
+        if (sessionCache.containsKey(sessionId)) {
+            return sessionCache.get(sessionId);
+        }
+
+        try {
+            Schedule schedule = scheduleDAO.findById(String.valueOf(sessionId));
+            if (schedule != null) {
+                ClassSession session = convertToClassSession(schedule);
+                sessionCache.put(sessionId, session);
+                return session;
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error retrieving session by ID: " + sessionId, e);
+        }
+        return null;
     }
 
     /**
@@ -94,9 +155,17 @@ public class ScheduleController {
      * @return Danh sách buổi học
      */
     public List<ClassSession> getSessionsByTeacher(String teacherName) {
-        return sessions.stream()
-                .filter(session -> session.isTaughtBy(teacherName))
-                .collect(Collectors.toList());
+        try {
+            // Since ScheduleDAO doesn't have a direct method to find by teacher,
+            // we'll retrieve all schedules and filter them
+            List<Schedule> allSchedules = scheduleDAO.findAll();
+            return convertToClassSessions(allSchedules).stream()
+                    .filter(session -> session.isTaughtBy(teacherName))
+                    .collect(Collectors.toList());
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error retrieving sessions by teacher: " + teacherName, e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -105,9 +174,16 @@ public class ScheduleController {
      * @return Danh sách buổi học
      */
     public List<ClassSession> getSessionsByDate(LocalDate date) {
-        return sessions.stream()
-                .filter(session -> session.getDate().equals(date))
-                .collect(Collectors.toList());
+        try {
+            LocalDateTime startOfDay = date.atStartOfDay();
+            LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();
+
+            List<Schedule> schedules = scheduleDAO.findByTimeRange(startOfDay, endOfDay);
+            return convertToClassSessions(schedules);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error retrieving sessions by date: " + date, e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -116,11 +192,16 @@ public class ScheduleController {
      * @return true nếu xóa thành công
      */
     public boolean deleteSession(long sessionId) {
-        int initialSize = sessions.size();
-        sessions = sessions.stream()
-                .filter(session -> session.getId() != sessionId)
-                .collect(Collectors.toList());
-        return sessions.size() < initialSize;
+        try {
+            boolean result = scheduleDAO.delete(String.valueOf(sessionId));
+            if (result) {
+                sessionCache.remove(sessionId);
+            }
+            return result;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error deleting session: " + sessionId, e);
+            return false;
+        }
     }
 
     /**
@@ -129,13 +210,25 @@ public class ScheduleController {
      * @return true nếu thêm thành công
      */
     public boolean addSession(ClassSession session) {
-        // Generate a new ID
-        long newId = sessions.stream()
-                .mapToLong(ClassSession::getId)
-                .max()
-                .orElse(0) + 1;
-        session.setId(newId);
-        return sessions.add(session);
+        try {
+            // Generate a new ID if not already set
+            if (session.getId() <= 0) {
+                String uniqueId = UUID.randomUUID().toString();
+                session.setId(Long.parseLong(uniqueId.substring(0, 8), 16)); // Convert first 8 chars of UUID to long
+            }
+
+            Schedule schedule = convertToSchedule(session);
+            boolean result = scheduleDAO.save(schedule);
+
+            if (result) {
+                sessionCache.put(session.getId(), session);
+            }
+
+            return result;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error adding session", e);
+            return false;
+        }
     }
 
     /**
@@ -144,13 +237,19 @@ public class ScheduleController {
      * @return true nếu cập nhật thành công
      */
     public boolean updateSession(ClassSession session) {
-        for (int i = 0; i < sessions.size(); i++) {
-            if (sessions.get(i).getId() == session.getId()) {
-                sessions.set(i, session);
-                return true;
+        try {
+            Schedule schedule = convertToSchedule(session);
+            boolean result = scheduleDAO.update(schedule);
+
+            if (result) {
+                sessionCache.put(session.getId(), session);
             }
+
+            return result;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error updating session: " + session.getId(), e);
+            return false;
         }
-        return false;
     }
 
     /**
@@ -159,34 +258,130 @@ public class ScheduleController {
      * @return true nếu có xung đột, false nếu không
      */
     public boolean hasScheduleConflict(ClassSession session) {
-        return sessions.stream()
-                .anyMatch(s -> s.getId() != session.getId() &&
-                        s.getDate().equals(session.getDate()) &&
-                        s.getTimeSlot().equals(session.getTimeSlot()) &&
-                        s.getRoom().equals(session.getRoom()));
+        try {
+            String[] timeSlotParts = session.getTimeSlot().split(" - ");
+            if (timeSlotParts.length != 2) {
+                return false;
+            }
+
+            LocalDate date = session.getDate();
+            DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+            LocalTime startTime = LocalTime.parse(timeSlotParts[0], timeFormatter);
+            LocalTime endTime = LocalTime.parse(timeSlotParts[1], timeFormatter);
+
+            LocalDateTime startDateTime = date.atTime(startTime);
+            LocalDateTime endDateTime = date.atTime(endTime);
+
+            List<Schedule> schedules = scheduleDAO.findByTimeRange(startDateTime, endDateTime);
+
+            // Check for conflicts with the same room
+            for (Schedule schedule : schedules) {
+                if (schedule instanceof RoomSchedule) {
+                    RoomSchedule roomSchedule = (RoomSchedule) schedule;
+
+                    // Skip the current session when checking
+                    if (roomSchedule.getId().equals(String.valueOf(session.getId()))) {
+                        continue;
+                    }
+
+                    ClassSession existingSession = convertToClassSession(roomSchedule);
+                    if (existingSession.getRoom().equals(session.getRoom()) &&
+                            existingSession.getDate().equals(session.getDate()) &&
+                            existingSession.getTimeSlot().equals(session.getTimeSlot())) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error checking schedule conflicts", e);
+            return false;
+        }
     }
 
-    // Khởi tạo dữ liệu mẫu
-    private void initSampleData() {
-        sessions = new ArrayList<>();
+    /**
+     * Convert a Schedule object to a ClassSession object
+     * @param schedule The Schedule object to convert
+     * @return Equivalent ClassSession object
+     */
+    private ClassSession convertToClassSession(Schedule schedule) {
+        String courseName = schedule.getName(); // Use schedule name as course name
 
-        // Thêm các buổi học mẫu
-        LocalDate today = LocalDate.now();
+        // Extract teacher from description (format expected: "Teacher: {name}")
+        String teacher = "Unknown";
+        if (schedule.getDescription() != null && schedule.getDescription().contains("Teacher:")) {
+            teacher = schedule.getDescription().split("Teacher:")[1].trim();
+        }
 
-        sessions.add(new ClassSession(1, "Lập trình Java", "Nguyễn Văn A", "P.201", today, "07:00 - 09:00"));
-        sessions.add(new ClassSession(2, "Cơ sở dữ liệu", "Trần Thị B", "P.202", today, "09:15 - 11:15"));
-        sessions.add(new ClassSession(3, "Toán rời rạc", "Lê Văn C", "P.301", today, "15:15 - 17:15"));
+        // For room schedules, use the room ID
+        String room = "Unknown";
+        if (schedule instanceof RoomSchedule) {
+            room = ((RoomSchedule) schedule).getRoomId();
+        }
 
-        sessions.add(new ClassSession(4, "Lập trình Web", "Nguyễn Văn A", "P.205", today.plusDays(1), "13:00 - 15:00"));
-        sessions.add(new ClassSession(5, "Mạng máy tính", "Phạm Thị D", "P.302", today.plusDays(1), "15:15 - 17:15"));
+        // Extract date and time slot
+        LocalDate date = schedule.getStartTime().toLocalDate();
+        String timeSlot = String.format("%s - %s",
+                schedule.getStartTime().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")),
+                schedule.getEndTime().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
 
-        sessions.add(new ClassSession(6, "Lập trình Java", "Nguyễn Văn A", "P.201", today.plusDays(2), "07:00 - 09:00"));
-        sessions.add(new ClassSession(7, "Cơ sở dữ liệu", "Trần Thị B", "P.202", today.plusDays(2), "09:15 - 11:15"));
+        long id = Long.parseLong(schedule.getId());
 
-        sessions.add(new ClassSession(8, "Thiết kế UI/UX", "Lê Văn C", "P.401", today.plusDays(3), "17:30 - 19:30"));
-        sessions.add(new ClassSession(9, "Kiểm thử phần mềm", "Phạm Thị D", "P.305", today.plusDays(3), "13:00 - 15:00"));
+        return new ClassSession(id, courseName, teacher, room, date, timeSlot);
+    }
 
-        sessions.add(new ClassSession(10, "Lập trình Mobile", "Nguyễn Văn A", "P.201", today.plusDays(4), "07:00 - 09:00"));
-        sessions.add(new ClassSession(11, "Trí tuệ nhân tạo", "Lê Văn C", "P.202", today.plusDays(4), "09:15 - 11:15"));
+    /**
+     * Convert multiple Schedule objects to ClassSession objects
+     * @param schedules List of Schedule objects
+     * @return List of equivalent ClassSession objects
+     */
+    private List<ClassSession> convertToClassSessions(List<Schedule> schedules) {
+        List<ClassSession> sessions = new ArrayList<>();
+
+        for (Schedule schedule : schedules) {
+            ClassSession session = convertToClassSession(schedule);
+            sessions.add(session);
+            // Update cache
+            sessionCache.put(session.getId(), session);
+        }
+
+        return sessions;
+    }
+
+    /**
+     * Convert a ClassSession object to a Schedule object (specifically a RoomSchedule)
+     * @param session The ClassSession to convert
+     * @return Equivalent Schedule object
+     */
+    private Schedule convertToSchedule(ClassSession session) {
+        String id = String.valueOf(session.getId());
+        String name = session.getCourseName();
+
+        // Store teacher in description
+        String description = "Teacher: " + session.getTeacher();
+
+        // Parse time slot
+        String[] timeSlotParts = session.getTimeSlot().split(" - ");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+        LocalTime startTime = LocalTime.parse(timeSlotParts[0], timeFormatter);
+        LocalTime endTime = LocalTime.parse(timeSlotParts[1], timeFormatter);
+
+        LocalDateTime startDateTime = session.getDate().atTime(startTime);
+        LocalDateTime endDateTime = session.getDate().atTime(endTime);
+
+        // Create a RoomSchedule since ClassSession has room information
+        return new RoomSchedule(
+                id,
+                name,
+                description,
+                startDateTime,
+                endDateTime,
+                session.getRoom(),
+                30,  // Default capacity, adjust as needed
+                "CLASSROOM"  // Default room type, adjust as needed
+        );
     }
 }

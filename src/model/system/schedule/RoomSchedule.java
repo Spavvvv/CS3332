@@ -84,4 +84,8 @@ public class RoomSchedule extends Schedule {
     public List<Course> getScheduledCourses() {
         return scheduledCourses;
     }
+
+    public void setScheduledCourses(List<Course> scheduledCourses) {
+        this.scheduledCourses = scheduledCourses;
+    }
 }

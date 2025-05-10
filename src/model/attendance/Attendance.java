@@ -471,4 +471,11 @@ public class Attendance {
         return session != null ? session.getDayOfWeek() : "";
     }
 
+    public void setStudentId(String studentId) {
+        student.setId(studentId);
+    }
+
+    public void setStudentName(String studentName) {
+        student.setName(studentName);
+    }
 }

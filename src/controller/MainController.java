@@ -3,6 +3,8 @@ import src.model.ClassSession;
 import view.*;
 import view.components.*;
 import src.model.attendance.*;
+
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import src.model.person.Person;
@@ -31,7 +33,7 @@ public class MainController {
      @param ui Interface người dùng
      @param navigationController Controller điều hướng
      */
-    public MainController(UI ui, NavigationController navigationController) {
+    public MainController(UI ui, NavigationController navigationController) throws SQLException {
         this.ui = ui;
         this.navigationController = navigationController;
         initialize();
@@ -49,15 +51,16 @@ public class MainController {
     /**
      Khởi tạo controller và đăng ký các màn hình
      */
-    private void initialize() {
+    private void initialize() throws SQLException {
         registerViews();
-// Thiết lập main controller cho tất cả các view đã đăng ký
+
+        // Thiết lập main controller cho tất cả các view đã đăng ký
         setMainControllerForAllViews();
     }
     /**
      Đăng ký các view với NavigationController
      */
-    private void registerViews() {
+    private void registerViews() throws SQLException {
 // Đăng ký các views với NavigationController
         navigationController.registerView("dashboard", new DashboardView());
 // TODO: Đăng ký thêm các views khác
@@ -72,10 +75,10 @@ public class MainController {
         navigationController.registerView("details-view", new DetailsView());
         navigationController.registerView("ClassListView", new ClassListScreenView());
         navigationController.registerView("learning-reports", new ReportView());
-        navigationController.registerView("teaching-statistics", new TeachingStatistics());
-        navigationController.registerView("monthly-teaching", new MonthlyTeachingStatistics());
-        navigationController.registerView("quarterly-teaching", new QuarterlyTeachingStatistics());
-        navigationController.registerView("yearly-teaching", new YearlyTeachingStatistics());
+        navigationController.registerView("teaching-statistics", new TeachingStatisticsView());
+        navigationController.registerView("monthly-teaching", new MonthlyTeachingStatisticsView());
+        navigationController.registerView("quarterly-teaching", new QuarterlyTeachingStatisticsView());
+        navigationController.registerView("yearly-teaching", new YearlyTeachingStatisticsView());
         navigationController.registerView("classrooms", new RoomView());
         navigationController.registerView("holidays", new HolidaysView());
     }

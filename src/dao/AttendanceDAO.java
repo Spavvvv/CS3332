@@ -1,372 +1,433 @@
 package src.dao;
 
-import src.model.attendance.Attendance;
 import src.model.ClassSession;
+import src.model.attendance.Attendance;
 import src.model.person.Student;
 import utils.DatabaseConnection;
 
 import java.sql.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
+import java.util.Optional;
 
 /**
- * Data Access Object cho lớp Attendance
- * Cung cấp các phương thức để tương tác với cơ sở dữ liệu
+ * Data Access Object for the Attendance entity
+ * Handles database operations for attendance records
  */
 public class AttendanceDAO {
-    private Connection connection;
+    private final DatabaseConnection dbConnector;
+    private final StudentDAO studentDAO;
+    private final ClassSessionDAO sessionDAO;
 
     /**
-     * Constructor mặc định, khởi tạo kết nối đến database
+     * Constructor with dependency injection
      */
-    public AttendanceDAO() {
-        try {
-            this.connection = DatabaseConnection.getConnection();
-        } catch (SQLException e) {
-            System.err.println("Lỗi kết nối đến cơ sở dữ liệu: " + e.getMessage());
-            e.printStackTrace();
-        }
+    public AttendanceDAO() throws SQLException {
+        dbConnector = new DatabaseConnection();
+        studentDAO = new StudentDAO();
+        sessionDAO = new ClassSessionDAO();
     }
 
     /**
-     * Constructor với Connection có sẵn
+     * Save a new attendance record to the database
      *
-     * @param connection Kết nối đến cơ sở dữ liệu
+     * @param attendance Attendance object to save
+     * @return true if successful, false otherwise
      */
-    public AttendanceDAO(Connection connection) {
-        this.connection = connection;
-    }
+    public boolean save(Attendance attendance) {
+        String sql = "INSERT INTO attendance (student_id, class_session_id, present, note, called, has_permission, " +
+                "check_in_time, record_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-    /**
-     * Lấy danh sách điểm danh theo ID buổi học
-     *
-     * @param sessionId ID của buổi học
-     * @return Danh sách điểm danh cho buổi học đó
-     * @throws SQLException Nếu có lỗi xảy ra khi truy vấn
-     */
-    public List<Attendance> getBySessionId(long sessionId) throws SQLException {
-        List<Attendance> attendances = new ArrayList<>();
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-        String sql = "SELECT a.*, s.id as student_id, s.name as student_name, " +
-                "c.id as session_id, c.class_id, c.subject_id, c.date " +
-                "FROM attendance a " +
-                "JOIN students s ON a.student_id = s.id " +
-                "JOIN class_sessions c ON a.session_id = c.id " +
-                "WHERE a.session_id = ?";
+            stmt.setString(1, attendance.getStudentId());
+            stmt.setLong(2, attendance.getSessionId());
+            stmt.setBoolean(3, attendance.isPresent());
+            stmt.setString(4, attendance.getNote());
+            stmt.setBoolean(5, attendance.isCalled());
+            stmt.setBoolean(6, attendance.hasPermission());
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setLong(1, sessionId);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    Attendance attendance = mapResultSetToAttendance(rs);
-                    attendances.add(attendance);
-                }
+            if (attendance.getCheckInTime() != null) {
+                stmt.setTimestamp(7, Timestamp.valueOf(attendance.getCheckInTime()));
+            } else {
+                stmt.setNull(7, Types.TIMESTAMP);
             }
-        }
 
-        return attendances;
-    }
-
-    /**
-     * Lấy danh sách điểm danh theo ID học sinh
-     *
-     * @param studentId ID của học sinh
-     * @return Danh sách điểm danh của học sinh đó
-     * @throws SQLException Nếu có lỗi xảy ra khi truy vấn
-     */
-    public List<Attendance> getByStudentId(long studentId) throws SQLException {
-        List<Attendance> attendances = new ArrayList<>();
-
-        String sql = "SELECT a.*, s.id as student_id, s.name as student_name, " +
-                "c.id as session_id, c.class_id, c.subject_id, c.date " +
-                "FROM attendance a " +
-                "JOIN students s ON a.student_id = s.id " +
-                "JOIN class_sessions c ON a.session_id = c.id " +
-                "WHERE a.student_id = ?";
-
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setLong(1, studentId);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    Attendance attendance = mapResultSetToAttendance(rs);
-                    attendances.add(attendance);
-                }
+            if (attendance.getRecordTime() != null) {
+                stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
+            } else {
+                stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
             }
-        }
-
-        return attendances;
-    }
-
-    /**
-     * Lấy danh sách điểm danh theo ID lớp học
-     *
-     * @param classId ID của lớp học
-     * @return Danh sách điểm danh cho lớp học đó
-     * @throws SQLException Nếu có lỗi xảy ra khi truy vấn
-     */
-    public List<Attendance> getByClassId(long classId) throws SQLException {
-        List<Attendance> attendances = new ArrayList<>();
-
-        String sql = "SELECT a.*, s.id as student_id, s.name as student_name, " +
-                "c.id as session_id, c.class_id, c.subject_id, c.date " +
-                "FROM attendance a " +
-                "JOIN students s ON a.student_id = s.id " +
-                "JOIN class_sessions c ON a.session_id = c.id " +
-                "WHERE c.class_id = ?";
-
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setLong(1, classId);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    Attendance attendance = mapResultSetToAttendance(rs);
-                    attendances.add(attendance);
-                }
-            }
-        }
-
-        return attendances;
-    }
-
-    /**
-     * Lấy thông tin điểm danh theo ID
-     *
-     * @param id ID của bản ghi điểm danh
-     * @return Đối tượng điểm danh hoặc null nếu không tìm thấy
-     * @throws SQLException Nếu có lỗi xảy ra khi truy vấn
-     */
-    public Attendance getById(long id) throws SQLException {
-        String sql = "SELECT a.*, s.id as student_id, s.name as student_name, " +
-                "c.id as session_id, c.class_id, c.subject_id, c.date " +
-                "FROM attendance a " +
-                "JOIN students s ON a.student_id = s.id " +
-                "JOIN class_sessions c ON a.session_id = c.id " +
-                "WHERE a.id = ?";
-
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setLong(1, id);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapResultSetToAttendance(rs);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Thêm một bản ghi điểm danh mới
-     *
-     * @param attendance Đối tượng điểm danh cần thêm
-     * @return true nếu thêm thành công, ngược lại là false
-     */
-    public boolean add(Attendance attendance) {
-        String sql = "INSERT INTO attendance (student_id, session_id, present, note, called, " +
-                "has_permission, check_in_time, record_time) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-
-        try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            populatePreparedStatement(stmt, attendance);
 
             int affectedRows = stmt.executeUpdate();
-            if (affectedRows == 0) {
-                return false;
-            }
 
-            // Lấy ID được sinh tự động
-            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+            if (affectedRows > 0) {
+                ResultSet generatedKeys = stmt.getGeneratedKeys();
                 if (generatedKeys.next()) {
                     attendance.setId(generatedKeys.getLong(1));
+                    return true;
                 }
             }
+            return false;
 
-            return true;
         } catch (SQLException e) {
-            System.err.println("Lỗi khi thêm bản ghi điểm danh: " + e.getMessage());
+            System.err.println("Error saving attendance: " + e.getMessage());
             e.printStackTrace();
             return false;
         }
     }
 
     /**
-     * Cập nhật thông tin điểm danh
+     * Update an existing attendance record
      *
-     * @param attendance Đối tượng điểm danh cần cập nhật
-     * @return true nếu cập nhật thành công, ngược lại là false
+     * @param attendance Attendance object to update
+     * @return true if successful, false otherwise
      */
     public boolean update(Attendance attendance) {
-        String sql = "UPDATE attendance SET student_id = ?, session_id = ?, present = ?, " +
+        String sql = "UPDATE attendance SET student_id = ?, class_session_id = ?, present = ?, " +
                 "note = ?, called = ?, has_permission = ?, check_in_time = ?, record_time = ? " +
                 "WHERE id = ?";
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            populatePreparedStatement(stmt, attendance);
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, attendance.getStudentId());
+            stmt.setLong(2, attendance.getSessionId());
+            stmt.setBoolean(3, attendance.isPresent());
+            stmt.setString(4, attendance.getNote());
+            stmt.setBoolean(5, attendance.isCalled());
+            stmt.setBoolean(6, attendance.hasPermission());
+
+            if (attendance.getCheckInTime() != null) {
+                stmt.setTimestamp(7, Timestamp.valueOf(attendance.getCheckInTime()));
+            } else {
+                stmt.setNull(7, Types.TIMESTAMP);
+            }
+
+            if (attendance.getRecordTime() != null) {
+                stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
+            } else {
+                stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
+            }
+
             stmt.setLong(9, attendance.getId());
 
-            int affectedRows = stmt.executeUpdate();
-            return affectedRows > 0;
+            return stmt.executeUpdate() > 0;
+
         } catch (SQLException e) {
-            System.err.println("Lỗi khi cập nhật bản ghi điểm danh: " + e.getMessage());
+            System.err.println("Error updating attendance: " + e.getMessage());
             e.printStackTrace();
             return false;
         }
     }
 
     /**
-     * Xóa bản ghi điểm danh
+     * Delete an attendance record by ID
      *
-     * @param id ID của bản ghi điểm danh cần xóa
-     * @return true nếu xóa thành công, ngược lại là false
+     * @param id ID of the attendance record to delete
+     * @return true if successful, false otherwise
      */
     public boolean delete(long id) {
         String sql = "DELETE FROM attendance WHERE id = ?";
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setLong(1, id);
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            int affectedRows = stmt.executeUpdate();
-            return affectedRows > 0;
+            stmt.setLong(1, id);
+            return stmt.executeUpdate() > 0;
+
         } catch (SQLException e) {
-            System.err.println("Lỗi khi xóa bản ghi điểm danh: " + e.getMessage());
+            System.err.println("Error deleting attendance: " + e.getMessage());
             e.printStackTrace();
             return false;
         }
     }
 
     /**
-     * Lấy danh sách điểm danh theo khoảng thời gian
+     * Find an attendance record by ID
      *
-     * @param startDate Ngày bắt đầu
-     * @param endDate Ngày kết thúc
-     * @return Danh sách điểm danh trong khoảng thời gian
-     * @throws SQLException Nếu có lỗi xảy ra khi truy vấn
+     * @param id ID of the attendance record to find
+     * @return Optional containing the attendance record if found
      */
-    public List<Attendance> getByDateRange(LocalDateTime startDate, LocalDateTime endDate) throws SQLException {
+    public Optional<Attendance> findById(long id) {
+        String sql = "SELECT * FROM attendance WHERE id = ?";
+
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setLong(1, id);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToAttendance(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error finding attendance by ID: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Find attendance records by student ID
+     *
+     * @param studentId ID of the student
+     * @return List of attendance records for the student
+     */
+    public List<Attendance> findByStudentId(String studentId) {
+        String sql = "SELECT * FROM attendance WHERE student_id = ?";
         List<Attendance> attendances = new ArrayList<>();
 
-        String sql = "SELECT a.*, s.id as student_id, s.name as student_name, " +
-                "c.id as session_id, c.class_id, c.subject_id, c.date " +
-                "FROM attendance a " +
-                "JOIN students s ON a.student_id = s.id " +
-                "JOIN class_sessions c ON a.session_id = c.id " +
-                "WHERE c.date BETWEEN ? AND ?";
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setTimestamp(1, Timestamp.valueOf(startDate));
-            stmt.setTimestamp(2, Timestamp.valueOf(endDate));
+            stmt.setString(1, studentId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    Attendance attendance = mapResultSetToAttendance(rs);
-                    attendances.add(attendance);
+                    attendances.add(mapResultSetToAttendance(rs));
                 }
             }
+
+        } catch (SQLException e) {
+            System.err.println("Error finding attendance by student ID: " + e.getMessage());
+            e.printStackTrace();
         }
 
         return attendances;
     }
 
     /**
-     * Lấy thống kê điểm danh theo học sinh
+     * Find attendance records by class session ID
      *
-     * @param studentId ID của học sinh
-     * @return Map<String, Integer> với key là loại điểm danh, value là số lượng
-     * @throws SQLException Nếu có lỗi xảy ra khi truy vấn
+     * @param sessionId ID of the class session
+     * @return List of attendance records for the class session
      */
-    public Map<String, Integer> getAttendanceStatsByStudent(long studentId) throws SQLException {
-        Map<String, Integer> stats = new HashMap<>();
-        stats.put("present", 0);
-        stats.put("absent_with_permission", 0);
-        stats.put("absent_without_permission", 0);
+    public List<Attendance> findBySessionId(long sessionId) {
+        String sql = "SELECT * FROM attendance WHERE class_session_id = ?";
+        List<Attendance> attendances = new ArrayList<>();
 
-        String sql = "SELECT present, has_permission, COUNT(*) as count " +
-                "FROM attendance " +
-                "WHERE student_id = ? " +
-                "GROUP BY present, has_permission";
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setLong(1, studentId);
+            stmt.setLong(1, sessionId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    boolean present = rs.getBoolean("present");
-                    boolean hasPermission = rs.getBoolean("has_permission");
-                    int count = rs.getInt("count");
-
-                    if (present) {
-                        stats.put("present", stats.get("present") + count);
-                    } else if (hasPermission) {
-                        stats.put("absent_with_permission", stats.get("absent_with_permission") + count);
-                    } else {
-                        stats.put("absent_without_permission", stats.get("absent_without_permission") + count);
-                    }
+                    attendances.add(mapResultSetToAttendance(rs));
                 }
             }
-        }
 
-        return stats;
-    }
-
-    /**
-     * Đóng kết nối đến cơ sở dữ liệu
-     */
-    public void closeConnection() {
-        try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-            }
         } catch (SQLException e) {
-            System.err.println("Lỗi khi đóng kết nối: " + e.getMessage());
+            System.err.println("Error finding attendance by session ID: " + e.getMessage());
             e.printStackTrace();
         }
+
+        return attendances;
     }
 
-    // Phương thức hỗ trợ
+    /**
+     * Find attendance records by date (uses session date)
+     *
+     * @param date Date to search for
+     * @return List of attendance records for the specified date
+     */
+    public List<Attendance> findByDate(LocalDate date) {
+        // This assumes there's a join with class_sessions or the date field is in the attendance table
+        String sql = "SELECT a.* FROM attendance a " +
+                "JOIN class_sessions cs ON a.class_session_id = cs.id " +
+                "WHERE cs.date = ?";
+        List<Attendance> attendances = new ArrayList<>();
+
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setDate(1, Date.valueOf(date));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    attendances.add(mapResultSetToAttendance(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error finding attendance by date: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return attendances;
+    }
 
     /**
-     * Chuyển đổi ResultSet thành đối tượng Attendance
+     * Find attendance records by student ID and session ID
      *
-     * @param rs ResultSet chứa dữ liệu cần chuyển đổi
-     * @return Đối tượng Attendance
-     * @throws SQLException Nếu có lỗi xảy ra khi truy cập dữ liệu
+     * @param studentId Student ID
+     * @param sessionId Session ID
+     * @return Optional containing the attendance record if found
+     */
+    public Optional<Attendance> findByStudentAndSession(String studentId, long sessionId) {
+        String sql = "SELECT * FROM attendance WHERE student_id = ? AND class_session_id = ?";
+
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, studentId);
+            stmt.setLong(2, sessionId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToAttendance(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error finding attendance by student and session: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Get all attendance records
+     *
+     * @return List of all attendance records
+     */
+    public List<Attendance> findAll() {
+        String sql = "SELECT * FROM attendance";
+        List<Attendance> attendances = new ArrayList<>();
+
+        try (Connection conn = dbConnector.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                attendances.add(mapResultSetToAttendance(rs));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error finding all attendances: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return attendances;
+    }
+
+    /**
+     * Find absent students for a specific session
+     *
+     * @param sessionId Session ID
+     * @return List of attendance records for absent students
+     */
+    public List<Attendance> findAbsentBySession(long sessionId) {
+        String sql = "SELECT * FROM attendance WHERE class_session_id = ? AND present = FALSE";
+        List<Attendance> attendances = new ArrayList<>();
+
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setLong(1, sessionId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    attendances.add(mapResultSetToAttendance(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error finding absent students: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return attendances;
+    }
+
+    /**
+     * Find absent students who have not been called yet
+     *
+     * @param sessionId Session ID
+     * @return List of attendance records for absent students who need to be called
+     */
+    public List<Attendance> findAbsentNotCalled(long sessionId) {
+        String sql = "SELECT * FROM attendance WHERE class_session_id = ? AND present = FALSE AND called = FALSE";
+        List<Attendance> attendances = new ArrayList<>();
+
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setLong(1, sessionId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    attendances.add(mapResultSetToAttendance(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error finding absent students not called: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return attendances;
+    }
+
+    /**
+     * Find attendance records in a date range
+     *
+     * @param startDate Start date
+     * @param endDate End date
+     * @return List of attendance records in the date range
+     */
+    public List<Attendance> findByDateRange(LocalDate startDate, LocalDate endDate) {
+        String sql = "SELECT a.* FROM attendance a " +
+                "JOIN class_sessions cs ON a.class_session_id = cs.id " +
+                "WHERE cs.date BETWEEN ? AND ?";
+        List<Attendance> attendances = new ArrayList<>();
+
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setDate(1, Date.valueOf(startDate));
+            stmt.setDate(2, Date.valueOf(endDate));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    attendances.add(mapResultSetToAttendance(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error finding attendance by date range: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return attendances;
+    }
+
+    /**
+     * Map a ResultSet row to an Attendance object
+     *
+     * @param rs ResultSet containing attendance data
+     * @return Attendance object populated with data from the ResultSet
+     * @throws SQLException if a database access error occurs
      */
     private Attendance mapResultSetToAttendance(ResultSet rs) throws SQLException {
         Attendance attendance = new Attendance();
+
+        // Set basic attendance properties
         attendance.setId(rs.getLong("id"));
-
-        // Tạo và thiết lập đối tượng Student
-        Student student = new Student();
-        student.setId("student_id");
-        // Thiết lập các thuộc tính khác của student nếu có
-        if (rs.getString("student_name") != null) {
-            student.setName(rs.getString("student_name"));
-        }
-        attendance.setStudent(student);
-
-        // Tạo và thiết lập đối tượng ClassSession
-        ClassSession session = new ClassSession();
-        session.setId(rs.getLong("session_id"));
-        session.setClassId(rs.getLong("class_id"));
-        session.setClassId(rs.getLong("subject_id"));
-        // Thiết lập các thuộc tính khác của session nếu có
-        if (rs.getTimestamp("date") != null) {
-            session.setDate(rs.getTimestamp("date").toLocalDateTime().toLocalDate());
-        }
-        attendance.setSession(session);
-
         attendance.setPresent(rs.getBoolean("present"));
         attendance.setNote(rs.getString("note"));
         attendance.setCalled(rs.getBoolean("called"));
         attendance.setHasPermission(rs.getBoolean("has_permission"));
 
-        // Xử lý các giá trị null cho timestamp
+        // Handle timestamps that may be null
         Timestamp checkInTime = rs.getTimestamp("check_in_time");
         if (checkInTime != null) {
             attendance.setCheckInTime(checkInTime.toLocalDateTime());
@@ -377,36 +438,251 @@ public class AttendanceDAO {
             attendance.setRecordTime(recordTime.toLocalDateTime());
         }
 
+        // Load related entities
+        String studentId = rs.getString("student_id");
+        long sessionId = rs.getLong("class_session_id");
+
+        // Get student and session objects
+        Optional<Student> student = studentDAO.findById(studentId);
+        Optional<ClassSession> session = sessionDAO.findById(sessionId);
+
+        // Set related entities if they exist
+        student.ifPresent(attendance::setStudent);
+        session.ifPresent(attendance::setSession);
+
+        // If related entities aren't found, at least set the IDs
+        if (student.isEmpty()) {
+            attendance.setStudentId(studentId);
+        }
+
+        if (session.isEmpty()) {
+            attendance.setSessionId(sessionId);
+        }
+
         return attendance;
     }
 
     /**
-     * Đổ dữ liệu từ đối tượng Attendance vào PreparedStatement
+     * Batch save multiple attendance records
      *
-     * @param stmt PreparedStatement cần đổ dữ liệu
-     * @param attendance Đối tượng Attendance chứa dữ liệu
-     * @throws SQLException Nếu có lỗi xảy ra khi gán dữ liệu
+     * @param attendances List of attendance records to save
+     * @return Number of records successfully saved
      */
-    private void populatePreparedStatement(PreparedStatement stmt, Attendance attendance) throws SQLException {
-        // Gán các giá trị cho PreparedStatement
-        stmt.setString(1, attendance.getStudent().getId());
-        stmt.setLong(2, attendance.getSession().getId());
-        stmt.setBoolean(3, attendance.isPresent());
-        stmt.setString(4, attendance.getNote());
-        stmt.setBoolean(5, attendance.isCalled());
-        stmt.setBoolean(6, attendance.hasPermission());
+    public int batchSave(List<Attendance> attendances) {
+        String sql = "INSERT INTO attendance (student_id, class_session_id, present, note, called, has_permission, " +
+                "check_in_time, record_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        int count = 0;
 
-        // Xử lý các giá trị null cho timestamp
-        if (attendance.getCheckInTime() != null) {
-            stmt.setTimestamp(7, Timestamp.valueOf(attendance.getCheckInTime()));
-        } else {
-            stmt.setNull(7, Types.TIMESTAMP);
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+            conn.setAutoCommit(false);
+
+            for (Attendance attendance : attendances) {
+                stmt.setString(1, attendance.getStudentId());
+                stmt.setLong(2, attendance.getSessionId());
+                stmt.setBoolean(3, attendance.isPresent());
+                stmt.setString(4, attendance.getNote());
+                stmt.setBoolean(5, attendance.isCalled());
+                stmt.setBoolean(6, attendance.hasPermission());
+
+                if (attendance.getCheckInTime() != null) {
+                    stmt.setTimestamp(7, Timestamp.valueOf(attendance.getCheckInTime()));
+                } else {
+                    stmt.setNull(7, Types.TIMESTAMP);
+                }
+
+                if (attendance.getRecordTime() != null) {
+                    stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
+                } else {
+                    stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
+                }
+
+                stmt.addBatch();
+            }
+
+            int[] results = stmt.executeBatch();
+            conn.commit();
+
+            for (int result : results) {
+                if (result > 0) {
+                    count++;
+                }
+            }
+
+            // Get generated IDs and set them on the attendance objects
+            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                int index = 0;
+                while (generatedKeys.next() && index < attendances.size()) {
+                    attendances.get(index).setId(generatedKeys.getLong(1));
+                    index++;
+                }
+            }
+
+            conn.setAutoCommit(true);
+
+        } catch (SQLException e) {
+            System.err.println("Error batch saving attendances: " + e.getMessage());
+            e.printStackTrace();
         }
 
-        if (attendance.getRecordTime() != null) {
-            stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
-        } else {
-            stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
+        return count;
+    }
+
+    /**
+     * Batch update multiple attendance records
+     *
+     * @param attendances List of attendance records to update
+     * @return Number of records successfully updated
+     */
+    public int batchUpdate(List<Attendance> attendances) {
+        String sql = "UPDATE attendance SET student_id = ?, class_session_id = ?, present = ?, " +
+                "note = ?, called = ?, has_permission = ?, check_in_time = ?, record_time = ? " +
+                "WHERE id = ?";
+        int count = 0;
+
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            conn.setAutoCommit(false);
+
+            for (Attendance attendance : attendances) {
+                stmt.setString(1, attendance.getStudentId());
+                stmt.setLong(2, attendance.getSessionId());
+                stmt.setBoolean(3, attendance.isPresent());
+                stmt.setString(4, attendance.getNote());
+                stmt.setBoolean(5, attendance.isCalled());
+                stmt.setBoolean(6, attendance.hasPermission());
+
+                if (attendance.getCheckInTime() != null) {
+                    stmt.setTimestamp(7, Timestamp.valueOf(attendance.getCheckInTime()));
+                } else {
+                    stmt.setNull(7, Types.TIMESTAMP);
+                }
+
+                if (attendance.getRecordTime() != null) {
+                    stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
+                } else {
+                    stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
+                }
+
+                stmt.setLong(9, attendance.getId());
+
+                stmt.addBatch();
+            }
+
+            int[] results = stmt.executeBatch();
+            conn.commit();
+
+            for (int result : results) {
+                if (result > 0) {
+                    count++;
+                }
+            }
+
+            conn.setAutoCommit(true);
+
+        } catch (SQLException e) {
+            System.err.println("Error batch updating attendances: " + e.getMessage());
+            e.printStackTrace();
         }
+
+        return count;
+    }
+
+    /**
+     * Gets attendance statistics for a student over a time period
+     *
+     * @param studentId Student ID
+     * @param startDate Start date
+     * @param endDate End date
+     * @return Map with statistics (present, absent, excused)
+     */
+    public AttendanceStats getStudentStats(String studentId, LocalDate startDate, LocalDate endDate) {
+        String sql = "SELECT " +
+                "SUM(CASE WHEN present = TRUE THEN 1 ELSE 0 END) as present_count, " +
+                "SUM(CASE WHEN present = FALSE AND has_permission = TRUE THEN 1 ELSE 0 END) as excused_count, " +
+                "SUM(CASE WHEN present = FALSE AND has_permission = FALSE THEN 1 ELSE 0 END) as unexcused_count " +
+                "FROM attendance a " +
+                "JOIN class_sessions cs ON a.class_session_id = cs.id " +
+                "WHERE a.student_id = ? AND cs.date BETWEEN ? AND ?";
+
+        AttendanceStats stats = new AttendanceStats();
+
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, studentId);
+            stmt.setDate(2, Date.valueOf(startDate));
+            stmt.setDate(3, Date.valueOf(endDate));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    stats.setPresentCount(rs.getInt("present_count"));
+                    stats.setExcusedAbsenceCount(rs.getInt("excused_count"));
+                    stats.setUnexcusedAbsenceCount(rs.getInt("unexcused_count"));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error getting student attendance stats: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return stats;
+    }
+
+    /**
+     * Helper class to store attendance statistics
+     */
+    public static class AttendanceStats {
+        private int presentCount;
+        private int excusedAbsenceCount;
+        private int unexcusedAbsenceCount;
+
+        public int getPresentCount() {
+            return presentCount;
+        }
+
+        public void setPresentCount(int presentCount) {
+            this.presentCount = presentCount;
+        }
+
+        public int getExcusedAbsenceCount() {
+            return excusedAbsenceCount;
+        }
+
+        public void setExcusedAbsenceCount(int excusedAbsenceCount) {
+            this.excusedAbsenceCount = excusedAbsenceCount;
+        }
+
+        public int getUnexcusedAbsenceCount() {
+            return unexcusedAbsenceCount;
+        }
+
+        public void setUnexcusedAbsenceCount(int unexcusedAbsenceCount) {
+            this.unexcusedAbsenceCount = unexcusedAbsenceCount;
+        }
+
+        public int getTotalAbsenceCount() {
+            return excusedAbsenceCount + unexcusedAbsenceCount;
+        }
+
+        public int getTotalCount() {
+            return presentCount + excusedAbsenceCount + unexcusedAbsenceCount;
+        }
+
+        public double getAttendanceRate() {
+            int total = getTotalCount();
+            return total > 0 ? (double) presentCount / total : 0.0;
+        }
+    }
+
+    public StudentDAO getStudentDAO() {
+        return studentDAO;
+    }
+
+    public ClassSessionDAO getClassSessionDAO() {
+        return sessionDAO;
     }
 }

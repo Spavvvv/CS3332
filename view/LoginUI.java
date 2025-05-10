@@ -42,7 +42,7 @@ public class LoginUI {
     private String currentTheme = "light"; // Mặc định là theme sáng
     private NavigationController navigationController;
     private MainController mainController;
-    private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
+    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
@@ -535,9 +535,9 @@ public class LoginUI {
             uiStage.setMaximized(true); // Mở rộng cửa sổ
 
             // Xử lý sự kiện đóng cửa sổ
-            uiStage.setOnCloseRequest(event -> {
-                mainController1.onAppExit();
-            });
+//            uiStage.setOnCloseRequest(event -> {
+//                mainController1.onAppExit();
+//            });
 
             uiStage.show();
 

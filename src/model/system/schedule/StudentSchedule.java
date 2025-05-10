@@ -70,4 +70,8 @@ public class StudentSchedule extends Schedule {
     public void removeCourse(Course course) {
         this.courses.remove(course);
     }
+
+    public void setCourses(List<Course> courses) {
+        this.courses = courses;
+    }
 }

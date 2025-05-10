@@ -16,9 +16,17 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
 import view.BaseScreenView;
 
+import src.model.absence.AbsenceRecord;
+import src.dao.AbsenceRecordDAO;
+
+import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Màn hình Gọi điện xác nhận nghỉ học
@@ -45,8 +53,34 @@ public class AbsenceCallView extends BaseScreenView {
     private ObservableList<AbsenceRecord> absenceData = FXCollections.observableArrayList();
     private FilteredList<AbsenceRecord> filteredData;
 
+    // DAO
+    private AbsenceRecordDAO absenceRecordDAO;
+
+    // Theo dõi thay đổi
+    private boolean dataChanged = false;
+
     public AbsenceCallView() {
         super("Gọi điện xác nhận", "absence-call-view");
+        // Initialize DAO
+        absenceRecordDAO = new AbsenceRecordDAO();
+    }
+
+    /**
+     * Sets the absence data from the controller
+     * @param records The list of absence records to display
+     */
+    public void setAbsenceData(ObservableList<AbsenceRecord> records) {
+        // Clear existing data and add new records
+        absenceData.clear();
+        absenceData.addAll(records);
+
+        // Refresh the table
+        if (tableView != null) {
+            tableView.refresh();
+        }
+
+        // Reset the data changed flag since we're setting fresh data
+        dataChanged = false;
     }
 
     @Override
@@ -62,8 +96,8 @@ public class AbsenceCallView extends BaseScreenView {
                 createTableView()
         );
 
-        // Load sample data
-        loadSampleData();
+        // Load data from database
+        loadDataFromDatabase();
 
         // Set up event handlers
         setupEventHandlers();
@@ -72,7 +106,8 @@ public class AbsenceCallView extends BaseScreenView {
     @Override
     public void refreshView() {
         super.refreshView();
-        // Refresh data if needed
+        // Refresh data from database
+        loadDataFromDatabase();
         if (tableView != null) {
             tableView.refresh();
         }
@@ -91,7 +126,7 @@ public class AbsenceCallView extends BaseScreenView {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // Return button - sử dụng text "←" làm icon
+        // Return button
         returnButton = new Button("← Quay lại");
         returnButton.setStyle(
                 "-fx-background-color: " + PRIMARY_COLOR + ";" +
@@ -99,8 +134,8 @@ public class AbsenceCallView extends BaseScreenView {
                         "-fx-font-weight: bold;" +
                         "-fx-padding: 10 20;" +
                         "-fx-background-radius: 20;" +
-                        "-fx-alignment: CENTER;" +  // Canh giữa nội dung
-                        "-fx-content-display: CENTER"  // Hiển thị nội dung ở giữa
+                        "-fx-alignment: CENTER;" +
+                        "-fx-content-display: CENTER"
         );
         returnButton.setGraphic(createButtonIcon("arrow-left", "white"));
 
@@ -112,8 +147,8 @@ public class AbsenceCallView extends BaseScreenView {
                         "-fx-font-weight: bold;" +
                         "-fx-padding: 10 20;" +
                         "-fx-background-radius: 20;" +
-                        "-fx-alignment: CENTER;" +  // Canh giữa nội dung
-                        "-fx-content-display: CENTER"  // Hiển thị nội dung ở giữa
+                        "-fx-alignment: CENTER;" +
+                        "-fx-content-display: CENTER"
         );
         saveButton.setGraphic(createButtonIcon("save", "white"));
 
@@ -121,7 +156,7 @@ public class AbsenceCallView extends BaseScreenView {
         buttons.getChildren().addAll(returnButton, saveButton);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
-        titleBar.getChildren().addAll(titleLabel, spacer, returnButton, saveButton);
+        titleBar.getChildren().addAll(titleLabel, spacer, buttons);
 
         return titleBar;
     }
@@ -151,8 +186,8 @@ public class AbsenceCallView extends BaseScreenView {
                 "-fx-background-color: transparent;" +
                         "-fx-border-color: " + BORDER_COLOR + ";" +
                         "-fx-border-radius: 8;" +
-                        "-fx-alignment: CENTER;" +  // Canh giữa nội dung
-                        "-fx-content-display: CENTER"  // Hiển thị nội dung ở giữa
+                        "-fx-alignment: CENTER;" +
+                        "-fx-content-display: CENTER"
         );
 
         // Date range
@@ -174,13 +209,13 @@ public class AbsenceCallView extends BaseScreenView {
                         "-fx-text-fill: white;" +
                         "-fx-padding: 8 15;" +
                         "-fx-background-radius: 5;"+
-                        "-fx-alignment: CENTER;" +  // Canh giữa nội dung
-                        "-fx-content-display: CENTER"  // Hiển thị nội dung ở giữa
+                        "-fx-alignment: CENTER;" +
+                        "-fx-content-display: CENTER"
         );
 
         // Add components to filter bar
         filterBar.getChildren().addAll(
-                searchLabel, searchField, filterButton,
+                searchLabel, searchField,
                 fromLabel, fromDatePicker,
                 toLabel, toDatePicker,
                 searchButton
@@ -263,8 +298,7 @@ public class AbsenceCallView extends BaseScreenView {
     }
 
     private ImageView createButtonIcon(String iconName, String color) {
-        // Trong ứng dụng thực tế, bạn sẽ load icon thực tế
-        // Đây chỉ là placeholder
+        // Placeholder for actual icons
         Rectangle rect = new Rectangle(16, 16);
         rect.setFill(Color.web(color));
 
@@ -272,171 +306,145 @@ public class AbsenceCallView extends BaseScreenView {
         imageView.setFitHeight(16);
         imageView.setFitWidth(16);
 
-        // Trong ứng dụng thực tế: imageView.setImage(new Image("/icons/" + iconName + ".png"));
+        // In a real application: imageView.setImage(new Image("/icons/" + iconName + ".png"));
 
         return imageView;
     }
 
-    private void loadSampleData() {
-        // Dữ liệu mẫu cho demo
-        for (int i = 1; i <= 10; i++) {
-            ImageView studentImage = new ImageView();
-            studentImage.setFitHeight(30);
-            studentImage.setFitWidth(30);
+    private void loadDataFromDatabase() {
+        try {
+            // Lấy dữ liệu từ database thông qua DAO
+            List<AbsenceRecord> records = absenceRecordDAO.findAll();
 
-            AbsenceRecord record = new AbsenceRecord(
-                    i,
-                    studentImage,
-                    "Học sinh " + i,
-                    "Lớp " + (i % 3 + 1),
-                    "29/04/2025",
-                    "Vắng",
-                    "Lý do " + i,
-                    false,
-                    false
-            );
+            // Xóa dữ liệu hiện tại và thêm dữ liệu mới
+            absenceData.clear();
+            absenceData.addAll(records);
 
-            absenceData.add(record);
+            // Reset dataChanged flag vì dữ liệu vừa mới load
+            dataChanged = false;
+
+        } catch (SQLException e) {
+            showError("Lỗi khi tải dữ liệu: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     private void setupEventHandlers() {
-        // Thiết lập các xử lý sự kiện
-
-        // Xử lý sự kiện nút Quay lại
+        // Return button event
         returnButton.setOnAction(e -> {
-            if (navigationController != null) {
-                navigationController.goBack();
+            if (dataChanged) {
+                // Confirm if user wants to leave without saving
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                alert.setTitle("Xác nhận");
+                alert.setHeaderText("Dữ liệu chưa được lưu");
+                alert.setContentText("Bạn có muốn lưu thay đổi trước khi quay lại không?");
+
+                ButtonType buttonSave = new ButtonType("Lưu và quay lại");
+                ButtonType buttonLeave = new ButtonType("Quay lại không lưu");
+                ButtonType buttonCancel = new ButtonType("Hủy", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+                alert.getButtonTypes().setAll(buttonSave, buttonLeave, buttonCancel);
+
+                alert.showAndWait().ifPresent(type -> {
+                    if (type == buttonSave) {
+                        saveChanges();
+                        navigateBack();
+                    } else if (type == buttonLeave) {
+                        navigateBack();
+                    }
+                    // Nếu là Cancel thì không làm gì cả
+                });
             } else {
-                System.out.println("NavigationController chưa được thiết lập");
+                navigateBack();
             }
         });
 
-        // Xử lý sự kiện nút Lưu thông tin
-        saveButton.setOnAction(e -> {
-            saveChanges();
+        // Save button event
+        saveButton.setOnAction(e -> saveChanges());
+
+        // Search button event
+        searchButton.setOnAction(e -> applyFilters());
+
+        // Track data changes
+        tableView.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 1) {
+                dataChanged = true;
+            }
         });
+    }
 
-        // Xử lý sự kiện nút Tìm kiếm
-        searchButton.setOnAction(e -> {
-            applyFilters();
-        });
-
-        // Xử lý sự kiện tìm kiếm theo từ khóa
-        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
-            filteredData.setPredicate(record -> {
-                if (newValue == null || newValue.isEmpty()) {
-                    return true;
-                }
-
-                String lowerCaseFilter = newValue.toLowerCase();
-
-                if (record.getName().toLowerCase().contains(lowerCaseFilter)) {
-                    return true;
-                } else if (record.getClassName().toLowerCase().contains(lowerCaseFilter)) {
-                    return true;
-                } else if (record.getDate().toLowerCase().contains(lowerCaseFilter)) {
-                    return true;
-                }
-                return false;
-            });
-        });
+    private void navigateBack() {
+        if (navigationController != null) {
+            navigationController.goBack();
+        } else {
+            System.out.println("Navigation controller is null");
+        }
     }
 
     private void saveChanges() {
-        // Lưu các thay đổi vào database hoặc service
-        showSuccess("Đã lưu thông tin thành công!");
+        try {
+            // Get all records from table
+            List<AbsenceRecord> records = new ArrayList<>(tableView.getItems());
+
+            // Save all records in a batch
+            boolean success = absenceRecordDAO.updateBatch(records);
+
+            if (success) {
+                showInfo("Đã lưu thành công!");
+                dataChanged = false;
+            } else {
+                showWarning("Không có thay đổi nào được lưu!");
+            }
+
+        } catch (SQLException e) {
+            showError("Lỗi khi lưu dữ liệu: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private void applyFilters() {
-        // Áp dụng các bộ lọc dựa trên từ khóa và ngày
-        LocalDate fromDate = fromDatePicker.getValue();
-        LocalDate toDate = toDatePicker.getValue();
+        try {
+            String keyword = searchField.getText().trim();
+            LocalDate fromDate = fromDatePicker.getValue();
+            LocalDate toDate = toDatePicker.getValue();
 
-        filteredData.setPredicate(record -> {
-            // TODO: Lọc theo ngày
-            // Đây là demo, trong ứng dụng thực tế bạn sẽ cần kiểm tra ngày
+            // Lấy dữ liệu đã lọc từ database
+            List<AbsenceRecord> filteredRecords = absenceRecordDAO.findByFilters(keyword, fromDate, toDate);
 
-            return true;
-        });
+            // Cập nhật bảng
+            absenceData.clear();
+            absenceData.addAll(filteredRecords);
 
-        showSuccess("Đã áp dụng bộ lọc!");
-    }
+            // Reset dataChanged flag vì dữ liệu vừa mới load
+            dataChanged = false;
 
-    @Override
-    public void onShow() {
-        super.onShow();
-        // Cập nhật lại dữ liệu khi hiển thị view
-        refreshView();
-    }
-
-    /**
-     * Inner class đại diện cho bản ghi vắng mặt
-     * Các thuộc tính public để module-info.java có thể truy cập
-     */
-    public static class AbsenceRecord {
-        private final Integer id;
-        private final ImageView image;
-        private final String name;
-        private final String className;
-        private final String date;
-        private final String attendance;
-        private final String note;
-        private final BooleanProperty called = new SimpleBooleanProperty();
-        private final BooleanProperty approved = new SimpleBooleanProperty();
-
-        public AbsenceRecord(Integer id, ImageView image, String name, String className,
-                             String date, String attendance, String note,
-                             boolean called, boolean approved) {
-            this.id = id;
-            this.image = image;
-            this.name = name;
-            this.className = className;
-            this.date = date;
-            this.attendance = attendance;
-            this.note = note;
-            this.called.set(called);
-            this.approved.set(approved);
+        } catch (SQLException e) {
+            showError("Lỗi khi lọc dữ liệu: " + e.getMessage());
+            e.printStackTrace();
         }
-
-        // Getters và Setters public
-        public Integer getId() { return id; }
-
-        public ImageView getImage() { return image; }
-
-        public String getName() { return name; }
-
-        public String getClassName() { return className; }
-
-        public String getDate() { return date; }
-
-        public String getAttendance() { return attendance; }
-
-        public String getNote() { return note; }
-
-        public boolean isCalled() { return called.get(); }
-
-        public BooleanProperty calledProperty() { return called; }
-
-        public void setCalled(boolean called) { this.called.set(called); }
-
-        public boolean isApproved() { return approved.get(); }
-
-        public BooleanProperty approvedProperty() { return approved; }
-
-        public void setApproved(boolean approved) { this.approved.set(approved); }
     }
 
-    // Getter để lấy dữ liệu cho controller
-    public ObservableList<AbsenceRecord> getAbsenceData() {
-        return absenceData;
+    private void showInfo(String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Thông báo");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
-    // Setter để controller có thể cập nhật dữ liệu
-    public void setAbsenceData(ObservableList<AbsenceRecord> data) {
-        this.absenceData.setAll(data);
-        if (tableView != null) {
-            tableView.refresh();
-        }
+    private void showWarning(String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle("Cảnh báo");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    public void showError(String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Lỗi");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 }

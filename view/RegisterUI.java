@@ -1,4 +1,5 @@
 package view;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -39,9 +40,10 @@ public class RegisterUI {
     private NavigationController navigationController;
     private MainController mainController;
     private String currentTheme = "light"; // Mặc định là theme sáng
+
     // File path for storing user accounts
     private String ACCOUNTS_FILE;
-    private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
+    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
 
     // Định dạng ngày tháng
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
