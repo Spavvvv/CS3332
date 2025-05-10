@@ -41,7 +41,7 @@ public class DetailsController {
      * @param sessionId The ID of the class session to load
      * @return True if session was loaded successfully, false otherwise
      */
-    public boolean loadSessionDetails(long sessionId) {
+    public boolean loadSessionDetails(String sessionId) {
         DetailsModel loadedModel = detailsDAO.loadSessionDetails(sessionId);
         if (loadedModel != null) {
             this.currentModel = loadedModel;
@@ -290,7 +290,7 @@ public class DetailsController {
      * @param sessionId Session ID to delete
      * @return True if deletion was successful
      */
-    public boolean deleteSession(long sessionId) {
+    public boolean deleteSession(String sessionId) {
         return detailsDAO.deleteSession(sessionId);
     }
 }

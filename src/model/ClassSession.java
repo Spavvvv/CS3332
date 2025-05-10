@@ -12,7 +12,7 @@ import java.util.Objects;
  Đối tượng đại diện cho một buổi học
  */
 public class ClassSession {
-    private long id;
+    private String id;
     private String courseName;
     private String teacher;
     private String room;
@@ -20,11 +20,11 @@ public class ClassSession {
     private String timeSlot;
     private LocalTime startTime; // Thời gian bắt đầu buổi học
     private LocalTime endTime;   // Thời gian kết thúc buổi học
-    private long classId; // ID của lớp học mà buổi học này thuộc về
+    private String classId; // ID của lớp học mà buổi học này thuộc về
     private List<Student> students; // Danh sách học sinh tham gia buổi học
     private CourseDate courseDate; // Thông tin về ngày của khóa học
 
-    public ClassSession(long id, String courseName, String teacher, String room, LocalDate date, String timeSlot) {
+    public ClassSession(String id, String courseName, String teacher, String room, LocalDate date, String timeSlot) {
         this.id = id;
         this.courseName = courseName;
         this.teacher = teacher;
@@ -35,14 +35,14 @@ public class ClassSession {
     }
 
 
-    public ClassSession(long id, String courseName, String teacher, String room, LocalDate date, String timeSlot, long classId) {
+    public ClassSession(String id, String courseName, String teacher, String room, LocalDate date, String timeSlot, String classId) {
         this(id, courseName, teacher, room, date, timeSlot);
         this.classId = classId;
     }
 
 
-    public ClassSession(long id, String courseName, String teacher, String room, LocalDate date,
-                        LocalTime startTime, LocalTime endTime, long classId) {
+    public ClassSession(String id, String courseName, String teacher, String room, LocalDate date,
+                        LocalTime startTime, LocalTime endTime, String classId) {
         this.id = id;
         this.courseName = courseName;
         this.teacher = teacher;
@@ -76,12 +76,12 @@ public class ClassSession {
 
 
     // Getters and setters
-    public long getId() {
+    public String getId() {
         return id;
     }
 
 
-    public void setId(long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -224,7 +224,7 @@ public class ClassSession {
      * Lấy ID của lớp học mà buổi học này thuộc về
      * @return ID của lớp học
      */
-    public long getClassId() {
+    public String getClassId() {
         return classId;
     }
 
@@ -233,7 +233,7 @@ public class ClassSession {
      * Thiết lập ID của lớp học mà buổi học này thuộc về
      * @param classId ID của lớp học
      */
-    public void setClassId(long classId) {
+    public void setClassId(String classId) {
         this.classId = classId;
     }
 

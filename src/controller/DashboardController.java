@@ -163,7 +163,7 @@ public class DashboardController {
      * Finds a class session by ID
      * Controller method that uses model's business logic
      */
-    public ClassSession findClassSessionById(long classId) {
+    public ClassSession findClassSessionById(String classId) {
         return model.findClassSessionById(classId);
     }
 

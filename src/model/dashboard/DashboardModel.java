@@ -164,9 +164,9 @@ public class DashboardModel {
      * Find a class session by ID
      * Business logic method - doesn't access data sources
      */
-    public ClassSession findClassSessionById(long classId) {
+    public ClassSession findClassSessionById(String classId) {
         for (ClassSession session : todayClasses) {
-            if (session.getId() == classId) {
+            if (session.getId().equals(classId)) {
                 return session;
             }
         }

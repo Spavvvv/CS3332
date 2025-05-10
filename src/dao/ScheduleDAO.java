@@ -12,11 +12,15 @@ import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * DAO for Schedule operations, combining interface and implementation
  */
 public class ScheduleDAO {
+
+    private static final Logger LOGGER = Logger.getLogger(ScheduleDAO.class.getName());
 
     /**
      * Find a schedule by ID
@@ -32,7 +36,7 @@ public class ScheduleDAO {
 
             // First query the schedule base table
             stmt = connection.prepareStatement(
-                    "SELECT * FROM schedules WHERE id = ?"
+                    "SELECT id, schedule_type FROM schedules WHERE id = ?"
             );
             stmt.setString(1, id);
             rs = stmt.executeQuery();
@@ -40,7 +44,7 @@ public class ScheduleDAO {
             if (rs.next()) {
                 String scheduleType = rs.getString("schedule_type");
 
-                // Depending on the type, query the specific subclass table
+                // Depending on the type, query the specific subclass table using the existing connection
                 if ("ROOM".equals(scheduleType)) {
                     schedule = findRoomScheduleById(connection, id);
                 } else if ("STUDENT".equals(scheduleType)) {
@@ -49,10 +53,13 @@ public class ScheduleDAO {
             }
 
             return schedule;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding schedule by ID: " + id, e);
+            throw e; // Re-throw the exception after logging
         } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (connection != null) connection.close();
+            if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
+            if (connection != null) { try { connection.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing Connection", e); }}
         }
     }
 
@@ -64,7 +71,7 @@ public class ScheduleDAO {
         try {
             // Join the schedules table with the room_schedules table
             stmt = connection.prepareStatement(
-                    "SELECT s.*, rs.room_id, rs.capacity, rs.room_type " +
+                    "SELECT s.id, s.name, s.description, s.start_time, s.end_time, rs.room_id, rs.capacity, rs.room_type " +
                             "FROM schedules s " +
                             "JOIN room_schedules rs ON s.id = rs.schedule_id " +
                             "WHERE s.id = ?"
@@ -85,9 +92,12 @@ public class ScheduleDAO {
                 );
             }
             return null;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding RoomSchedule by ID: " + id, e);
+            throw e; // Re-throw the exception after logging
         } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
+            if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
         }
     }
 
@@ -99,7 +109,7 @@ public class ScheduleDAO {
         try {
             // Join the schedules table with the student_schedules table
             stmt = connection.prepareStatement(
-                    "SELECT s.*, ss.student_id " +
+                    "SELECT s.id, s.name, s.description, s.start_time, s.end_time, ss.student_id " +
                             "FROM schedules s " +
                             "JOIN student_schedules ss ON s.id = ss.schedule_id " +
                             "WHERE s.id = ?"
@@ -118,9 +128,12 @@ public class ScheduleDAO {
                 );
             }
             return null;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding StudentSchedule by ID: " + id, e);
+            throw e; // Re-throw the exception after logging
         } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
+            if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
         }
     }
 
@@ -155,10 +168,13 @@ public class ScheduleDAO {
             }
 
             return schedules;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding all schedules", e);
+            throw e; // Re-throw the exception after logging
         } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (connection != null) connection.close();
+            if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing Statement", e); }}
+            if (connection != null) { try { connection.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing Connection", e); }}
         }
     }
 
@@ -168,6 +184,16 @@ public class ScheduleDAO {
     public boolean save(Schedule schedule) throws SQLException {
         Connection connection = null;
         PreparedStatement stmt = null;
+
+        if (schedule == null) {
+            LOGGER.log(Level.WARNING, "Attempted to save a null schedule.");
+            return false;
+        }
+        if (schedule.getId() == null || schedule.getId().trim().isEmpty()) {
+            LOGGER.log(Level.WARNING, "Attempted to save a schedule with null or empty ID.");
+            return false; // Cannot save without a valid ID
+        }
+
 
         try {
             connection = DatabaseConnection.getConnection();
@@ -181,43 +207,60 @@ public class ScheduleDAO {
             stmt.setString(1, schedule.getId());
             stmt.setString(2, schedule.getName());
             stmt.setString(3, schedule.getDescription());
-            stmt.setTimestamp(4, Timestamp.valueOf(schedule.getStartTime()));
-            stmt.setTimestamp(5, Timestamp.valueOf(schedule.getEndTime()));
+            stmt.setTimestamp(4, schedule.getStartTime() != null ? Timestamp.valueOf(schedule.getStartTime()) : null);
+            stmt.setTimestamp(5, schedule.getEndTime() != null ? Timestamp.valueOf(schedule.getEndTime()) : null);
+
+            boolean subclassSaveSuccess = false; // Flag to track if subclass save is successful
 
             // Determine schedule type and handle subclass-specific persistence
             if (schedule instanceof RoomSchedule) {
                 stmt.setString(6, "ROOM");
                 int result = stmt.executeUpdate();
-
                 if (result > 0) {
-                    saveRoomSchedule(connection, (RoomSchedule) schedule);
+                    subclassSaveSuccess = saveRoomSchedule(connection, (RoomSchedule) schedule);
                 }
             } else if (schedule instanceof StudentSchedule) {
                 stmt.setString(6, "STUDENT");
                 int result = stmt.executeUpdate();
-
                 if (result > 0) {
-                    saveStudentSchedule(connection, (StudentSchedule) schedule);
+                    subclassSaveSuccess = saveStudentSchedule(connection, (StudentSchedule) schedule);
                 }
             } else {
                 // Unknown schedule type
+                LOGGER.log(Level.SEVERE, "Attempted to save schedule with unknown type: " + schedule.getClass().getName());
+                connection.rollback(); // Rollback the base insert
                 return false;
             }
 
-            connection.commit();
-            return true;
+            if (subclassSaveSuccess) {
+                connection.commit();
+                return true;
+            } else {
+                LOGGER.log(Level.SEVERE, "Failed to save subclass schedule for schedule ID: " + schedule.getId());
+                connection.rollback(); // Rollback base insert if subclass save fails
+                return false;
+            }
+
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error saving schedule with ID: " + schedule.getId(), e);
             try {
-                if (connection != null) connection.rollback();
+                if (connection != null) {
+                    LOGGER.log(Level.INFO, "Performing rollback for schedule ID: " + schedule.getId());
+                    connection.rollback();
+                }
             } catch (SQLException ex) {
-                throw new SQLException("Error during rollback", ex);
+                LOGGER.log(Level.SEVERE, "Error during rollback for schedule ID: " + schedule.getId(), ex);
             }
             throw e;
         } finally {
-            if (stmt != null) stmt.close();
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
             if (connection != null) {
-                connection.setAutoCommit(true);
-                connection.close();
+                try {
+                    connection.setAutoCommit(true); // Restore auto-commit mode
+                    connection.close();
+                } catch (SQLException e) {
+                    LOGGER.log(Level.WARNING, "Error closing Connection", e);
+                }
             }
         }
     }
@@ -237,8 +280,11 @@ public class ScheduleDAO {
             stmt.setString(4, roomSchedule.getRoomType());
 
             return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error saving RoomSchedule for schedule ID: " + roomSchedule.getId(), e);
+            throw e; // Re-throw to allow rollback in calling method
         } finally {
-            if (stmt != null) stmt.close();
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
         }
     }
 
@@ -255,10 +301,14 @@ public class ScheduleDAO {
             stmt.setString(2, studentSchedule.getStudentId());
 
             return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error saving StudentSchedule for schedule ID: " + studentSchedule.getId(), e);
+            throw e; // Re-throw to allow rollback in calling method
         } finally {
-            if (stmt != null) stmt.close();
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
         }
     }
+
 
     /**
      * Update a schedule
@@ -266,6 +316,11 @@ public class ScheduleDAO {
     public boolean update(Schedule schedule) throws SQLException {
         Connection connection = null;
         PreparedStatement stmt = null;
+
+        if (schedule == null || schedule.getId() == null || schedule.getId().trim().isEmpty()) {
+            LOGGER.log(Level.WARNING, "Attempted to update a null schedule or schedule with null/empty ID.");
+            return false;
+        }
 
         try {
             connection = DatabaseConnection.getConnection();
@@ -278,8 +333,8 @@ public class ScheduleDAO {
             );
             stmt.setString(1, schedule.getName());
             stmt.setString(2, schedule.getDescription());
-            stmt.setTimestamp(3, Timestamp.valueOf(schedule.getStartTime()));
-            stmt.setTimestamp(4, Timestamp.valueOf(schedule.getEndTime()));
+            stmt.setTimestamp(3, schedule.getStartTime() != null ? Timestamp.valueOf(schedule.getStartTime()) : null);
+            stmt.setTimestamp(4, schedule.getEndTime() != null ? Timestamp.valueOf(schedule.getEndTime()) : null);
             stmt.setString(5, schedule.getId());
 
             int result = stmt.executeUpdate();
@@ -295,17 +350,25 @@ public class ScheduleDAO {
             connection.commit();
             return result > 0;
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error updating schedule with ID: " + schedule.getId(), e);
             try {
-                if (connection != null) connection.rollback();
+                if (connection != null) {
+                    LOGGER.log(Level.INFO, "Performing rollback for schedule ID: " + schedule.getId());
+                    connection.rollback();
+                }
             } catch (SQLException ex) {
-                throw new SQLException("Error during rollback", ex);
+                LOGGER.log(Level.SEVERE, "Error during rollback for schedule ID: " + schedule.getId(), ex);
             }
             throw e;
         } finally {
-            if (stmt != null) stmt.close();
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
             if (connection != null) {
-                connection.setAutoCommit(true);
-                connection.close();
+                try {
+                    connection.setAutoCommit(true); // Restore auto-commit mode
+                    connection.close();
+                } catch (SQLException e) {
+                    LOGGER.log(Level.WARNING, "Error closing Connection", e);
+                }
             }
         }
     }
@@ -325,8 +388,11 @@ public class ScheduleDAO {
             stmt.setString(4, roomSchedule.getId());
 
             return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error updating RoomSchedule for schedule ID: " + roomSchedule.getId(), e);
+            throw e; // Re-throw to allow rollback in calling method
         } finally {
-            if (stmt != null) stmt.close();
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
         }
     }
 
@@ -343,8 +409,11 @@ public class ScheduleDAO {
             stmt.setString(2, studentSchedule.getId());
 
             return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error updating StudentSchedule for schedule ID: " + studentSchedule.getId(), e);
+            throw e; // Re-throw to allow rollback in calling method
         } finally {
-            if (stmt != null) stmt.close();
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
         }
     }
 
@@ -356,6 +425,11 @@ public class ScheduleDAO {
         PreparedStatement stmt = null;
         ResultSet rs = null;
 
+        if (id == null || id.trim().isEmpty()) {
+            LOGGER.log(Level.WARNING, "Attempted to delete schedule with null or empty ID.");
+            return false;
+        }
+
         try {
             connection = DatabaseConnection.getConnection();
             connection.setAutoCommit(false);
@@ -364,6 +438,8 @@ public class ScheduleDAO {
             stmt = connection.prepareStatement("SELECT schedule_type FROM schedules WHERE id = ?");
             stmt.setString(1, id);
             rs = stmt.executeQuery();
+
+            boolean success = false; // Track overall success
 
             if (rs.next()) {
                 String scheduleType = rs.getString("schedule_type");
@@ -374,13 +450,16 @@ public class ScheduleDAO {
                 if ("ROOM".equals(scheduleType)) {
                     stmt = connection.prepareStatement("DELETE FROM room_schedules WHERE schedule_id = ?");
                     stmt.setString(1, id);
-                    stmt.executeUpdate();
-                    stmt.close();
+                    stmt.executeUpdate(); // Execute, but result doesn't strictly determine success of base delete
+                    if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
                 } else if ("STUDENT".equals(scheduleType)) {
                     stmt = connection.prepareStatement("DELETE FROM student_schedules WHERE schedule_id = ?");
                     stmt.setString(1, id);
-                    stmt.executeUpdate();
-                    stmt.close();
+                    stmt.executeUpdate(); // Execute, but result doesn't strictly determine success of base delete
+                    if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
+                } else {
+                    // Unknown type, proceed to delete from base table
+                    LOGGER.log(Level.WARNING, "Attempted to delete schedule with unknown type: " + scheduleType + " for ID: " + id);
                 }
 
                 // Then delete from base table
@@ -388,27 +467,48 @@ public class ScheduleDAO {
                 stmt.setString(1, id);
                 int result = stmt.executeUpdate();
 
-                connection.commit();
-                return result > 0;
+                if (result > 0) {
+                    connection.commit();
+                    success = true;
+                } else {
+                    // Base table delete failed
+                    LOGGER.log(Level.SEVERE, "Failed to delete base schedule for ID: " + id);
+                    connection.rollback(); // Rollback subclass delete as well
+                    success = false;
+                }
+            } else {
+                // Schedule ID not found
+                LOGGER.log(Level.WARNING, "Attempted to delete non-existent schedule with ID: " + id);
+                success = false;
             }
 
-            return false;
+            return success;
+
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error deleting schedule with ID: " + id, e);
             try {
-                if (connection != null) connection.rollback();
+                if (connection != null) {
+                    LOGGER.log(Level.INFO, "Performing rollback for schedule ID: " + id);
+                    connection.rollback();
+                }
             } catch (SQLException ex) {
-                throw new SQLException("Error during rollback", ex);
+                LOGGER.log(Level.SEVERE, "Error during rollback for schedule ID: " + id, ex);
             }
             throw e;
         } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
+            if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
             if (connection != null) {
-                connection.setAutoCommit(true);
-                connection.close();
+                try {
+                    connection.setAutoCommit(true); // Restore auto-commit mode
+                    connection.close();
+                } catch (SQLException e) {
+                    LOGGER.log(Level.WARNING, "Error closing Connection", e);
+                }
             }
         }
     }
+
 
     /**
      * Find schedules by time range
@@ -419,21 +519,24 @@ public class ScheduleDAO {
         ResultSet rs = null;
         List<Schedule> schedules = new ArrayList<>();
 
+        if (startTime == null || endTime == null) {
+            LOGGER.log(Level.WARNING, "Attempted to find schedules with null time range.");
+            return new ArrayList<>();
+        }
+
         try {
             connection = DatabaseConnection.getConnection();
 
+            // This query logic needs to be correct for overlapping time ranges.
+            // A common pattern is: (start1 <= end2) AND (end1 >= start2)
+            // Here, (schedule.start_time <= endTime) AND (schedule.end_time >= startTime)
             stmt = connection.prepareStatement(
                     "SELECT id, schedule_type FROM schedules " +
-                            "WHERE (start_time <= ? AND end_time >= ?) " +
-                            "OR (start_time >= ? AND start_time <= ?) " +
-                            "OR (end_time >= ? AND end_time <= ?)"
+                            "WHERE (start_time <= ? AND end_time >= ?)"
             );
             stmt.setTimestamp(1, Timestamp.valueOf(endTime));
             stmt.setTimestamp(2, Timestamp.valueOf(startTime));
-            stmt.setTimestamp(3, Timestamp.valueOf(startTime));
-            stmt.setTimestamp(4, Timestamp.valueOf(endTime));
-            stmt.setTimestamp(5, Timestamp.valueOf(startTime));
-            stmt.setTimestamp(6, Timestamp.valueOf(endTime));
+
 
             rs = stmt.executeQuery();
 
@@ -442,6 +545,7 @@ public class ScheduleDAO {
                 String scheduleType = rs.getString("schedule_type");
 
                 Schedule schedule = null;
+                // Reuse the same connection for fetching subclass details
                 if ("ROOM".equals(scheduleType)) {
                     schedule = findRoomScheduleById(connection, id);
                 } else if ("STUDENT".equals(scheduleType)) {
@@ -454,10 +558,13 @@ public class ScheduleDAO {
             }
 
             return schedules;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding schedules by time range.", e);
+            throw e; // Re-throw the exception after logging
         } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (connection != null) connection.close();
+            if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
+            if (connection != null) { try { connection.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing Connection", e); }}
         }
     }
 
@@ -470,6 +577,11 @@ public class ScheduleDAO {
         ResultSet rs = null;
         List<Schedule> schedules = new ArrayList<>();
 
+        if (name == null || name.trim().isEmpty()) {
+            LOGGER.log(Level.WARNING, "Attempted to find schedules with null or empty name.");
+            return new ArrayList<>();
+        }
+
         try {
             connection = DatabaseConnection.getConnection();
 
@@ -477,7 +589,7 @@ public class ScheduleDAO {
                     "SELECT id, schedule_type FROM schedules " +
                             "WHERE name LIKE ?"
             );
-            stmt.setString(1, "%" + name + "%");
+            stmt.setString(1, "%" + name + "%"); // Using LIKE for partial matching
 
             rs = stmt.executeQuery();
 
@@ -486,6 +598,7 @@ public class ScheduleDAO {
                 String scheduleType = rs.getString("schedule_type");
 
                 Schedule schedule = null;
+                // Reuse the same connection for fetching subclass details
                 if ("ROOM".equals(scheduleType)) {
                     schedule = findRoomScheduleById(connection, id);
                 } else if ("STUDENT".equals(scheduleType)) {
@@ -498,10 +611,73 @@ public class ScheduleDAO {
             }
 
             return schedules;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding schedules by name: " + name, e);
+            throw e; // Re-throw the exception after logging
         } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (connection != null) connection.close();
+            if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
+            if (connection != null) { try { connection.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing Connection", e); }}
+        }
+    }
+
+    /**
+     * Find schedules by class ID.
+     * NOTE: This implementation assumes the 'classId' parameter corresponds to the
+     * 'name' column in the 'schedules' table. This might need adjustment
+     * based on the actual database schema and how classes are linked to schedules.
+     * @param classId The ID of the class (assumed to match the 'name' column).
+     * @return A list of schedules associated with the given class ID.
+     * @throws SQLException If a database access error occurs.
+     */
+    public List<Schedule> findByClassId(String classId) throws SQLException {
+        Connection connection = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        List<Schedule> schedules = new ArrayList<>();
+
+        if (classId == null || classId.trim().isEmpty()) {
+            LOGGER.log(Level.WARNING, "Attempted to find schedules with null or empty class ID.");
+            return new ArrayList<>();
+        }
+
+        try {
+            connection = DatabaseConnection.getConnection();
+
+            // Assuming classId matches the 'name' column in the schedules table
+            stmt = connection.prepareStatement(
+                    "SELECT id, schedule_type FROM schedules " +
+                            "WHERE name = ?" // Using '=' for exact match on assumed ID
+            );
+            stmt.setString(1, classId);
+
+            rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                String id = rs.getString("id");
+                String scheduleType = rs.getString("schedule_type");
+
+                Schedule schedule = null;
+                // Reuse the same connection for fetching subclass details
+                if ("ROOM".equals(scheduleType)) {
+                    schedule = findRoomScheduleById(connection, id);
+                } else if ("STUDENT".equals(scheduleType)) {
+                    schedule = findStudentScheduleById(connection, id);
+                }
+
+                if (schedule != null) {
+                    schedules.add(schedule);
+                }
+            }
+
+            return schedules;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding schedules by class ID: " + classId, e);
+            throw e; // Re-throw the exception after logging
+        } finally {
+            if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
+            if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
+            if (connection != null) { try { connection.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing Connection", e); }}
         }
     }
 }

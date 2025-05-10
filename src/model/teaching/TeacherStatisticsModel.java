@@ -15,7 +15,8 @@ public class TeacherStatisticsModel {
     // Individual teacher statistics data
     private final SimpleIntegerProperty stt;
     private final SimpleStringProperty teacherName;
-    private final SimpleIntegerProperty teacherId;
+    // Changed teacherId to SimpleStringProperty
+    private final SimpleStringProperty teacherId;
     private final Map<LocalDate, DailyStatistics> dailyStats;
     private final SimpleIntegerProperty totalSessions;
     private final SimpleDoubleProperty totalHours;
@@ -28,9 +29,11 @@ public class TeacherStatisticsModel {
     private double aggregatedTotalHours = 0.0;
 
     // Constructor for daily view
-    public TeacherStatisticsModel(int stt, int teacherId, String teacherName) {
+    // Changed teacherId parameter type to String
+    public TeacherStatisticsModel(int stt, String teacherId, String teacherName) {
         this.stt = new SimpleIntegerProperty(stt);
-        this.teacherId = new SimpleIntegerProperty(teacherId);
+        // Initializing SimpleStringProperty with the String teacherId
+        this.teacherId = new SimpleStringProperty(teacherId);
         this.teacherName = new SimpleStringProperty(teacherName);
         this.dailyStats = new HashMap<>();
         this.totalSessions = new SimpleIntegerProperty(0);
@@ -38,10 +41,11 @@ public class TeacherStatisticsModel {
         this.teacherMonthlyStatisticsList = FXCollections.observableArrayList();
     }
 
-    // Default constructor for monthly view
+    // Default constructor for monthly view (adjusted for String ID, though default often has no ID)
     public TeacherStatisticsModel() {
         this.stt = new SimpleIntegerProperty(0);
-        this.teacherId = new SimpleIntegerProperty(0);
+        // Initializing SimpleStringProperty with an empty string
+        this.teacherId = new SimpleStringProperty("");
         this.teacherName = new SimpleStringProperty("");
         this.dailyStats = new HashMap<>();
         this.totalSessions = new SimpleIntegerProperty(0);
@@ -58,11 +62,13 @@ public class TeacherStatisticsModel {
         return stt;
     }
 
-    public int getTeacherId() {
+    // Changed getter return type to String
+    public String getTeacherId() {
         return teacherId.get();
     }
 
-    public SimpleIntegerProperty teacherIdProperty() {
+    // Changed property return type to SimpleStringProperty
+    public SimpleStringProperty teacherIdProperty() {
         return teacherId;
     }
 

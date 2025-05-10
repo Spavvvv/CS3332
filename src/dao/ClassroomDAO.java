@@ -20,7 +20,7 @@ public class ClassroomDAO {
      */
     public List<Classroom> findAll() {
         List<Classroom> classrooms = new ArrayList<>();
-        String sql = "SELECT * FROM classroom ORDER BY code";
+        String sql = "SELECT * FROM rooms ORDER BY code";
 
         try {
             ResultSet rs = DatabaseConnection.executeQuery(sql);
@@ -47,7 +47,7 @@ public class ClassroomDAO {
         List<Classroom> classrooms = new ArrayList<>();
         List<Object> params = new ArrayList<>();
 
-        StringBuilder sql = new StringBuilder("SELECT * FROM classroom WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT * FROM rooms WHERE 1=1");
 
         // Add search conditions
         if (keyword != null && !keyword.isEmpty()) {
@@ -87,7 +87,7 @@ public class ClassroomDAO {
      * @return The found classroom, or null if not found
      */
     public Classroom findById(int id) {
-        String sql = "SELECT * FROM classroom WHERE id = ?";
+        String sql = "SELECT * FROM rooms WHERE id = ?";
 
         try {
             ResultSet rs = DatabaseConnection.executeQuery(sql, id);
@@ -115,7 +115,7 @@ public class ClassroomDAO {
         try {
             if (classroom.getId() == 0) {
                 // Insert new classroom
-                String sql = "INSERT INTO classroom (code, name, floor, capacity, status) VALUES (?, ?, ?, ?, ?)";
+                String sql = "INSERT INTO rooms (code, name, floor, capacity, status) VALUES (?, ?, ?, ?, ?)";
 
                 // Use prepared statement to get generated keys
                 Connection conn = DatabaseConnection.getConnection();
@@ -143,7 +143,7 @@ public class ClassroomDAO {
                 stmt.close();
             } else {
                 // Update existing classroom
-                String sql = "UPDATE classroom SET code=?, name=?, floor=?, capacity=?, status=? WHERE id=?";
+                String sql = "UPDATE rooms SET code=?, name=?, floor=?, capacity=?, status=? WHERE id=?";
 
                 int affectedRows = DatabaseConnection.executeUpdate(sql,
                         classroom.getMa(),
@@ -175,7 +175,7 @@ public class ClassroomDAO {
      * @return true if successful, false otherwise
      */
     public boolean updateStatus(int id, String newStatus) {
-        String sql = "UPDATE classroom SET status=? WHERE id=?";
+        String sql = "UPDATE rooms SET status=? WHERE id=?";
 
         try {
             int affectedRows = DatabaseConnection.executeUpdate(sql, newStatus, id);
@@ -193,7 +193,7 @@ public class ClassroomDAO {
      * @return true if successful, false otherwise
      */
     public boolean delete(int id) {
-        String sql = "DELETE FROM classroom WHERE id=?";
+        String sql = "DELETE FROM rooms WHERE id=?";
 
         try {
             int affectedRows = DatabaseConnection.executeUpdate(sql, id);

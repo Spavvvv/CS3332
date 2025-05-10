@@ -21,7 +21,7 @@ public class AttendanceController {
     private final AttendanceDAO attendanceDAO;
     private final ClassSessionDAO classSessionDAO;
     private final StudentDAO studentDAO;
-    private Long selectedSessionId;
+    private String selectedSessionId;
 
     /**
      * Constructor with dependencies
@@ -49,10 +49,10 @@ public class AttendanceController {
      * @return List of class sessions
      * @throws SQLException if database operation fails
      */
-    public List<ClassSession> getClassSessionsByClassId(Long classId) throws SQLException {
+    public List<ClassSession> getClassSessionsByClassId(String classId) throws SQLException {
         // Filter all sessions by classId
         return classSessionDAO.findAll().stream()
-                .filter(session -> session.getClassId() == (classId))
+                .filter(session -> session.getClassId().equals(classId))
                 .collect(Collectors.toList());
     }
 
@@ -63,7 +63,7 @@ public class AttendanceController {
      * @return Class session object
      * @throws SQLException if database operation fails
      */
-    public ClassSession getClassSessionById(Long sessionId) throws SQLException {
+    public ClassSession getClassSessionById(String sessionId) throws SQLException {
         Optional<ClassSession> session = classSessionDAO.findById(sessionId);
         return session.orElse(null);
     }
@@ -75,7 +75,7 @@ public class AttendanceController {
      * @return List of attendance records
      * @throws SQLException if database operation fails
      */
-    public List<Attendance> getAttendanceBySessionId(Long sessionId) throws SQLException {
+    public List<Attendance> getAttendanceBySessionId(String sessionId) throws SQLException {
         selectedSessionId = sessionId;
         return attendanceDAO.findBySessionId(sessionId);
     }
@@ -100,7 +100,7 @@ public class AttendanceController {
      * @return List of attendance records
      * @throws SQLException if database operation fails
      */
-    public List<Attendance> getAttendanceDataInRange(Long classId, LocalDate startDate, LocalDate endDate)
+    public List<Attendance> getAttendanceDataInRange(String classId, LocalDate startDate, LocalDate endDate)
             throws SQLException {
         List<ClassSession> allSessions = getClassSessionsByClassId(classId);
 
@@ -161,7 +161,7 @@ public class AttendanceController {
                 String status = attendance.hasPermission() ? "Excused" : "Absent";
 
                 AbsenceRecord absenceRecord = new AbsenceRecord(
-                        (int) attendance.getId(),
+                        attendance.getId(),
                         null,                           // No image view yet
                         student.getName(),              // Student name
                         session.getClassName(),         // Class name
@@ -195,7 +195,7 @@ public class AttendanceController {
      * @param sessionId Session ID
      * @return List of attendance records for absent students who haven't been called
      */
-    public List<Attendance> getUncalledAbsencesForSession(long sessionId) {
+    public List<Attendance> getUncalledAbsencesForSession(String sessionId) {
         return attendanceDAO.findAbsentNotCalled(sessionId);
     }
 
@@ -226,7 +226,7 @@ public class AttendanceController {
      * @return true if successful, false otherwise
      * @throws SQLException if database operation fails
      */
-    public boolean markAttendanceAsCalled(Long attendanceId) throws SQLException {
+    public boolean markAttendanceAsCalled(String attendanceId) throws SQLException {
         // Get the attendance record
         Optional<Attendance> attendanceOpt = attendanceDAO.findById(attendanceId);
         if (attendanceOpt.isPresent()) {
@@ -246,7 +246,7 @@ public class AttendanceController {
      * @return true if successful, false otherwise
      * @throws SQLException if database operation fails
      */
-    public boolean excuseAbsence(Long attendanceId, String note) throws SQLException {
+    public boolean excuseAbsence(String attendanceId, String note) throws SQLException {
         // Get the attendance record
         Optional<Attendance> attendanceOpt = attendanceDAO.findById(attendanceId);
         if (attendanceOpt.isPresent()) {
@@ -266,7 +266,7 @@ public class AttendanceController {
      *
      * @return Selected session ID
      */
-    public Long getSelectedSessionId() {
+    public String getSelectedSessionId() {
         return selectedSessionId;
     }
 
@@ -275,7 +275,7 @@ public class AttendanceController {
      *
      * @param sessionId Session ID to select
      */
-    public void setSelectedSessionId(Long sessionId) {
+    public void setSelectedSessionId(String sessionId) {
         this.selectedSessionId = sessionId;
     }
 
@@ -379,7 +379,7 @@ public class AttendanceController {
                 .count();
     }
 
-    public void updateAttendanceNote(long id, String newValue) {
+    public void updateAttendanceNote(String id, String newValue) {
         if (newValue == null || newValue.trim().isEmpty()) {
             return;
         }
@@ -392,7 +392,7 @@ public class AttendanceController {
         }
     }
 
-    public void markAttendanceCalled(long id, Boolean newVal) {
+    public void markAttendanceCalled(String id, Boolean newVal) {
         if (newVal == null) {
             return;
         }
@@ -403,5 +403,12 @@ public class AttendanceController {
             attendance.setCalled(newVal);
             attendanceDAO.update(attendance);
         }
+    }
+
+    public Student getStudentById(String studentId) throws SQLException {
+        if(studentId != null )
+        return studentDAO.getStudentById(studentId);
+        else
+        return null;
     }
 }

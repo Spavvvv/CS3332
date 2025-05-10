@@ -22,7 +22,7 @@ public class ClassSessionDAO {
      */
     public List<ClassSession> getAllClassSessions() throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
                 "start_time, end_time, class_id FROM class_sessions";
 
         try (Connection conn = DatabaseConnection.getConnection();
@@ -44,14 +44,14 @@ public class ClassSessionDAO {
      * @return the ClassSession object, or null if not found
      * @throws SQLException if a database access error occurs
      */
-    public ClassSession getClassSessionById(long id) throws SQLException {
-        String sql = "SELECT id, course_name, teacher_name, room, class_date, " +
-                "start_time, end_time, class_id FROM class_sessions WHERE id = ?";
+    public ClassSession getClassSessionById(String id) throws SQLException {
+        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
+                "start_time, end_time, class_id FROM class_sessions WHERE session_id = ?";
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setLong(1, id);
+            stmt.setString(1, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -69,7 +69,7 @@ public class ClassSessionDAO {
      * @return the generated ID of the new class session
      * @throws SQLException if a database access error occurs
      */
-    public long createClassSession(ClassSession session) throws SQLException {
+    public String createClassSession(ClassSession session) throws SQLException {
         String sql = "INSERT INTO class_sessions (course_name, teacher_name, room, class_date, " +
                 "start_time, end_time, class_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
@@ -81,7 +81,7 @@ public class ClassSessionDAO {
 
             try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
-                    return generatedKeys.getLong(1);
+                    return generatedKeys.getString(1);
                 } else {
                     throw new SQLException("Creating class session failed, no ID obtained.");
                 }
@@ -104,7 +104,7 @@ public class ClassSessionDAO {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             prepareStatementFromClassSession(stmt, session);
-            stmt.setLong(8, session.getId());
+            stmt.setString(8, session.getId());
 
             return stmt.executeUpdate() > 0;
         }
@@ -116,13 +116,13 @@ public class ClassSessionDAO {
      * @return true if the deletion was successful, false otherwise
      * @throws SQLException if a database access error occurs
      */
-    public boolean deleteClassSession(long id) throws SQLException {
+    public boolean deleteClassSession(String id) throws SQLException {
         String sql = "DELETE FROM class_sessions WHERE id = ?";
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setLong(1, id);
+            stmt.setString(1, id);
             return stmt.executeUpdate() > 0;
         }
     }
@@ -135,7 +135,7 @@ public class ClassSessionDAO {
      */
     public List<ClassSession> getSessionsByClassId(long classId) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
                 "start_time, end_time, class_id FROM class_sessions WHERE class_id = ?";
 
         try (Connection conn = DatabaseConnection.getConnection();
@@ -161,7 +161,7 @@ public class ClassSessionDAO {
      * @throws SQLException if a database access error occurs
      */
     private ClassSession mapResultSetToClassSession(ResultSet rs) throws SQLException {
-        long id = rs.getLong("id");
+        String id = rs.getString("session_id");
         String courseName = rs.getString("course_name");
         String teacher = rs.getString("teacher_name");
         String room = rs.getString("room");
@@ -186,7 +186,7 @@ public class ClassSessionDAO {
             endTime = endTimeDb.toLocalTime();
         }
 
-        long classId = rs.getLong("class_id");
+        String classId = rs.getString("class_id");
 
         // Create a new ClassSession with the base data
         ClassSession session = new ClassSession();
@@ -238,7 +238,7 @@ public class ClassSessionDAO {
             stmt.setNull(6, Types.TIME);
         }
 
-        stmt.setLong(7, session.getClassId());
+        stmt.setString(7, session.getClassId());
     }
 
     /**
@@ -246,7 +246,7 @@ public class ClassSessionDAO {
      * @param sessionId the ID of the class session
      * @return Optional containing the ClassSession if found, empty Optional otherwise
      */
-    public Optional<ClassSession> findById(long sessionId) {
+    public Optional<ClassSession> findById(String sessionId) {
         try {
             return Optional.ofNullable(getClassSessionById(sessionId));
         } catch (SQLException e) {
@@ -275,9 +275,9 @@ public class ClassSessionDAO {
      */
     public boolean save(ClassSession session) {
         try {
-            long id = createClassSession(session);
+            String id = createClassSession(session);
             session.setId(id);
-            return id > 0;
+            return true;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -304,7 +304,7 @@ public class ClassSessionDAO {
      * @return true if the deletion was successful, false otherwise
      */
     public boolean delete(ClassSession session) {
-        if (session == null || session.getId() == 0) {
+        if (session == null || session.getId() == null) {
             return false;
         }
         try {
@@ -337,7 +337,7 @@ public class ClassSessionDAO {
      */
     public List<ClassSession> findByDateRange(LocalDate startDate, LocalDate endDate) {
         List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
                 "start_time, end_time, class_id FROM class_sessions " +
                 "WHERE class_date BETWEEN ? AND ?";
 

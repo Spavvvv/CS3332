@@ -44,7 +44,7 @@ public class AttendanceDAO {
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             stmt.setString(1, attendance.getStudentId());
-            stmt.setLong(2, attendance.getSessionId());
+            stmt.setString(2, attendance.getSessionId());
             stmt.setBoolean(3, attendance.isPresent());
             stmt.setString(4, attendance.getNote());
             stmt.setBoolean(5, attendance.isCalled());
@@ -67,7 +67,7 @@ public class AttendanceDAO {
             if (affectedRows > 0) {
                 ResultSet generatedKeys = stmt.getGeneratedKeys();
                 if (generatedKeys.next()) {
-                    attendance.setId(generatedKeys.getLong(1));
+                    attendance.setId(generatedKeys.getString(1));
                     return true;
                 }
             }
@@ -95,7 +95,7 @@ public class AttendanceDAO {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, attendance.getStudentId());
-            stmt.setLong(2, attendance.getSessionId());
+            stmt.setString(2, attendance.getSessionId());
             stmt.setBoolean(3, attendance.isPresent());
             stmt.setString(4, attendance.getNote());
             stmt.setBoolean(5, attendance.isCalled());
@@ -113,7 +113,7 @@ public class AttendanceDAO {
                 stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
             }
 
-            stmt.setLong(9, attendance.getId());
+            stmt.setString(9, attendance.getId());
 
             return stmt.executeUpdate() > 0;
 
@@ -152,13 +152,13 @@ public class AttendanceDAO {
      * @param id ID of the attendance record to find
      * @return Optional containing the attendance record if found
      */
-    public Optional<Attendance> findById(long id) {
+    public Optional<Attendance> findById(String id) {
         String sql = "SELECT * FROM attendance WHERE id = ?";
 
         try (Connection conn = dbConnector.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setLong(1, id);
+            stmt.setString(1, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -209,14 +209,14 @@ public class AttendanceDAO {
      * @param sessionId ID of the class session
      * @return List of attendance records for the class session
      */
-    public List<Attendance> findBySessionId(long sessionId) {
-        String sql = "SELECT * FROM attendance WHERE class_session_id = ?";
+    public List<Attendance> findBySessionId(String sessionId) {
+        String sql = "SELECT * FROM attendance WHERE session_id = ?";
         List<Attendance> attendances = new ArrayList<>();
 
         try (Connection conn = dbConnector.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setLong(1, sessionId);
+            stmt.setString(1, sessionId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -354,14 +354,14 @@ public class AttendanceDAO {
      * @param sessionId Session ID
      * @return List of attendance records for absent students who need to be called
      */
-    public List<Attendance> findAbsentNotCalled(long sessionId) {
+    public List<Attendance> findAbsentNotCalled(String sessionId) {
         String sql = "SELECT * FROM attendance WHERE class_session_id = ? AND present = FALSE AND called = FALSE";
         List<Attendance> attendances = new ArrayList<>();
 
         try (Connection conn = dbConnector.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setLong(1, sessionId);
+            stmt.setString(1, sessionId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -421,7 +421,7 @@ public class AttendanceDAO {
         Attendance attendance = new Attendance();
 
         // Set basic attendance properties
-        attendance.setId(rs.getLong("id"));
+        attendance.setId(rs.getString("session_id"));
         attendance.setPresent(rs.getBoolean("present"));
         attendance.setNote(rs.getString("note"));
         attendance.setCalled(rs.getBoolean("called"));
@@ -440,7 +440,7 @@ public class AttendanceDAO {
 
         // Load related entities
         String studentId = rs.getString("student_id");
-        long sessionId = rs.getLong("class_session_id");
+        String sessionId = rs.getString("class_session_id");
 
         // Get student and session objects
         Optional<Student> student = studentDAO.findById(studentId);
@@ -480,7 +480,7 @@ public class AttendanceDAO {
 
             for (Attendance attendance : attendances) {
                 stmt.setString(1, attendance.getStudentId());
-                stmt.setLong(2, attendance.getSessionId());
+                stmt.setString(2, attendance.getSessionId());
                 stmt.setBoolean(3, attendance.isPresent());
                 stmt.setString(4, attendance.getNote());
                 stmt.setBoolean(5, attendance.isCalled());
@@ -514,7 +514,7 @@ public class AttendanceDAO {
             try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
                 int index = 0;
                 while (generatedKeys.next() && index < attendances.size()) {
-                    attendances.get(index).setId(generatedKeys.getLong(1));
+                    attendances.get(index).setId(generatedKeys.getString(1));
                     index++;
                 }
             }
@@ -548,7 +548,7 @@ public class AttendanceDAO {
 
             for (Attendance attendance : attendances) {
                 stmt.setString(1, attendance.getStudentId());
-                stmt.setLong(2, attendance.getSessionId());
+                stmt.setString(2, attendance.getSessionId());
                 stmt.setBoolean(3, attendance.isPresent());
                 stmt.setString(4, attendance.getNote());
                 stmt.setBoolean(5, attendance.isCalled());
@@ -566,7 +566,7 @@ public class AttendanceDAO {
                     stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
                 }
 
-                stmt.setLong(9, attendance.getId());
+                stmt.setString(9, attendance.getId());
 
                 stmt.addBatch();
             }

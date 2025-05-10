@@ -5,24 +5,23 @@ import javafx.scene.control.ToggleButton;
 import src.model.teaching.yearly.TeacherYearlyStatisticsModel;
 import src.model.teaching.yearly.StatisticsSummaryModel;
 import view.components.YearlyTeachingStatisticsView;
-import src.dao.TeacherStatisticsDAO;
+import src.dao.TeacherYearlyStatisticsDAO;
 
 public class YearlyStatisticsController {
     private YearlyTeachingStatisticsView view;
-    private TeacherStatisticsDAO statisticsDAO;
+    private TeacherYearlyStatisticsDAO statisticsDAO;
 
-    // Current filter values
-    private int currentFromYear;
-    private int currentToYear;
+    // Current filter values - using a single year now
+    private int currentYear;
     private String currentStatus;
 
     public YearlyStatisticsController(YearlyTeachingStatisticsView view) {
         this.view = view;
-        this.statisticsDAO = new TeacherStatisticsDAO();
+        this.statisticsDAO = new TeacherYearlyStatisticsDAO();
 
         // Default filter values
-        this.currentFromYear = 2025;
-        this.currentToYear = 2025;
+        // Assuming a default year is needed, e.g., the current year
+        this.currentYear = 2025; // Set a default year, adjust as needed
         this.currentStatus = "Tất cả";
     }
 
@@ -30,29 +29,29 @@ public class YearlyStatisticsController {
      * Load statistics data based on current filter settings
      */
     public void loadData() {
-        // Get data from DAO
+        // Get data from DAO using only the current year and status
         ObservableList<TeacherYearlyStatisticsModel> data =
-                statisticsDAO.getYearlyStatistics(currentFromYear, currentToYear, currentStatus);
+                statisticsDAO.getYearlyStatistics(currentYear, currentStatus);
 
-        // Get summary data
+        // Get summary data using only the current year and status
         StatisticsSummaryModel summary =
-                statisticsDAO.calculateSummaryStatistics(currentFromYear, currentToYear, currentStatus);
+                statisticsDAO.calculateSummaryStatistics(currentYear, currentStatus);
 
         // Update the view
         view.setTableData(data);
         view.updateSummary(summary);
 
         // Update year label in view header
-        view.updateYearLabel(currentToYear);
+        view.updateYearLabel(currentYear);
     }
 
     /**
      * Handle search action with filter parameters
+     * Modified to accept a single year and status
      */
-    public void handleSearch(int fromYear, int toYear, String status) {
+    public void handleSearch(int year, String status) {
         // Update current filter values
-        this.currentFromYear = fromYear;
-        this.currentToYear = toYear;
+        this.currentYear = year;
         this.currentStatus = status;
 
         // Reload data with new filters
@@ -64,7 +63,9 @@ public class YearlyStatisticsController {
      */
     public void handleExportExcel() {
         // In a real app, this would use a service to generate Excel with data from DAO
+        // You would likely pass currentYear and currentStatus to the export service
         view.showExportingMessage("Excel");
+        // Example: exportService.exportYearlyStatistics(currentYear, currentStatus);
     }
 
     /**
@@ -72,7 +73,9 @@ public class YearlyStatisticsController {
      */
     public void handleExportPdf() {
         // In a real app, this would use a service to generate PDF with data from DAO
+        // You would likely pass currentYear and currentStatus to the export service
         view.showExportingMessage("PDF");
+        // Example: pdfService.exportYearlyStatistics(currentYear, currentStatus);
     }
 
     /**
@@ -80,23 +83,39 @@ public class YearlyStatisticsController {
      */
     public void handlePrint() {
         // In a real app, this would use a print service with data from DAO
+        // You would likely pass currentYear and currentStatus to the print service
         view.showPrintingMessage();
+        // Example: printService.printYearlyStatistics(currentYear, currentStatus);
     }
 
     /**
      * Handle period type change (day/month/quarter/year)
+     * Note: This method logic depends on how your overall navigation/view switching
+     * is implemented in the application. The navigateToView calls are placeholders.
      */
     public void handlePeriodChange(ToggleButton selected) {
-        if (selected.getText().equals("Ngày")) {
+        if (selected == null) {
+            // Handle case where no toggle button is selected, if necessary
+            return;
+        }
+        String periodText = selected.getText();
+
+        if ("Ngày".equals(periodText)) {
             // Switch to daily view
+            // Assuming "teaching-statistics" is the identifier for the daily view
             view.navigateToView("teaching-statistics");
-        } else if (selected.getText().equals("Tháng")) {
+        } else if ("Tháng".equals(periodText)) {
             // Switch to monthly view
+            // Assuming "monthly-teaching" is the identifier for the monthly view
             view.navigateToView("monthly-teaching");
-        } else if (selected.getText().equals("Quý")) {
+        } else if ("Quý".equals(periodText)) {
             // Switch to quarterly view
+            // Assuming "quarterly-teaching" is the identifier for the quarterly view
             view.navigateToView("quarterly-teaching");
         }
+        // The "Năm" (Year) case is implicitly handled by staying on this controller's view
+        // or could explicitly trigger loadData() if the Year toggle button is clicked
+        // while already on the Yearly view.
     }
 
     /**

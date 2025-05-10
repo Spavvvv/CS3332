@@ -13,10 +13,15 @@ import javafx.scene.text.FontWeight;
 import javafx.util.StringConverter;
 import src.model.teaching.monthly.MonthlyTeachingStatisticsModel;
 import src.model.teaching.monthly.MonthlyTeachingStatisticsModel.TeacherMonthlyStatistics;
-import view.BaseScreenView;
+import view.BaseScreenView; // Assuming BaseScreenView is in a 'view' package
 
 import java.time.Month;
+import java.time.Year;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class MonthlyTeachingStatisticsView extends BaseScreenView {
 
@@ -48,11 +53,26 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
     // Controller reference
     private final MonthlyTeachingStatisticsController controller;
 
-    // Date formatter
-    private final DateTimeFormatter monthFormatter = DateTimeFormatter.ofPattern("MM/yyyy");
+    // Date formatter for ComboBox display
+    private final StringConverter<Month> monthStringConverter = new StringConverter<Month>() {
+        @Override
+        public String toString(Month month) {
+            return month == null ? "" : "Thg " + month.getValue();
+        }
+
+        @Override
+        public Month fromString(String string) {
+            // Not needed for this view, but must be implemented
+            return null;
+        }
+    };
+
+    // Year range for year combo boxes
+    private final int START_YEAR = 2023;
+    private final int END_YEAR = Year.now().getValue() + 5; // Show current year + 5 years
 
     public MonthlyTeachingStatisticsView() {
-        super("Thống kê giờ giảng", "monthly-teaching");
+        super("Thống kê giờ giảng", "monthly-teaching"); // Ensure base view handles screen ID
         this.controller = new MonthlyTeachingStatisticsController();
     }
 
@@ -75,9 +95,30 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         // Create the table
         createStatisticsTable();
 
-        // Load initial data from controller
-        controller.loadInitialData();
-        updateTableWithModelData();
+        // Action buttons bar (placed after filter bar in the VBox)
+        actionButtonsBar = new HBox(10);
+        actionButtonsBar.setAlignment(Pos.CENTER_RIGHT);
+        exportExcelButton = createActionButton("Excel"); // Simplified action button creation
+        exportPdfButton = createActionButton("PDF");
+        printButton = createActionButton("Print");
+        actionButtonsBar.getChildren().addAll(exportExcelButton, exportPdfButton, printButton);
+
+        // Add filter and action bars to a container
+        VBox topContainer = new VBox(10);
+        topContainer.getChildren().addAll(filterBar, actionButtonsBar);
+        root.getChildren().add(topContainer);
+
+        // Add the table container after the filter/action bars
+        VBox tableContainer = new VBox();
+        tableContainer.getChildren().add(statisticsTable);
+
+        // Create totals row
+        GridPane totalRow = createTotalRow();
+        tableContainer.getChildren().add(totalRow);
+
+        root.getChildren().add(tableContainer);
+
+        // Note: Initial data load and event handlers are set up in onActivate
     }
 
     private void createHeader() {
@@ -102,8 +143,9 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         typeLabel.setTextFill(Color.BLACK);
         typeLabel.setPrefWidth(50);
 
+        // Create toggle buttons - initial selection handled in onActivate
         dayToggle = createToggleButton("Ngày", false);
-        monthToggle = createToggleButton("Tháng", true);
+        monthToggle = createToggleButton("Tháng", false);
         quarterToggle = createToggleButton("Quý", false);
         yearToggle = createToggleButton("Năm", false);
 
@@ -120,30 +162,14 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         HBox fromDateBox = new HBox(5);
         fromMonthComboBox = new ComboBox<>();
         fromMonthComboBox.setPrefWidth(65);
-        fromMonthComboBox.setItems(FXCollections.observableArrayList(
-                Month.JANUARY, Month.FEBRUARY, Month.MARCH, Month.APRIL,
-                Month.MAY, Month.JUNE, Month.JULY, Month.AUGUST,
-                Month.SEPTEMBER, Month.OCTOBER, Month.NOVEMBER, Month.DECEMBER
-        ));
-        fromMonthComboBox.setValue(Month.APRIL);
-        fromMonthComboBox.setConverter(new StringConverter<Month>() {
-            @Override
-            public String toString(Month month) {
-                return month == null ? "" : "Thg " + month.getValue();
-            }
-
-            @Override
-            public Month fromString(String string) {
-                return null;
-            }
-        });
+        fromMonthComboBox.setItems(FXCollections.observableArrayList(Month.values())); // All months
+        fromMonthComboBox.setConverter(monthStringConverter);
 
         fromYearComboBox = new ComboBox<>();
         fromYearComboBox.setPrefWidth(70);
-        fromYearComboBox.setItems(FXCollections.observableArrayList(
-                2023, 2024, 2025, 2026, 2027
-        ));
-        fromYearComboBox.setValue(2025);
+        List<Integer> years = IntStream.rangeClosed(START_YEAR, END_YEAR).boxed().collect(Collectors.toList());
+        fromYearComboBox.setItems(FXCollections.observableArrayList(years));
+
         fromDateBox.getChildren().addAll(fromMonthComboBox, fromYearComboBox);
 
         Label toLabel = new Label("đến:");
@@ -153,30 +179,13 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         HBox toDateBox = new HBox(5);
         toMonthComboBox = new ComboBox<>();
         toMonthComboBox.setPrefWidth(65);
-        toMonthComboBox.setItems(FXCollections.observableArrayList(
-                Month.JANUARY, Month.FEBRUARY, Month.MARCH, Month.APRIL,
-                Month.MAY, Month.JUNE, Month.JULY, Month.AUGUST,
-                Month.SEPTEMBER, Month.OCTOBER, Month.NOVEMBER, Month.DECEMBER
-        ));
-        toMonthComboBox.setValue(Month.APRIL);
-        toMonthComboBox.setConverter(new StringConverter<Month>() {
-            @Override
-            public String toString(Month month) {
-                return month == null ? "" : "Thg " + month.getValue();
-            }
-
-            @Override
-            public Month fromString(String string) {
-                return null;
-            }
-        });
+        toMonthComboBox.setItems(FXCollections.observableArrayList(Month.values())); // All months
+        toMonthComboBox.setConverter(monthStringConverter);
 
         toYearComboBox = new ComboBox<>();
         toYearComboBox.setPrefWidth(70);
-        toYearComboBox.setItems(FXCollections.observableArrayList(
-                2023, 2024, 2025, 2026, 2027
-        ));
-        toYearComboBox.setValue(2025);
+        toYearComboBox.setItems(FXCollections.observableArrayList(years)); // Same year list
+
         toDateBox.getChildren().addAll(toMonthComboBox, toYearComboBox);
 
         dateRangeBox.getChildren().addAll(fromLabel, fromDateBox, toLabel, toDateBox);
@@ -190,9 +199,9 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
 
         statusComboBox = new ComboBox<>();
         statusComboBox.setItems(FXCollections.observableArrayList(
-                controller.getModel().getStatusOptions()
+                controller.getModel().getStatusOptions() // Get status options from model
         ));
-        statusComboBox.setValue("Tất cả");
+        statusComboBox.setValue("Tất cả"); // Default value
         statusComboBox.setPrefWidth(120);
 
         statusBox.getChildren().addAll(statusLabel, statusComboBox);
@@ -208,20 +217,6 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         filterBar.setAlignment(Pos.CENTER_LEFT);
         filterBar.getChildren().addAll(periodTypeBox, dateRangeBox, statusBox, searchButton);
         filterBar.setStyle("-fx-background-color: #F5F5F5; -fx-border-color: #E0E0E0; -fx-border-width: 1px;");
-
-        // Action buttons bar
-        exportExcelButton = createActionButton("Excel", "icon-excel");
-        exportPdfButton = createActionButton("PDF", "icon-pdf");
-        printButton = createActionButton("Print", "icon-print");
-
-        actionButtonsBar = new HBox(10);
-        actionButtonsBar.setAlignment(Pos.CENTER_RIGHT);
-        actionButtonsBar.getChildren().addAll(exportExcelButton, exportPdfButton, printButton);
-
-        VBox topContainer = new VBox(10);
-        topContainer.getChildren().addAll(filterBar, actionButtonsBar);
-
-        root.getChildren().add(topContainer);
     }
 
     private void createStatisticsTable() {
@@ -251,15 +246,15 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         teacherHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         teacherColumn.setGraphic(teacherHeaderLabel);
 
-        // Create the month column with black header text
+        // Create the month column (will dynamically update graphic)
         TableColumn<TeacherMonthlyStatistics, String> monthColumn = new TableColumn<>();
-
-        Label monthHeaderLabel = new Label("Tháng 4/2025");
+        // Initial graphic (will be updated in updateTableWithModelData)
+        Label monthHeaderLabel = new Label("Tháng");
         monthHeaderLabel.setTextFill(Color.BLACK);
         monthHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         monthColumn.setGraphic(monthHeaderLabel);
 
-        // Sessions sub-column with black header text
+        // Sessions sub-column
         TableColumn<TeacherMonthlyStatistics, Integer> sessionsColumn = new TableColumn<>();
         sessionsColumn.setCellValueFactory(new PropertyValueFactory<>("sessions"));
         sessionsColumn.setPrefWidth(80);
@@ -270,7 +265,8 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         sessionsHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         sessionsColumn.setGraphic(sessionsHeaderLabel);
 
-        // Hours sub-column with black header text
+
+        // Hours sub-column
         TableColumn<TeacherMonthlyStatistics, Double> hoursColumn = new TableColumn<>();
         hoursColumn.setCellValueFactory(new PropertyValueFactory<>("hours"));
         hoursColumn.setPrefWidth(80);
@@ -283,7 +279,7 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
 
         monthColumn.getColumns().addAll(sessionsColumn, hoursColumn);
 
-        // Create the total column with black header text
+        // Create the total column
         TableColumn<TeacherMonthlyStatistics, String> totalColumn = new TableColumn<>();
 
         Label totalHeaderLabel = new Label("Tổng cộng");
@@ -291,7 +287,7 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         totalHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         totalColumn.setGraphic(totalHeaderLabel);
 
-        // Total sessions sub-column with black header text
+        // Total sessions sub-column
         TableColumn<TeacherMonthlyStatistics, Integer> totalSessionsColumn = new TableColumn<>();
         totalSessionsColumn.setCellValueFactory(new PropertyValueFactory<>("totalSessions"));
         totalSessionsColumn.setPrefWidth(80);
@@ -302,7 +298,7 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         totalSessionsHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         totalSessionsColumn.setGraphic(totalSessionsHeaderLabel);
 
-        // Total hours sub-column with black header text
+        // Total hours sub-column
         TableColumn<TeacherMonthlyStatistics, Double> totalHoursColumn = new TableColumn<>();
         totalHoursColumn.setCellValueFactory(new PropertyValueFactory<>("totalHours"));
         totalHoursColumn.setPrefWidth(80);
@@ -316,16 +312,6 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         totalColumn.getColumns().addAll(totalSessionsColumn, totalHoursColumn);
 
         statisticsTable.getColumns().addAll(sttColumn, teacherColumn, monthColumn, totalColumn);
-
-        // Add footer row for totals
-        VBox tableContainer = new VBox();
-        tableContainer.getChildren().add(statisticsTable);
-
-        // Create totals row
-        GridPane totalRow = createTotalRow();
-        tableContainer.getChildren().add(totalRow);
-
-        root.getChildren().add(tableContainer);
     }
 
     private GridPane createTotalRow() {
@@ -352,6 +338,7 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         ColumnConstraints totalHoursColumnConstraint = new ColumnConstraints();
         totalHoursColumnConstraint.setPrefWidth(80);
 
+
         totalRow.getColumnConstraints().addAll(
                 sttColumnConstraint,
                 nameColumnConstraint,
@@ -365,32 +352,40 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         Label totalLabel = new Label("Tổng cộng");
         totalLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
         GridPane.setColumnIndex(totalLabel, 0);
-        GridPane.setColumnSpan(totalLabel, 2);
+        GridPane.setColumnSpan(totalLabel, 2); // Span across STT and Giáo viên columns
 
-        // Create and add the session totals
+        // Create and add the session totals labels
         sessionTotal = new Label("0");
         sessionTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
+        sessionTotal.setAlignment(Pos.CENTER); // Center the text
         GridPane.setColumnIndex(sessionTotal, 2);
+        GridPane.setHalignment(sessionTotal, javafx.geometry.HPos.CENTER); // Center horizontally
 
-        // Create and add the hours totals
         hoursTotal = new Label("0.0");
         hoursTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
+        hoursTotal.setAlignment(Pos.CENTER); // Center the text
         GridPane.setColumnIndex(hoursTotal, 3);
+        GridPane.setHalignment(hoursTotal, javafx.geometry.HPos.CENTER); // Center horizontally
 
-        // Create and add the total session totals
+
+        // Create and add the total session totals labels
         totalSessionTotal = new Label("0");
         totalSessionTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
+        totalSessionTotal.setAlignment(Pos.CENTER); // Center the text
         GridPane.setColumnIndex(totalSessionTotal, 4);
+        GridPane.setHalignment(totalSessionTotal, javafx.geometry.HPos.CENTER); // Center horizontally
 
-        // Create and add the total hours totals
         totalHoursTotal = new Label("0.0");
         totalHoursTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
+        totalHoursTotal.setAlignment(Pos.CENTER); // Center the text
         GridPane.setColumnIndex(totalHoursTotal, 5);
+        GridPane.setHalignment(totalHoursTotal, javafx.geometry.HPos.CENTER); // Center horizontally
 
         totalRow.getChildren().addAll(totalLabel, sessionTotal, hoursTotal, totalSessionTotal, totalHoursTotal);
 
         return totalRow;
     }
+
 
     private void updateTableWithModelData() {
         MonthlyTeachingStatisticsModel model = controller.getModel();
@@ -398,17 +393,22 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
 
         // Update totals
         sessionTotal.setText(String.valueOf(model.getTotalSessions()));
-        hoursTotal.setText(String.valueOf(model.getTotalHours()));
+        hoursTotal.setText(String.format("%.1f", model.getTotalHours())); // Format hours to one decimal place
         totalSessionTotal.setText(String.valueOf(model.getTotalSessions()));
-        totalHoursTotal.setText(String.valueOf(model.getTotalHours()));
+        totalHoursTotal.setText(String.format("%.1f", model.getTotalHours())); // Format hours to one decimal place
 
-        // Update month header
+
+        // Update month column header graphic
         Month selectedMonth = fromMonthComboBox.getValue();
         int selectedYear = fromYearComboBox.getValue();
+        // Find the column with the "Tháng" graphic
         for (TableColumn<TeacherMonthlyStatistics, ?> column : statisticsTable.getColumns()) {
-            if (column.getGraphic() instanceof Label && ((Label) column.getGraphic()).getText().startsWith("Tháng")) {
-                ((Label) column.getGraphic()).setText("Tháng " + selectedMonth.getValue() + "/" + selectedYear);
-                break;
+            if (column.getGraphic() instanceof Label) {
+                Label headerLabel = (Label) column.getGraphic();
+                if (headerLabel.getText().equals("Tháng")) { // Identify the 'monthColumn' by its initial text
+                    headerLabel.setText("Tháng " + selectedMonth.getValue() + "/" + selectedYear);
+                    break; // Found and updated, exit loop
+                }
             }
         }
     }
@@ -419,20 +419,45 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         toggleButton.setSelected(selected);
         toggleButton.setPrefHeight(30);
         toggleButton.setPrefWidth(80);
+        // Basic styling for toggle buttons
+        toggleButton.setStyle("-fx-base: #E0E0E0;"); // Default color
+        toggleButton.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
+            if (isSelected) {
+                toggleButton.setStyle("-fx-base: #1976D2; -fx-text-fill: white;"); // Selected color
+            } else {
+                toggleButton.setStyle("-fx-base: #E0E0E0; -fx-text-fill: black;"); // Unselected color
+            }
+        });
         return toggleButton;
     }
 
-    private Button createActionButton(String text, String iconStyle) {
+    private Button createActionButton(String text) { // Simplified, icon handling would be added here
         Button button = new Button(text);
-        button.setPrefSize(40, 40);
+        button.setPrefSize(60, 30); // Adjust size as needed
+        // Basic styling
+        button.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;"); // Example green
+        // Change style on hover for feedback
+        button.setOnMouseEntered(e -> button.setStyle("-fx-background-color: #66BB6A; -fx-text-fill: white;"));
+        button.setOnMouseExited(e -> button.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;"));
         return button;
     }
 
+
     @Override
     public void refreshView() {
-        // Reload data from controller
+        // This might be called when the view becomes active again
+        // Ensure date selectors are set to current month/year
+        YearMonth currentYearMonth = YearMonth.now();
+        fromMonthComboBox.setValue(currentYearMonth.getMonth());
+        fromYearComboBox.setValue(currentYearMonth.getYear());
+        toMonthComboBox.setValue(currentYearMonth.getMonth());
+        toYearComboBox.setValue(currentYearMonth.getYear());
+
+        // Load initial data (current month) and update table
         controller.loadInitialData();
         updateTableWithModelData();
+        // Ensure "Tháng" toggle is selected when the monthly view is refreshed
+        monthToggle.setSelected(true);
     }
 
     // Event handlers
@@ -443,49 +468,46 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         int toYear = toYearComboBox.getValue();
         String status = statusComboBox.getValue();
 
+        if (fromMonth == null || fromYear == 0 || toMonth == null || toYear == 0 || status == null) {
+            showAlert("Lỗi nhập liệu", "Vui lòng chọn đầy đủ khoảng thời gian và trạng thái.", Alert.AlertType.WARNING);
+            return;
+        }
+
         // Delegate search to controller
         boolean success = controller.searchStatistics(fromMonth, fromYear, toMonth, toYear, status);
 
         if (!success) {
-            showAlert("Lỗi kết nối", "Không thể kết nối với cơ sở dữ liệu. Hiển thị dữ liệu mẫu.", Alert.AlertType.WARNING);
+            showAlert("Lỗi kết nối hoặc truy vấn", "Không thể tải dữ liệu. Vui lòng kiểm tra kết nối cơ sở dữ liệu.", Alert.AlertType.ERROR);
+            // The controller already clears the model data on error, so just update the table
         }
 
+        // Always update the table to reflect the model's current state (either data or empty)
         updateTableWithModelData();
     }
 
     private void handleExportExcel() {
         showSuccess("Đang xuất file Excel...");
+        // Implement actual export logic here
     }
 
     private void handleExportPdf() {
         showSuccess("Đang xuất file PDF...");
+        // Implement actual export logic here
     }
 
     private void handlePrint() {
         showSuccess("Đang chuẩn bị in...");
+        // Implement actual print logic here
     }
 
-    private void checkToggles() {
-        // Đảm bảo rằng nút "Tháng" đã được chọn khi màn hình này được hiển thị
-        monthToggle.setSelected(true);
+    // Helper method to show a success notification (replace with actual UI feedback)
+    public void showSuccess(String message) {
+        System.out.println("INFO: " + message); // Placeholder for actual UI notification
+        // Example: Using a simple Alert for now
+        // showAlert("Thông báo", message, Alert.AlertType.INFORMATION);
     }
 
-    private void handlePeriodChange(ToggleButton selected) {
-        if (selected.getText().equals("Ngày")) {
-            // Chuyển sang TeachingStatistics mà không làm mất đi lựa chọn "Ngày"
-            navigationController.saveToggleState("view_type", "Ngày");
-            navigationController.navigateTo("teaching-statistics");
-        } else if (selected.getText().equals("Quý")) {
-            // Chuyển sang QuarterlyTeachingStatistics mà không làm mất đi lựa chọn "Quý"
-            navigationController.saveToggleState("view_type", "Quý");
-            navigationController.navigateTo("quarterly-teaching");
-        } else if (selected.getText().equals("Năm")) {
-            // Chuyển sang YearlyTeachingStatistics mà không làm mất đi lựa chọn "Năm"
-            navigationController.saveToggleState("view_type", "Năm");
-            navigationController.navigateTo("yearly-teaching");
-        }
-    }
-
+    // Helper for showing Alerts
     private void showAlert(String title, String content, Alert.AlertType alertType) {
         Alert alert = new Alert(alertType);
         alert.setTitle(title);
@@ -494,121 +516,68 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         alert.showAndWait();
     }
 
+
+    private void handlePeriodChange(ToggleButton selected) {
+        if (selected != null) {
+            String viewType = selected.getText();
+            navigationController.saveToggleState("view_type", viewType);
+
+            // Navigate to the corresponding view based on the selected toggle
+            if (viewType.equals("Ngày")) {
+                navigationController.navigateTo("teaching-statistics"); // Assuming this is the Daily view ID
+            } else if (viewType.equals("Quý")) {
+                navigationController.navigateTo("quarterly-teaching"); // Assuming this is the Quarterly view ID
+            } else if (viewType.equals("Năm")) {
+                navigationController.navigateTo("yearly-teaching"); // Assuming this is the Yearly view ID
+            }
+            // If "Tháng" is selected, stay on this view
+        }
+    }
+
+
     @Override
     public void onActivate() {
         super.onActivate();
 
-        // Set up event handlers
+        // Set up event handlers - only do this once when the view is activated
         searchButton.setOnAction(e -> handleSearch());
         exportExcelButton.setOnAction(e -> handleExportExcel());
         exportPdfButton.setOnAction(e -> handleExportPdf());
         printButton.setOnAction(e -> handlePrint());
 
-        // Kiểm tra xem người dùng đã chọn một view_type nào đó chưa
+        // Check saved view type or default to "Tháng"
         String savedViewType = navigationController.getSavedToggleState("view_type");
-        if (savedViewType != null) {
-            if (savedViewType.equals("Ngày")) {
-                dayToggle.setSelected(true);
-                // Chuyển hướng đến TeachingStatistics với view_type = "Ngày"
-                navigationController.navigateTo("teaching-statistics");
-                return;
-            } else if (savedViewType.equals("Quý")) {
-                quarterToggle.setSelected(true);
-                // Chuyển hướng đến QuarterlyTeachingStatistics với view_type = "Quý"
-                navigationController.navigateTo("quarterly-teaching");
-                return;
-            } else if (savedViewType.equals("Năm")) {
-                yearToggle.setSelected(true);
-                // Chuyển hướng đến YearlyTeachingStatistics với view_type = "Năm"
-                navigationController.navigateTo("yearly-teaching");
-                return;
-            } else if (savedViewType.equals("Tháng")) {
-                monthToggle.setSelected(true);
-            }
-        } else {
-            // Mặc định sẽ là "Tháng" nếu không có lựa chọn nào được lưu
-            monthToggle.setSelected(true);
-            navigationController.saveToggleState("view_type", "Tháng");
+
+        if (savedViewType != null && !savedViewType.equals("Tháng")) {
+            // If a different view type was saved, navigate to that view
+            handlePeriodChange(periodToggleGroup.getToggles().stream()
+                    .filter(toggle -> ((ToggleButton)toggle).getText().equals(savedViewType))
+                    .map(toggle -> (ToggleButton)toggle)
+                    .findFirst().orElse(monthToggle)); // Default to month toggle if not found
+            return; // Exit onActivate as we're navigating away
         }
 
-        // Set up period toggle handlers
-        dayToggle.setOnAction(e -> {
-            if (dayToggle.isSelected()) {
-                handlePeriodChange(dayToggle);
-            }
-        });
+        // If saved type is "Tháng" or no type saved, ensure "Tháng" is selected and load data
+        monthToggle.setSelected(true);
+        navigationController.saveToggleState("view_type", "Tháng"); // Ensure "Tháng" is the saved state
 
-        monthToggle.setOnAction(e -> {
-            if (monthToggle.isSelected()) {
-                navigationController.saveToggleState("view_type", "Tháng");
-            }
-        });
+        // Set initial date selectors to the current month and year
+        YearMonth currentYearMonth = YearMonth.now();
+        fromMonthComboBox.setValue(currentYearMonth.getMonth());
+        fromYearComboBox.setValue(currentYearMonth.getYear());
+        toMonthComboBox.setValue(currentYearMonth.getMonth());
+        toYearComboBox.setValue(currentYearMonth.getYear());
 
-        quarterToggle.setOnAction(e -> {
-            if (quarterToggle.isSelected()) {
-                handlePeriodChange(quarterToggle);
-            }
-        });
+        // Load data for the current month and update the table
+        controller.loadInitialData();
+        updateTableWithModelData();
 
-        yearToggle.setOnAction(e -> {
-            if (yearToggle.isSelected()) {
-                handlePeriodChange(yearToggle);
+
+        // Set up listeners for period toggles
+        periodToggleGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+            if (newToggle != null && newToggle instanceof ToggleButton) {
+                handlePeriodChange((ToggleButton) newToggle);
             }
         });
     }
 }
-
-// 5. SQL Table Schema
-/*
-CREATE TABLE teachers (
-    teacher_id INT AUTO_INCREMENT PRIMARY KEY,
-    full_name VARCHAR(100) NOT NULL,
-    email VARCHAR(100),
-    phone VARCHAR(20),
-    qualification VARCHAR(100),
-    status ENUM('active', 'inactive') DEFAULT 'active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-CREATE TABLE teaching_sessions (
-    session_id INT AUTO_INCREMENT PRIMARY KEY,
-    teacher_id INT NOT NULL,
-    session_date DATE NOT NULL,
-    start_time TIME NOT NULL,
-    end_time TIME NOT NULL,
-    duration_hours DECIMAL(5,2) NOT NULL,
-    subject VARCHAR(100) NOT NULL,
-    group_name VARCHAR(100),
-    status ENUM('Đã duyệt', 'Chưa duyệt', 'Từ chối') DEFAULT 'Chưa duyệt',
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id)
-);
-
--- Insert sample teachers
-INSERT INTO teachers (full_name) VALUES
-('Trịnh Đình Đức'),
-('Hoàng Ngọc Hà'),
-('Đinh Thị Ngọc Linh'),
-('Bùi Tuyết Mai'),
-('Nguyễn Tiến Dũng'),
-('Trần Trung Hải'),
-('Lê Quang Huy'),
-('Vũ Nhật Quang'),
-('Lê Văn Bảo'),
-('Đỗ Tiến Dũng'),
-('Nguyễn Khánh Linh'),
-('Nguyễn Thị Kim'),
-('Trần Thu Hiền'),
-('Nguyễn Lê Thanh Thủy'),
-('Hà Thị Ngọc'),
-('Phạm Quỳnh Trang'),
-('Trần Thu Hằng'),
-('Nguyễn Minh Anh'),
-('Kiều Thu Thảo');
-
--- Sample sessions for April 2025
--- This is just a simplified example; in a real app, you would have many more sessions
-*/

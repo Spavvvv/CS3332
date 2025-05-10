@@ -615,11 +615,9 @@ public class DashboardView extends BaseScreenView {
      */
     private void showClassDetails(String classId) {
         try {
-            // Convert classId from String to long for comparison
-            long classIdLong = Long.parseLong(classId);
 
             // Use controller to find the class session
-            ClassSession foundSession = dashboardController.findClassSessionById(classIdLong);
+            ClassSession foundSession = dashboardController.findClassSessionById(classId);
 
             if (foundSession != null) {
                 // Save ClassSession object in MainController to access from detail screen

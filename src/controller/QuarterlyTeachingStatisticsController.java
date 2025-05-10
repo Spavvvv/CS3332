@@ -1,13 +1,17 @@
 package src.controller;
 
 import src.dao.TeacherQuarterlyStatisticsDAO;
+import javafx.collections.FXCollections; // Added FXCollections import
 import javafx.collections.ObservableList;
 import src.model.teaching.quarterly.TeacherQuarterlyStatisticsModel;
 import view.components.QuarterlyTeachingStatisticsView;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
 
+import java.time.Year;
 import java.util.Arrays;
 import java.util.List;
-import java.util.prefs.Preferences;
+// Removed Preferences import as state is handled by view/NavigationController
 
 public class QuarterlyTeachingStatisticsController {
     private final QuarterlyTeachingStatisticsView view;
@@ -15,115 +19,164 @@ public class QuarterlyTeachingStatisticsController {
 
     // Constants
     private final List<String> statusOptions = Arrays.asList("Tất cả", "Đã duyệt", "Chưa duyệt", "Từ chối");
-    private final List<Integer> quarters = Arrays.asList(1, 2, 3, 4);
-    private static final String TOGGLE_STATE_KEY = "statistics_view_type";
+    // Removed quarters list as view no longer uses range selectors
 
-    // User preferences for persistence
-    private final Preferences prefs = Preferences.userNodeForPackage(QuarterlyTeachingStatisticsController.class);
+    // Removed Preferences field
 
     public QuarterlyTeachingStatisticsController(QuarterlyTeachingStatisticsView view) {
         this.view = view;
         this.dao = new TeacherQuarterlyStatisticsDAO();
-        initController();
+        // Initial setup of view elements that don't depend on data or events
+        setupViewInitialState();
+        // Event handlers and data loading are now initiated by the view's onActivate
     }
 
-    private void initController() {
-        // Setup view with data
-        view.setQuartersList(quarters);
+    private void setupViewInitialState() {
+        // Setup static view elements that the controller provides
         view.setStatusOptions(statusOptions);
+        // Note: Initial year selection and toggle state are handled by the view's onActivate
+    }
 
-        // Setup event handlers
+    /**
+     * Called by the view's onActivate method to set up event handlers.
+     */
+    public void setupEventHandlers() {
+        // Setup event handlers for buttons and toggles
         view.setSearchButtonHandler(e -> handleSearch());
         view.setExportExcelButtonHandler(e -> handleExportExcel());
         view.setExportPdfButtonHandler(e -> handleExportPdf());
         view.setPrintButtonHandler(e -> handlePrint());
 
-        // Toggle handlers
-        view.setDayToggleHandler(e -> {
-            if (view.isDayToggleSelected()) {
-                saveToggleState("Ngày");
-                navigateToView("teaching-statistics");
-            }
-        });
+        // Toggle handlers - navigation and state saving is handled by the view
+        // The controller does NOT handle toggle selection logic here, only search triggering
+        view.setDayToggleHandler(e -> { if (view.isDayToggleSelected()) view.handlePeriodChange(view.dayToggle); });
+        view.setMonthToggleHandler(e -> { if (view.isMonthToggleSelected()) view.handlePeriodChange(view.monthToggle); });
+        view.setQuarterToggleHandler(e -> { /* Stay on this view */ }); // Quarter toggle stays here
+        view.setYearToggleHandler(e -> { if (view.isYearToggleSelected()) view.handlePeriodChange(view.yearToggle); });
 
-        view.setMonthToggleHandler(e -> {
-            if (view.isMonthToggleSelected()) {
-                saveToggleState("Tháng");
-                navigateToView("monthly-teaching");
-            }
-        });
+        // Add listener to the year ComboBox to trigger search when year changes
+        if (view.yearComboBox != null) { // Added null check
+            view.yearComboBox.setOnAction(event -> handleSearch());
+        }
 
-        view.setQuarterToggleHandler(e -> {
-            if (view.isQuarterToggleSelected()) {
-                saveToggleState("Quý");
-            }
-        });
-
-        view.setYearToggleHandler(e -> {
-            if (view.isYearToggleSelected()) {
-                saveToggleState("Năm");
-                navigateToView("yearly-teaching");
-            }
-        });
-
-        // Load saved toggle state if available
-        loadSavedToggleState();
-
-        // Load initial data
-        loadData();
+        // Add listener to the status ComboBox to trigger search when status changes
+        if (view.statusComboBox != null) { // Added null check
+            view.statusComboBox.setOnAction(event -> handleSearch());
+        }
     }
 
-    public void loadData() {
-        int fromQuarter = view.getFromQuarter();
-        int fromYear = view.getFromYear();
-        int toQuarter = view.getToQuarter();
-        int toYear = view.getToYear();
-        String status = view.getSelectedStatus();
 
-        ObservableList<TeacherQuarterlyStatisticsModel> data =
-                dao.getTeacherStatistics(fromQuarter, fromYear, toQuarter, toYear, status);
+    /**
+     * Called by the view's onActivate method to load initial data.
+     */
+    public void loadInitialData() {
+        // Get the initial state from the view
+        int initialYear = view.getSelectedYear(); // View defaults to current year
+        String initialStatus = view.getSelectedStatus(); // View defaults to first status option
 
-        double[] summaryData =
-                dao.getStatisticsSummary(fromQuarter, fromYear, toQuarter, toYear, status);
-
-        view.updateTableData(data);
-        view.updateSummaryRow(summaryData);
+        // Load data for the initial state
+        loadStatisticsData(initialYear, initialStatus);
     }
 
+    /**
+     * Handles the search action triggered by the Search button or filter changes.
+     */
     private void handleSearch() {
-        // Load data based on search criteria
-        loadData();
+        // Get the current filter criteria from the view
+        int selectedYear = view.getSelectedYear();
+        String selectedStatus = view.getSelectedStatus();
+
+        // Validate input (basic check)
+        if (selectedYear <= 0 || selectedStatus == null || selectedStatus.trim().isEmpty()) {
+            view.showAlert("Lỗi nhập liệu", "Vui lòng chọn năm và trạng thái.", Alert.AlertType.WARNING);
+            return;
+        }
+
+        // Load data based on the selected criteria
+        loadStatisticsData(selectedYear, selectedStatus);
     }
+
+    /**
+     * Fetches data from the DAO and updates the view.
+     *
+     * @param year the year to retrieve statistics for
+     * @param status the approval status to filter by ("Tất cả" for all statuses)
+     * @return true if data loading was successful, false otherwise
+     */
+    public boolean searchStatistics(int year, int currentQuarterPlaceholder, String status) {
+        // The currentQuarterPlaceholder is ignored here as the DAO gets all quarters
+        // The view will use its own logic to display the relevant quarter
+        return loadStatisticsData(year, status);
+    }
+
+
+    /**
+     * Core method to fetch data from DAO and update the view.
+     * @param year The year to fetch statistics for.
+     * @param status The approval status filter.
+     * @return true if data was loaded successfully, false otherwise.
+     */
+    private boolean loadStatisticsData(int year, String status) {
+        ObservableList<TeacherQuarterlyStatisticsModel> dataFromDao = null; // Use a new variable
+        boolean success = false; // Track success outside the try block
+        try {
+            dataFromDao = dao.getTeacherStatistics(year, status);
+            success = dataFromDao != null; // Set success based on DAO result
+
+            // Update the view on the JavaFX application thread
+            final ObservableList<TeacherQuarterlyStatisticsModel> finalData = dataFromDao; // Make it effectively final for the lambda
+            Platform.runLater(() -> {
+                if (finalData != null) {
+                    view.updateTableData(finalData); // updateTableData calls updateSummaryRow internally
+                    // The view now dynamically updates headers and summary based on current data and selected year/quarter
+                } else {
+                    // Clear the table and summary if data is null (e.g., on error)
+                    view.updateTableData(FXCollections.observableArrayList());
+                    view.updateSummaryRow(); // Update summary with empty data
+                }
+            });
+
+        } catch (Exception e) {
+            // Log the error (replace with proper logging)
+            e.printStackTrace();
+            System.err.println("Error loading statistics data: " + e.getMessage());
+
+            // Show error message on the JavaFX application thread
+            Platform.runLater(() -> {
+                view.showAlert("Lỗi", "Đã xảy ra lỗi khi tải dữ liệu thống kê.", Alert.AlertType.ERROR);
+                // Clear the table and summary on error
+                view.updateTableData(FXCollections.observableArrayList());
+                view.updateSummaryRow(); // Update summary with empty data
+            });
+            success = false; // Indicate failure
+        }
+        return success; // Return the success status
+    }
+
 
     private void handleExportExcel() {
-        view.showSuccessMessage("Đang xuất file Excel...");
-        // Implementation for Excel export would go here
-        // Would use data from the DAO to generate the Excel file
+        view.showSuccess("Đang xuất file Excel...");
+        // TODO: Implement Excel export logic
+        // Get data from DAO or directly from view.statisticsTable.getItems()
+        // TeacherQuarterlyStatisticsDAO exportDao = new TeacherQuarterlyStatisticsDAO();
+        // ObservableList<TeacherQuarterlyStatisticsModel> dataToExport = exportDao.getTeacherStatistics(view.getSelectedYear(), view.getSelectedStatus());
+        // Call an export service/utility
     }
 
     private void handleExportPdf() {
-        view.showSuccessMessage("Đang xuất file PDF...");
-        // Implementation for PDF export would go here
-        // Would use data from the DAO to generate the PDF file
+        view.showSuccess("Đang xuất file PDF...");
+        // TODO: Implement PDF export logic
+        // Get data similar to Excel export
+        // Call an export service/utility
     }
 
     private void handlePrint() {
-        view.showSuccessMessage("Đang chuẩn bị in...");
-        // Implementation for printing would go here
-        // Would use data from the DAO to generate printable content
+        view.showSuccess("Đang chuẩn bị in...");
+        // TODO: Implement Print logic
+        // Get data similar to Excel export
+        // Call a printing service/utility
     }
 
-    private void saveToggleState(String state) {
-        prefs.put(TOGGLE_STATE_KEY, state);
-    }
-
-    private void loadSavedToggleState() {
-        String savedState = prefs.get(TOGGLE_STATE_KEY, "Quý");
-        view.selectToggleByState(savedState);
-    }
-
-    private void navigateToView(String viewName) {
-        // Navigation logic would be implemented here
-        // This would depend on your application's navigation framework
-    }
+    // Removed saveToggleState and loadSavedToggleState as they are handled by the view/NavigationController
+    // Removed navigateToView as it's handled by the view's handlePeriodChange method
 }

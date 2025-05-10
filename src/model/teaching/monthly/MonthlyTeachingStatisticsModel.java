@@ -58,6 +58,8 @@ public class MonthlyTeachingStatisticsModel {
 
     // Data model for teacher monthly statistics
     public static class TeacherMonthlyStatistics {
+        // Added teacherId property as SimpleStringProperty
+        private final SimpleStringProperty teacherId;
         private final SimpleStringProperty teacherName;
         private final SimpleIntegerProperty stt;
         private final SimpleIntegerProperty sessions;
@@ -65,13 +67,25 @@ public class MonthlyTeachingStatisticsModel {
         private final SimpleIntegerProperty totalSessions;
         private final SimpleDoubleProperty totalHours;
 
-        public TeacherMonthlyStatistics(int stt, String teacherName, int sessions, double hours) {
+        // Updated constructor to include String teacherId parameter
+        public TeacherMonthlyStatistics(int stt, String teacherId, String teacherName, int sessions, double hours) {
             this.stt = new SimpleIntegerProperty(stt);
+            // Initialized the teacherId SimpleStringProperty
+            this.teacherId = new SimpleStringProperty(teacherId);
             this.teacherName = new SimpleStringProperty(teacherName);
             this.sessions = new SimpleIntegerProperty(sessions);
             this.hours = new SimpleDoubleProperty(hours);
             this.totalSessions = new SimpleIntegerProperty(sessions); // Same as sessions for the example
             this.totalHours = new SimpleDoubleProperty(hours);       // Same as hours for the example
+        }
+
+        // Added getter and property method for teacherId
+        public String getTeacherId() {
+            return teacherId.get();
+        }
+
+        public SimpleStringProperty teacherIdProperty() {
+            return teacherId;
         }
 
         public String getTeacherName() {

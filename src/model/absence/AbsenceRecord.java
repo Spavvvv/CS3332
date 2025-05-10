@@ -9,7 +9,7 @@ import javafx.scene.image.ImageView;
  * Model class representing an absence record
  */
 public class AbsenceRecord {
-    private final Integer id;
+    private final String id;
     private final ImageView image;
     private final String name;
     private final String className;
@@ -19,7 +19,7 @@ public class AbsenceRecord {
     private final BooleanProperty called = new SimpleBooleanProperty();
     private final BooleanProperty approved = new SimpleBooleanProperty();
 
-    public AbsenceRecord(Integer id, ImageView image, String name, String className,
+    public AbsenceRecord(String id, ImageView image, String name, String className,
                          String date, String attendance, String note,
                          boolean called, boolean approved) {
         this.id = id;
@@ -34,7 +34,7 @@ public class AbsenceRecord {
     }
 
     // Getters and Setters
-    public Integer getId() { return id; }
+    public String getId() { return id; }
 
     public ImageView getImage() { return image; }
 

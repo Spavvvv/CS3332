@@ -9,25 +9,25 @@ import utils.DatabaseConnection;
 public class TeacherQuarterlyStatisticsDAO {
 
     /**
-     * Gets teacher statistics data based on filters
+     * Gets teacher statistics data for a specific year and status.
+     * Retrieves data for all four quarters of the specified year and the annual total.
+     * Sessions are counted by the number of entries, and hours are calculated
+     * from the duration between start_time and end_time.
      *
-     * @param fromQuarter the starting quarter
-     * @param fromYear the starting year
-     * @param toQuarter the ending quarter
-     * @param toYear the ending year
-     * @param status the approval status
-     * @return a list of teacher statistics
+     * @param year the year to retrieve statistics for
+     * @param status the approval status to filter by ("Tất cả" for all statuses)
+     * @return a list of teacher statistics for the specified year
      */
     public ObservableList<TeacherQuarterlyStatisticsModel> getTeacherStatistics(
-            int fromQuarter, int fromYear, int toQuarter, int toYear, String status) {
+            int year, String status) {
 
         ObservableList<TeacherQuarterlyStatisticsModel> statistics = FXCollections.observableArrayList();
+        String query = buildStatisticsQuery(status);
 
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            String query = buildStatisticsQuery(status);
-            PreparedStatement pstmt = conn.prepareStatement(query);
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
 
-            setQueryParameters(pstmt, fromQuarter, fromYear, toQuarter, toYear, status);
+            setStatisticsQueryParameters(pstmt, year, status);
 
             ResultSet rs = pstmt.executeQuery();
             int stt = 1;
@@ -38,126 +38,112 @@ public class TeacherQuarterlyStatisticsDAO {
                 double q1Hours = rs.getDouble("q1_hours");
                 int q2Sessions = rs.getInt("q2_sessions");
                 double q2Hours = rs.getDouble("q2_hours");
+                int q3Sessions = rs.getInt("q3_sessions");
+                double q3Hours = rs.getDouble("q3_hours");
+                int q4Sessions = rs.getInt("q4_sessions");
+                double q4Hours = rs.getDouble("q4_hours");
+                // Annual totals are calculated in the query but not strictly needed by the model constructor
+                // int totalSessions = rs.getInt("annual_total_sessions");
+                // double totalHours = rs.getDouble("annual_total_hours");
+
 
                 statistics.add(new TeacherQuarterlyStatisticsModel(
-                        stt++, teacherName, q1Sessions, q1Hours, q2Sessions, q2Hours));
+                        stt++, teacherName,
+                        q1Sessions, q1Hours,
+                        q2Sessions, q2Hours,
+                        q3Sessions, q3Hours,
+                        q4Sessions, q4Hours
+                ));
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
             System.err.println("Error retrieving teacher statistics: " + e.getMessage());
+            // Return empty list on error
+            return FXCollections.observableArrayList();
         }
 
         return statistics;
     }
 
     /**
-     * Gets summary data for the total row
+     * Builds the SQL query for retrieving teacher quarterly and annual statistics.
+     * Calculates the quarter from the session_date column, sessions by counting rows,
+     * and hours from the time difference between start_time and end_time.
+     * Joins teachers and class_sessions on teacher name.
      *
-     * @param fromQuarter the starting quarter
-     * @param fromYear the starting year
-     * @param toQuarter the ending quarter
-     * @param toYear the ending year
-     * @param status the approval status
-     * @return an array of summary values [q1Sessions, q1Hours, q2Sessions, q2Hours, totalSessions, totalHours]
+     * @param status the approval status filter ("Tất cả" for all statuses)
+     * @return the SQL query string
      */
-    public double[] getStatisticsSummary(
-            int fromQuarter, int fromYear, int toQuarter, int toYear, String status) {
-
-        double[] summaryData = new double[6]; // [q1Sessions, q1Hours, q2Sessions, q2Hours, totalSessions, totalHours]
-
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            String query = buildSummaryQuery(status);
-            PreparedStatement pstmt = conn.prepareStatement(query);
-
-            setQueryParameters(pstmt, fromQuarter, fromYear, toQuarter, toYear, status);
-
-            ResultSet rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                summaryData[0] = rs.getDouble("total_q1_sessions");
-                summaryData[1] = rs.getDouble("total_q1_hours");
-                summaryData[2] = rs.getDouble("total_q2_sessions");
-                summaryData[3] = rs.getDouble("total_q2_hours");
-                summaryData[4] = rs.getDouble("total_sessions");
-                summaryData[5] = rs.getDouble("total_hours");
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-            System.err.println("Error retrieving statistics summary: " + e.getMessage());
-        }
-
-        return summaryData;
-    }
-
     private String buildStatisticsQuery(String status) {
         StringBuilder query = new StringBuilder();
-        query.append("SELECT t.teacher_name, ");
-        query.append("SUM(CASE WHEN ts.quarter = ? AND ts.year = ? THEN ts.sessions ELSE 0 END) AS q1_sessions, ");
-        query.append("SUM(CASE WHEN ts.quarter = ? AND ts.year = ? THEN ts.hours ELSE 0 END) AS q1_hours, ");
-        query.append("SUM(CASE WHEN ts.quarter = ? AND ts.year = ? THEN ts.sessions ELSE 0 END) AS q2_sessions, ");
-        query.append("SUM(CASE WHEN ts.quarter = ? AND ts.year = ? THEN ts.hours ELSE 0 END) AS q2_hours ");
+        // Select t.name and alias it as teacher_name
+        query.append("SELECT t.name AS teacher_name, ");
+
+        // Aggregate sessions and hours for each quarter of the specified year
+        // Calculate quarter from session_date: CEIL(MONTH(date) / 3.0)
+        // Sessions are counted by summing 1 for each session within the condition
+        // Hours are calculated by summing the time difference in minutes, divided by 60
+        query.append("SUM(CASE WHEN CEIL(MONTH(cs.session_date) / 3.0) = 1 AND YEAR(cs.session_date) = ? THEN 1 ELSE 0 END) AS q1_sessions, ");
+        query.append("SUM(CASE WHEN CEIL(MONTH(cs.session_date) / 3.0) = 1 AND YEAR(cs.session_date) = ? THEN TIMESTAMPDIFF(MINUTE, cs.start_time, cs.end_time) / 60.0 ELSE 0 END) AS q1_hours, ");
+        query.append("SUM(CASE WHEN CEIL(MONTH(cs.session_date) / 3.0) = 2 AND YEAR(cs.session_date) = ? THEN 1 ELSE 0 END) AS q2_sessions, ");
+        query.append("SUM(CASE WHEN CEIL(MONTH(cs.session_date) / 3.0) = 2 AND YEAR(cs.session_date) = ? THEN TIMESTAMPDIFF(MINUTE, cs.start_time, cs.end_time) / 60.0 ELSE 0 END) AS q2_hours, ");
+        query.append("SUM(CASE WHEN CEIL(MONTH(cs.session_date) / 3.0) = 3 AND YEAR(cs.session_date) = ? THEN 1 ELSE 0 END) AS q3_sessions, ");
+        query.append("SUM(CASE WHEN CEIL(MONTH(cs.session_date) / 3.0) = 3 AND YEAR(cs.session_date) = ? THEN TIMESTAMPDIFF(MINUTE, cs.start_time, cs.end_time) / 60.0 ELSE 0 END) AS q3_hours, ");
+        query.append("SUM(CASE WHEN CEIL(MONTH(cs.session_date) / 3.0) = 4 AND YEAR(cs.session_date) = ? THEN 1 ELSE 0 END) AS q4_sessions, ");
+        query.append("SUM(CASE WHEN CEIL(MONTH(cs.session_date) / 3.0) = 4 AND YEAR(cs.session_date) = ? THEN TIMESTAMPDIFF(MINUTE, cs.start_time, cs.end_time) / 60.0 ELSE 0 END) AS q4_hours, ");
+
+        // Calculate annual totals for the specified year
+        query.append("SUM(CASE WHEN YEAR(cs.session_date) = ? THEN 1 ELSE 0 END) AS annual_total_sessions, ");
+        query.append("SUM(CASE WHEN YEAR(cs.session_date) = ? THEN TIMESTAMPDIFF(MINUTE, cs.start_time, cs.end_time) / 60.0 ELSE 0 END) AS annual_total_hours ");
+
         query.append("FROM teachers t ");
-        query.append("JOIN teaching_sessions ts ON t.teacher_id = ts.teacher_id ");
-        query.append("WHERE ((ts.quarter = ? AND ts.year = ?) OR (ts.quarter = ? AND ts.year = ?)) ");
+        // Corrected the JOIN condition to use t.name and cs.teacher_name
+        query.append("JOIN class_sessions cs ON t.name = cs.teacher_name ");
+        // Filter by the year derived from session_date
+        // This WHERE clause ensures we only process records for the specified year
+        // before applying the quarterly/annual SUMs.
+        query.append("WHERE YEAR(cs.session_date) = ? ");
 
-        if (!status.equals("Tất cả")) {
-            query.append("AND ts.approval_status = ? ");
+        // Added check for null status before appending the WHERE clause part
+        if (status != null && !status.equals("Tất cả") && !status.trim().isEmpty()) {
+            query.append("AND cs.approval_status = ? "); // Optional filter by status
         }
 
-        query.append("GROUP BY t.teacher_id, t.teacher_name ");
-        query.append("ORDER BY t.teacher_name");
+        // Group by teacher id and name. Grouping by id is generally preferred if it's unique.
+        query.append("GROUP BY t.id, t.name ");
+        // Order alphabetically by teacher name
+        query.append("ORDER BY t.name");
 
         return query.toString();
     }
 
-    private String buildSummaryQuery(String status) {
-        StringBuilder query = new StringBuilder();
-        query.append("SELECT ");
-        query.append("SUM(CASE WHEN ts.quarter = ? AND ts.year = ? THEN ts.sessions ELSE 0 END) AS total_q1_sessions, ");
-        query.append("SUM(CASE WHEN ts.quarter = ? AND ts.year = ? THEN ts.hours ELSE 0 END) AS total_q1_hours, ");
-        query.append("SUM(CASE WHEN ts.quarter = ? AND ts.year = ? THEN ts.sessions ELSE 0 END) AS total_q2_sessions, ");
-        query.append("SUM(CASE WHEN ts.quarter = ? AND ts.year = ? THEN ts.hours ELSE 0 END) AS total_q2_hours, ");
-        query.append("SUM(ts.sessions) AS total_sessions, ");
-        query.append("SUM(ts.hours) AS total_hours ");
-        query.append("FROM teaching_sessions ts ");
-        query.append("WHERE ((ts.quarter = ? AND ts.year = ?) OR (ts.quarter = ? AND ts.year = ?)) ");
+    /**
+     * Sets the parameters for the statistics query.
+     *
+     * @param pstmt the prepared statement
+     * @param year the year parameter
+     * @param status the status parameter
+     * @throws SQLException if a SQL error occurs
+     */
+    private void setStatisticsQueryParameters(PreparedStatement pstmt, int year, String status) throws SQLException {
+        int paramIndex = 1;
 
-        if (!status.equals("Tất cả")) {
-            query.append("AND ts.approval_status = ? ");
+        // Set year parameter for each quarter in the SELECT CASE statements (8 times for sessions/hours)
+        for (int i = 0; i < 8; i++) {
+            pstmt.setInt(paramIndex++, year);
         }
 
-        return query.toString();
-    }
+        // Set year parameter for the annual totals in the SELECT SUM CASE statements (2 times for sessions/hours)
+        pstmt.setInt(paramIndex++, year); // Annual total sessions year
+        pstmt.setInt(paramIndex++, year); // Annual total hours year
 
-    private void setQueryParameters(PreparedStatement pstmt, int fromQuarter, int fromYear,
-                                    int toQuarter, int toYear, String status) throws SQLException {
-        // For the first quarter values
-        pstmt.setInt(1, fromQuarter);
-        pstmt.setInt(2, fromYear);
+        // Set year parameter in the WHERE clause (1 time)
+        pstmt.setInt(paramIndex++, year);
 
-        // For the first quarter hours
-        pstmt.setInt(3, fromQuarter);
-        pstmt.setInt(4, fromYear);
-
-        // For the second quarter values
-        pstmt.setInt(5, toQuarter);
-        pstmt.setInt(6, toYear);
-
-        // For the second quarter hours
-        pstmt.setInt(7, toQuarter);
-        pstmt.setInt(8, toYear);
-
-        // For WHERE clause quarter/year criteria
-        pstmt.setInt(9, fromQuarter);
-        pstmt.setInt(10, fromYear);
-        pstmt.setInt(11, toQuarter);
-        pstmt.setInt(12, toYear);
-
-        // If status is specified
-        if (!status.equals("Tất cả")) {
-            pstmt.setString(13, status);
+        // Set status parameter if it's not "Tất cả" (1 time if applicable)
+        if (status != null && !status.equals("Tất cả") && !status.trim().isEmpty()) {
+            pstmt.setString(paramIndex++, status);
         }
     }
 }

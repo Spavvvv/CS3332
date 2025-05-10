@@ -82,14 +82,14 @@ public class DashboardDAO {
 
             while (rs.next()) {
                 // Mapping columns to ClassSession constructor parameters
-                long id = rs.getLong("id");
+                String id = rs.getString("id");
                 String courseName = rs.getString("course_name");
                 String teacher = rs.getString("teacher_name");
                 String room = rs.getString("room");
                 LocalDate date = rs.getDate("class_date").toLocalDate();
                 LocalTime startTime = rs.getTime("start_time").toLocalTime();
                 LocalTime endTime = rs.getTime("end_time").toLocalTime();
-                long classId = rs.getLong("class_id"); // Assuming this maps to a class/grouping ID
+                String classId = rs.getString("class_id"); // Assuming this maps to a class/grouping ID
 
                 // Create ClassSession object - ensure your ClassSession model matches these fields
                 ClassSession classSession = new ClassSession(id, courseName, teacher, room, date, startTime, endTime, classId);
@@ -208,7 +208,7 @@ public class DashboardDAO {
     public ObservableList<PieChart.Data> getCourseDistribution() throws SQLException {
         // Adjusted JOIN condition to use courses.course_id as primary key,
         // assuming class_sessions links to courses via course_id column
-        String query = "SELECT c.course_name, COUNT(cs.id) as class_count " +
+        String query = "SELECT c.course_name, COUNT(cs.course_id) as class_count " +
                 "FROM courses c " +
                 "JOIN class_sessions cs ON c.course_id = cs.course_id " + // Assumes courses PK is course_id
                 "GROUP BY c.course_name";

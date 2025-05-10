@@ -18,12 +18,12 @@ import src.controller.NavigationController;
 
 import java.util.Arrays;
 import java.util.List;
+import java.time.Year; // Import Year class
 
 public class YearlyTeachingStatisticsView extends BaseScreenView {
 
     // UI Components
-    private ComboBox<Integer> fromYearComboBox;
-    private ComboBox<Integer> toYearComboBox;
+    private ComboBox<Integer> yearComboBox; // Changed from fromYear/toYear
     private ToggleGroup periodToggleGroup;
     private ComboBox<String> statusComboBox;
     private TableView<TeacherYearlyStatisticsModel> statisticsTable;
@@ -38,14 +38,28 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
 
     // Data
     private final List<String> statusOptions = Arrays.asList("Tất cả", "Đã duyệt", "Chưa duyệt", "Từ chối");
-    private final List<Integer> years = Arrays.asList(2023, 2024, 2025, 2026);
+    // Dynamically generate years (e.g., 10 years around the current year)
+    private ObservableList<Integer> years = FXCollections.observableArrayList();
+
 
     // Controller reference
     private YearlyStatisticsController controller;
 
     public YearlyTeachingStatisticsView() {
         super("Thống kê giờ giảng", "yearly-teaching");
+        // Initialize the controller with this view
         this.controller = new YearlyStatisticsController(this);
+        // Generate years upon instantiation
+        generateYears();
+        // Note: Initial data load is now triggered at the end of initializeView()
+        // to ensure UI components are ready.
+    }
+
+    private void generateYears() {
+        int currentYear = Year.now().getValue();
+        for (int i = currentYear - 5; i <= currentYear + 5; i++) {
+            years.add(i);
+        }
     }
 
     @Override
@@ -71,6 +85,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         setupEventHandlers();
 
         // Load data (controller will load data and update the view)
+        // Call loadData here to ensure UI components like totalRow are initialized
         controller.loadData();
     }
 
@@ -86,7 +101,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
     }
 
     private void createFilterBar() {
-        // Period selection toggle group
+        // Period selection toggle group (kept for consistency if needed elsewhere, but year is default here)
         periodToggleGroup = new ToggleGroup();
 
         HBox periodTypeBox = new HBox(10);
@@ -96,45 +111,38 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         typeLabel.setTextFill(Color.BLACK);
         typeLabel.setPrefWidth(50);
 
-        ToggleButton dayToggle = createToggleButton("Ngày", false);
-        ToggleButton monthToggle = createToggleButton("Tháng", false);
-        ToggleButton quarterToggle = createToggleButton("Quý", false);
-        ToggleButton yearToggle = createToggleButton("Năm", true);
+        // Keep toggles but handle navigation in their actions
+        ToggleButton dayToggle = createToggleButton("Ngày", false, "daily-teaching"); // Added viewId
+        ToggleButton monthToggle = createToggleButton("Tháng", false, "monthly-teaching"); // Added viewId
+        ToggleButton quarterToggle = createToggleButton("Quý", false, "quarterly-teaching"); // Added viewId
+        ToggleButton yearToggle = createToggleButton("Năm", true, "yearly-teaching"); // Added viewId
 
-        // Set toggle handlers
-        dayToggle.setOnAction(e -> {
-            if (dayToggle.isSelected()) controller.handlePeriodChange(dayToggle);
-        });
+        // Set toggle handlers to navigate
+        dayToggle.setOnAction(e -> { if (dayToggle.isSelected()) navigateToView("daily-teaching"); });
+        monthToggle.setOnAction(e -> { if (monthToggle.isSelected()) navigateToView("monthly-teaching"); });
+        quarterToggle.setOnAction(e -> { if (quarterToggle.isSelected()) navigateToView("quarterly-teaching"); });
+        yearToggle.setOnAction(e -> { if (yearToggle.isSelected()) navigateToView("yearly-teaching"); }); // Navigating to self keeps you here
 
-        monthToggle.setOnAction(e -> {
-            if (monthToggle.isSelected()) controller.handlePeriodChange(monthToggle);
-        });
 
-        quarterToggle.setOnAction(e -> {
-            if (quarterToggle.isSelected()) controller.handlePeriodChange(quarterToggle);
-        });
+        // Ensure the correct toggle is selected when this view is active
+        periodToggleGroup.selectToggle(yearToggle);
+
 
         periodTypeBox.getChildren().addAll(typeLabel, dayToggle, monthToggle, quarterToggle, yearToggle);
 
-        // Year selection for date range
-        HBox dateRangeBox = new HBox(10);
-        dateRangeBox.setAlignment(Pos.CENTER_LEFT);
+        // Single Year selection
+        HBox yearSelectionBox = new HBox(10);
+        yearSelectionBox.setAlignment(Pos.CENTER_LEFT);
 
-        Label fromLabel = new Label("Từ:");
-        fromLabel.setTextFill(Color.BLACK);
-        fromYearComboBox = new ComboBox<>();
-        fromYearComboBox.setPrefWidth(100);
-        fromYearComboBox.setItems(FXCollections.observableArrayList(years));
-        fromYearComboBox.setValue(2025);
+        Label yearLabel = new Label("Năm:"); // Changed label
+        yearLabel.setTextFill(Color.BLACK);
+        yearComboBox = new ComboBox<>(); // Changed from fromYearComboBox
+        yearComboBox.setPrefWidth(100);
+        yearComboBox.setItems(years);
+        yearComboBox.setValue(Year.now().getValue()); // Set default to current year
 
-        Label toLabel = new Label("Đến:");
-        toLabel.setTextFill(Color.BLACK);
-        toYearComboBox = new ComboBox<>();
-        toYearComboBox.setPrefWidth(100);
-        toYearComboBox.setItems(FXCollections.observableArrayList(years));
-        toYearComboBox.setValue(2025);
 
-        dateRangeBox.getChildren().addAll(fromLabel, fromYearComboBox, toLabel, toYearComboBox);
+        yearSelectionBox.getChildren().addAll(yearLabel, yearComboBox); // Changed children
 
         // Status selection
         HBox statusBox = new HBox(10);
@@ -169,7 +177,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         filterBar.setAlignment(Pos.CENTER_LEFT);
         filterBar.setPadding(new Insets(10));
         filterBar.setBackground(new Background(new BackgroundFill(Color.web("#f5f5f5"), new CornerRadii(5), Insets.EMPTY)));
-        filterBar.getChildren().addAll(periodTypeBox, dateRangeBox, statusBox, actionButtonsBar);
+        filterBar.getChildren().addAll(periodTypeBox, yearSelectionBox, statusBox, actionButtonsBar); // Changed children
 
         root.getChildren().add(filterBar);
     }
@@ -179,6 +187,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         statisticsTable.setEditable(false);
         statisticsTable.setPrefHeight(600);
         statisticsTable.getStyleClass().add("statistics-table");
+        // CONSTRAINED_RESIZE_POLICY is deprecated, consider alternative layout approaches
         statisticsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         // Create the STT column with black header text
@@ -204,15 +213,15 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         teacherHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         teacherColumn.setGraphic(teacherHeaderLabel);
 
-        // Create the 2025 column with black header text
+        // Create the Year column with dynamic header
         TableColumn<TeacherYearlyStatisticsModel, String> yearColumn = new TableColumn<>();
 
-        yearHeaderLabel = new Label("2025");
+        yearHeaderLabel = new Label(String.valueOf(Year.now().getValue())); // Default to current year
         yearHeaderLabel.setTextFill(Color.BLACK);
         yearHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         yearColumn.setGraphic(yearHeaderLabel);
 
-        // 2025 Sessions sub-column with black header text
+        // Year Sessions sub-column
         TableColumn<TeacherYearlyStatisticsModel, Integer> yearSessionsColumn = new TableColumn<>();
         yearSessionsColumn.setCellValueFactory(new PropertyValueFactory<>("yearSessions"));
         yearSessionsColumn.setPrefWidth(80);
@@ -223,7 +232,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         yearSessionsHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         yearSessionsColumn.setGraphic(yearSessionsHeaderLabel);
 
-        // 2025 Hours sub-column with black header text
+        // Year Hours sub-column
         TableColumn<TeacherYearlyStatisticsModel, Double> yearHoursColumn = new TableColumn<>();
         yearHoursColumn.setCellValueFactory(new PropertyValueFactory<>("yearHours"));
         yearHoursColumn.setPrefWidth(80);
@@ -236,7 +245,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
 
         yearColumn.getColumns().addAll(yearSessionsColumn, yearHoursColumn);
 
-        // Create the Total column with black header text
+        // Create the Total column
         TableColumn<TeacherYearlyStatisticsModel, String> totalColumn = new TableColumn<>();
 
         Label totalHeaderLabel = new Label("Tổng cộng");
@@ -244,7 +253,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         totalHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         totalColumn.setGraphic(totalHeaderLabel);
 
-        // Total Sessions sub-column with black header text
+        // Total Sessions sub-column
         TableColumn<TeacherYearlyStatisticsModel, Integer> totalSessionsColumn = new TableColumn<>();
         totalSessionsColumn.setCellValueFactory(new PropertyValueFactory<>("totalSessions"));
         totalSessionsColumn.setPrefWidth(80);
@@ -255,7 +264,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         totalSessionsHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         totalSessionsColumn.setGraphic(totalSessionsHeaderLabel);
 
-        // Total Hours sub-column with black header text
+        // Total Hours sub-column
         TableColumn<TeacherYearlyStatisticsModel, Double> totalHoursColumn = new TableColumn<>();
         totalHoursColumn.setCellValueFactory(new PropertyValueFactory<>("totalHours"));
         totalHoursColumn.setPrefWidth(80);
@@ -276,7 +285,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         tableContainer.getChildren().add(statisticsTable);
 
         // Create the total row using a grid pane for alignment with the table
-        totalRow = createTotalRow();
+        totalRow = createTotalRow(); // Initialize totalRow here
         tableContainer.getChildren().add(totalRow);
 
         root.getChildren().add(tableContainer);
@@ -318,37 +327,47 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         // Create and add the "Tổng cộng" label
         Label totalLabel = new Label("Tổng cộng");
         totalLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
-        GridPane.setColumnSpan(totalLabel, 2);
+        GridPane.setColumnSpan(totalLabel, 2); // Span across STT and Name columns
         totalRow.add(totalLabel, 0, 0);
 
         // Add the total values (these will be updated by the controller)
+        // Assign IDs to these labels for easier lookup later
         Label yearSessionTotal = new Label("0");
         yearSessionTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
-        totalRow.add(yearSessionTotal, 2, 0);
+        yearSessionTotal.setId("yearSessionTotalLabel"); // Assign ID
+        totalRow.add(yearSessionTotal, 2, 0); // Column index 2 for Year Sessions
 
         Label yearHoursTotal = new Label("0.0");
         yearHoursTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
-        totalRow.add(yearHoursTotal, 3, 0);
+        yearHoursTotal.setId("yearHoursTotalLabel"); // Assign ID
+        totalRow.add(yearHoursTotal, 3, 0); // Column index 3 for Year Hours
 
-        Label totalSessionTotal = new Label("0");
-        totalSessionTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
-        totalRow.add(totalSessionTotal, 4, 0);
+        // Add the total values for the "Tổng cộng" column - these will show the same data
+        // as the year totals in this single-year view context.
+        Label overallTotalSessionTotal = new Label("0");
+        overallTotalSessionTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
+        overallTotalSessionTotal.setId("overallTotalSessionTotalLabel"); // Assign ID
+        totalRow.add(overallTotalSessionTotal, 4, 0); // Column index 4 for Total Sessions
 
-        Label totalHoursTotal = new Label("0.0");
-        totalHoursTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
-        totalRow.add(totalHoursTotal, 5, 0);
+        Label overallTotalHoursTotal = new Label("0.0");
+        overallTotalHoursTotal.setFont(Font.font("System", FontWeight.BOLD, 12));
+        overallTotalHoursTotal.setId("overallTotalHoursTotalLabel"); // Assign ID
+        totalRow.add(overallTotalHoursTotal, 5, 0); // Column index 5 for Total Hours
 
         return totalRow;
     }
 
-    private ToggleButton createToggleButton(String text, boolean selected) {
+    private ToggleButton createToggleButton(String text, boolean selected, String viewId) {
         ToggleButton toggleButton = new ToggleButton(text);
         toggleButton.setToggleGroup(periodToggleGroup);
         toggleButton.setSelected(selected);
         toggleButton.setPrefHeight(30);
         toggleButton.setPrefWidth(80);
+        // Store viewId in user data to retrieve it in handler
+        toggleButton.setUserData(viewId);
         return toggleButton;
     }
+
 
     private Button createActionButton(String text, String iconStyle) {
         Button button = new Button(text);
@@ -357,11 +376,29 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
     }
 
     private void setupEventHandlers() {
+        // Search button handler now gets a single year and calls controller.handleSearch
         searchButton.setOnAction(e -> controller.handleSearch(
-                fromYearComboBox.getValue(),
-                toYearComboBox.getValue(),
+                yearComboBox.getValue(), // Get selected year
                 statusComboBox.getValue()
         ));
+
+        // Add listener to the year ComboBox to trigger search when year changes
+        if (yearComboBox != null) {
+            yearComboBox.setOnAction(event -> controller.handleSearch(
+                    yearComboBox.getValue(),
+                    statusComboBox.getValue()
+            ));
+        }
+
+        // Add listener to the status ComboBox to trigger search when status changes
+        if (statusComboBox != null) {
+            statusComboBox.setOnAction(event -> controller.handleSearch(
+                    yearComboBox.getValue(),
+                    statusComboBox.getValue()
+            ));
+        }
+
+
         exportExcelButton.setOnAction(e -> controller.handleExportExcel());
         exportPdfButton.setOnAction(e -> controller.handleExportPdf());
         printButton.setOnAction(e -> controller.handlePrint());
@@ -369,7 +406,8 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
 
     @Override
     public void refreshView() {
-        // Delegate to controller
+        // Delegate to controller, ensuring the current selected filters are used
+        // Call loadData without arguments
         controller.loadData();
     }
 
@@ -377,12 +415,13 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
     public void onActivate() {
         super.onActivate();
 
-        // Restore the correct toggle button state if necessary
+        // Restore the correct toggle button state
         Toggle yearToggle = null;
         for (Toggle toggle : periodToggleGroup.getToggles()) {
             if (toggle instanceof ToggleButton) {
                 ToggleButton tb = (ToggleButton) toggle;
-                if (tb.getText().equals("Năm")) {
+                // Check against the viewId stored in UserData
+                if ("yearly-teaching".equals(tb.getUserData())) {
                     yearToggle = tb;
                     break;
                 }
@@ -393,16 +432,17 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
             periodToggleGroup.selectToggle(yearToggle);
         }
 
-        // Ensure data is up to date
-        refreshView();
+        // Load data for the initially selected year and status when the view becomes active
+        // Call loadData without arguments
+        controller.loadData();
     }
 
     @Override
     public boolean onDeactivate() {
         super.onDeactivate();
 
-        // Clean up resources
-        controller.cleanup();
+        // Clean up resources (if any specific to this view's deactivation)
+        // controller.cleanup(); // Assuming cleanup is handled by the controller's lifecycle
 
         return true;
     }
@@ -418,27 +458,50 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
 
     /**
      * Update the summary row with totals
+     * Now finds labels by ID for robustness.
      */
     public void updateSummary(StatisticsSummaryModel summary) {
-        // Update the totals in the UI
-        Label yearSessionTotal = (Label) totalRow.getChildren().get(2);
-        yearSessionTotal.setText(String.valueOf(summary.getYearSessions()));
+        if (totalRow != null) {
+            // Find labels by ID instead of index
+            Label yearSessionTotalLabel = (Label) totalRow.lookup("#yearSessionTotalLabel");
+            Label yearHoursTotalLabel = (Label) totalRow.lookup("#yearHoursTotalLabel");
+            Label overallTotalSessionTotalLabel = (Label) totalRow.lookup("#overallTotalSessionTotalLabel");
+            Label overallTotalHoursTotalLabel = (Label) totalRow.lookup("#overallTotalHoursTotalLabel");
 
-        Label yearHoursTotal = (Label) totalRow.getChildren().get(3);
-        yearHoursTotal.setText(String.format("%.1f", summary.getYearHours()));
+            // Check if labels were found before updating
+            if (yearSessionTotalLabel != null) {
+                yearSessionTotalLabel.setText(String.valueOf(summary.getYearSessions()));
+            } else {
+                System.err.println("Label with ID 'yearSessionTotalLabel' not found in totalRow.");
+            }
+            if (yearHoursTotalLabel != null) {
+                yearHoursTotalLabel.setText(String.format("%.1f", summary.getYearHours()));
+            } else {
+                System.err.println("Label with ID 'yearHoursTotalLabel' not found in totalRow.");
+            }
+            if (overallTotalSessionTotalLabel != null) {
+                overallTotalSessionTotalLabel.setText(String.valueOf(summary.getTotalSessions()));
+            } else {
+                System.err.println("Label with ID 'overallTotalSessionTotalLabel' not found in totalRow.");
+            }
+            if (overallTotalHoursTotalLabel != null) {
+                overallTotalHoursTotalLabel.setText(String.format("%.1f", summary.getTotalHours()));
+            } else {
+                System.err.println("Label with ID 'overallTotalHoursTotalLabel' not found in totalRow.");
+            }
 
-        Label totalSessionTotal = (Label) totalRow.getChildren().get(4);
-        totalSessionTotal.setText(String.valueOf(summary.getTotalSessions()));
-
-        Label totalHoursTotal = (Label) totalRow.getChildren().get(5);
-        totalHoursTotal.setText(String.format("%.1f", summary.getTotalHours()));
+        } else {
+            System.err.println("Total row GridPane is null. Cannot update summary.");
+        }
     }
 
     /**
      * Update the year label in the table header
      */
     public void updateYearLabel(int year) {
-        yearHeaderLabel.setText(String.valueOf(year));
+        if (yearHeaderLabel != null) {
+            yearHeaderLabel.setText(String.valueOf(year));
+        }
     }
 
     /**
@@ -447,6 +510,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
     public void showExportingMessage(String format) {
         // In a real application, this would show a toast or dialog
         System.out.println("Exporting to " + format + "...");
+        showAlert("Thông báo", "Đang xuất file " + format + "...", Alert.AlertType.INFORMATION);
     }
 
     /**
@@ -455,6 +519,7 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
     public void showPrintingMessage() {
         // In a real application, this would show a toast or dialog
         System.out.println("Preparing to print...");
+        showAlert("Thông báo", "Đang chuẩn bị in...", Alert.AlertType.INFORMATION);
     }
 
     /**
@@ -465,7 +530,29 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         if (navController != null) {
             navController.navigateTo(viewId);
         } else {
-            System.out.println("Navigation controller is null");
+            System.err.println("Navigation controller is null. Cannot navigate to " + viewId);
+            showAlert("Lỗi hệ thống", "Không thể thực hiện điều hướng.", Alert.AlertType.ERROR);
         }
+    }
+
+    /**
+     * Helper method to show alerts.
+     */
+    public void showAlert(String title, String message, Alert.AlertType type) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    // Getter for selected year for controller
+    public int getSelectedYear() {
+        return yearComboBox.getValue();
+    }
+
+    // Getter for selected status for controller
+    public String getSelectedStatus() {
+        return statusComboBox.getValue();
     }
 }

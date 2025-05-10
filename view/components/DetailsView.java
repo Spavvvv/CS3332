@@ -467,7 +467,7 @@ public class DetailsView extends BaseScreenView {
     /**
      * Load session details by ID
      */
-    public boolean loadSession(long sessionId) {
+    public boolean loadSession(String sessionId) {
         boolean loaded = controller.loadSessionDetails(sessionId);
         if (loaded) {
             this.model = controller.getCurrentModel();

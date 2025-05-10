@@ -172,12 +172,12 @@ public class ExamsController {
      */
     public void saveSession(ClassSession session) {
         try {
-            if (session.getId() > 0) {
+            if (session.getId() != null) {
                 // Update existing session
                 classSessionDAO.updateClassSession(session);
             } else {
                 // Create new session
-                long newId = classSessionDAO.createClassSession(session);
+                String newId = classSessionDAO.createClassSession(session);
                 session.setId(newId);
             }
 
