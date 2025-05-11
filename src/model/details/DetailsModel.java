@@ -345,6 +345,14 @@ public class DetailsModel {
     }
 
     /**
+     * Setter for studentData. This method was requested.
+     * @param studentData The new list of student data to set.
+     */
+    public void setStudentData(ObservableList<StudentGradeModel> studentData) {
+        this.studentData = studentData;
+    }
+
+    /**
      * Student Grade Model class for data representation
      */
     public static class StudentGradeModel {

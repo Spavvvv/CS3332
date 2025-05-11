@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.stream.Collectors;
+import java.util.Optional; // Import Optional
 
 /**
  * Màn hình Danh sách vắng học
@@ -72,15 +73,8 @@ public class AbsenceCallScreenView extends BaseScreenView {
     public AbsenceCallScreenView() {
         super("Danh sách vắng học", "absence-call-table");
         // Initialize controller - DAOs should be managed within the controller
-        try {
-            attendanceController = new AttendanceController();
-        } catch (SQLException e) {
-            // Handle the SQLException during controller initialization
-            showError("Lỗi khởi tạo bộ điều khiển điểm danh: " + e.getMessage());
-            e.printStackTrace();
-            // Consider exiting or disabling functionality if controller fails to initialize
-        }
-        selectedDate = LocalDate.now();
+        this.attendanceController = new AttendanceController(); // Initialize the controller
+        this.selectedDate = LocalDate.now();
     }
 
     /**
@@ -299,14 +293,20 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
         TableColumn<Attendance, String> absenceTypeCol = new TableColumn<>("Loại vắng");
         absenceTypeCol.setCellValueFactory(data -> {
+            // Assuming Attendance model has a method like getAbsenceType() or a property representing absence type
+            // If the type is determined by isPresent and hasPermission, you might derive it here.
+            // For now, assuming getAbsenceType() exists.
+            // If not, derive like: data.getValue().isPresent() ? "Có mặt" : (data.getValue().hasPermission() ? "Vắng có phép" : "Vắng không phép")
             String absenceType = data.getValue().getAbsenceType(); // Ensure getAbsenceType exists and returns String
             return new SimpleStringProperty(absenceType != null && !absenceType.isEmpty() ? absenceType : "Không lý do");
         });
+
 
         TableColumn<Attendance, String> parentNameCol = new TableColumn<>("Phụ huynh");
         parentNameCol.setCellValueFactory(data -> {
             Student student = data.getValue().getStudent();
             // Ensure student.getParent() exists and getParent().getName() exists and returns String
+            // This might require the Student model to have a reference to a Parent model or similar structure
             return javafx.beans.binding.Bindings.createStringBinding(
                     () -> student != null && student.getParent() != null ? student.getParent().getName() : ""
             );
@@ -323,63 +323,69 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
         TableColumn<Attendance, Boolean> calledCol = new TableColumn<>("Đã gọi");
         calledCol.setCellValueFactory(data -> {
-            SimpleBooleanProperty prop = new SimpleBooleanProperty(data.getValue().isCalled()); // Ensure isCalled exists
+            // Use SimpleBooleanProperty for editable CheckBoxTableCell
+            SimpleBooleanProperty prop = new SimpleBooleanProperty(data.getValue().isCalled()); // Ensure isCalled() exists on Attendance model
+            // Add listener to update the model and controller when checkbox is toggled
             prop.addListener((obs, oldVal, newVal) -> {
                 // Ensure data.getValue().getId() returns String
                 String attendanceId = data.getValue().getId();
-                if (attendanceController != null && attendanceId != null) {
-                    // Update the attendance record using the controller
-                    attendanceController.markAttendanceCalled(attendanceId, newVal); // Controller method must accept String ID
-                    data.getValue().setCalled(newVal); // Update model after successful controller call
-                    updateProgressBar();
+                if (attendanceController != null && attendanceId != null && newVal != null) {
+                    try {
+                        // Call the controller method to update the database
+                        attendanceController.markAttendanceCalled(attendanceId, newVal);
+                        // If successful, update the model object as well
+                        data.getValue().setCalled(newVal);
+                        updateProgressBar(); // Update progress bar after a change
+                    } catch (SQLException e) {
+                        showError("Lỗi khi cập nhật trạng thái gọi: " + e.getMessage());
+                        e.printStackTrace();
+                        // Revert the checkbox state in the UI if the update fails
+                        // This part is tricky with SimpleBooleanProperty and CheckBoxTableCell listener
+                        // A common pattern is to revert the model's value if the controller call fails
+                        // and potentially refresh the table row or data.
+                        // For simplicity here, we are just showing an error. A more robust solution
+                        // might involve wrapping the controller call in a Task and handling success/failure.
+                        // Reverting the prop state directly here might cause an infinite loop.
+                        // Reverting the model value is safer.
+                        data.getValue().setCalled(oldVal); // Revert model state
+                        // Need to force UI refresh if reverting model state doesn't update the cell automatically
+                        absenceTable.refresh(); // Might be needed depending on how TableView observes changes
+                    }
                 } else {
-                    // Revert the checkbox state if update fails (optional but good practice)
-                    prop.removeListener((obs2, oldVal2, newVal2) -> {}); // Avoid infinite loop
-                    prop.set(oldVal);
-                    prop.addListener((obs2, oldVal2, newVal2) -> {
-                        data.getValue().setCalled(newVal2);
-                        if (attendanceController != null && attendanceId != null) {
-                            attendanceController.markAttendanceCalled(attendanceId, newVal2);
-                            updateProgressBar();
-                        }
-                    });
-                    showError("Không thể cập nhật trạng thái gọi.");
+                    showError("Không thể cập nhật trạng thái gọi. ID điểm danh hoặc giá trị mới không hợp lệ.");
+                    data.getValue().setCalled(oldVal); // Revert model state
+                    absenceTable.refresh();
                 }
             });
             return prop;
         });
         calledCol.setCellFactory(CheckBoxTableCell.forTableColumn(calledCol));
-        calledCol.setEditable(true);
+        calledCol.setEditable(true); // Make the column editable
+
 
         TableColumn<Attendance, String> notesCol = new TableColumn<>("Ghi chú");
-        notesCol.setCellValueFactory(new PropertyValueFactory<>("note")); // Ensure 'note' property exists and is String
-        notesCol.setCellFactory(col -> {
-            TextFieldTableCell<Attendance, String> cell = new TextFieldTableCell<>();
-            cell.setConverter(new javafx.util.StringConverter<String>() {
-                @Override
-                public String toString(String object) {
-                    return object == null ? "" : object;
-                }
-
-                @Override
-                public String fromString(String string) {
-                    return string;
-                }
-            });
-            return cell;
-        });
-        notesCol.setEditable(true);
+        notesCol.setCellValueFactory(new PropertyValueFactory<>("note")); // Ensure 'note' property exists and is String in Attendance model
+        notesCol.setCellFactory(TextFieldTableCell.forTableColumn()); // Use default TextFieldTableCell
+        notesCol.setEditable(true); // Make the column editable
         notesCol.setOnEditCommit(event -> {
             Attendance attendance = event.getRowValue();
-            // Ensure attendance.getId() returns String
-            String attendanceId = attendance.getId();
+            String attendanceId = attendance.getId(); // Ensure getId() returns String
             String newNote = event.getNewValue();
             if (attendanceController != null && attendanceId != null) {
-                attendance.setNote(newNote); // Update model
-                // Update the attendance note using the controller
-                attendanceController.updateAttendanceNote(attendanceId, newNote); // Controller method must accept String ID
+                try {
+                    // Call the controller method to update the database
+                    attendanceController.updateAttendanceNote(attendanceId, newNote);
+                    // If successful, update the model object as well
+                    attendance.setNote(newNote); // Update model
+                } catch (SQLException e) {
+                    showError("Lỗi khi cập nhật ghi chú: " + e.getMessage());
+                    e.printStackTrace();
+                    // Revert the cell value in the UI if the update fails
+                    absenceTable.refresh(); // Refresh table to show original value or handle reversion explicitly
+                }
             } else {
-                showError("Không thể cập nhật ghi chú.");
+                showError("Không thể cập nhật ghi chú. ID điểm danh không hợp lệ.");
+                absenceTable.refresh();
             }
         });
 
@@ -403,6 +409,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
      */
     public void loadAbsenceData() {
         if (attendanceController == null) {
+            System.err.println("AttendanceController is not initialized.");
             absenceData = FXCollections.observableArrayList();
             filteredData = new FilteredList<>(absenceData);
             absenceTable.setItems(filteredData);
@@ -414,20 +421,20 @@ public class AbsenceCallScreenView extends BaseScreenView {
         // Get all teacher's class IDs (Assuming mainController.getTeacherClassIds() returns List<String>)
         List<String> teacherClassIds = new ArrayList<>();
         if (mainController != null) {
-            // Assuming mainController.getTeacherClassIds() now returns List<String>
-            // If it still returns List<Long>, you would need to convert them to String here.
-            // For this fix, we assume it returns List<String>.
-            List<Object> ids = mainController.getTeacherClassIds(); // Assuming it returns List<Object>
-            for (Object id : ids) {
-                if (id instanceof String) {
-                    teacherClassIds.add((String) id);
-                } else if (id != null) {
-                    System.err.println("Unexpected class ID type from mainController: " + id.getClass().getName());
+            // Assuming mainController.getTeacherClassIds() might return List<Object> and contains String IDs
+            List<?> ids = mainController.getTeacherClassIds();
+            if (ids != null) {
+                for (Object id : ids) {
+                    if (id instanceof String) {
+                        teacherClassIds.add((String) id);
+                    } else if (id != null) {
+                        System.err.println("Unexpected class ID type from mainController: " + id.getClass().getName());
+                    }
                 }
             }
         } else {
             System.err.println("mainController is null. Cannot get teacher class IDs.");
-            // Handle case where mainController is null - maybe show an error or load no data
+            showError("Lỗi hệ thống: Không thể lấy danh sách lớp học.");
             absenceData = FXCollections.observableArrayList();
             filteredData = new FilteredList<>(absenceData);
             absenceTable.setItems(filteredData);
@@ -444,7 +451,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
             for (String classId : teacherClassIds) {
                 if (classId == null || classId.trim().isEmpty()) continue; // Skip invalid IDs
 
-                // attendanceController.getClassSessionsByClassId must accept String
+                // attendanceController.getClassSessionsByClassId must accept String and return List<ClassSession>
                 List<ClassSession> classSessions = attendanceController.getClassSessionsByClassId(classId);
 
                 // Filter sessions to match the selected date (exact date match)
@@ -456,10 +463,13 @@ public class AbsenceCallScreenView extends BaseScreenView {
                 // Get attendance for each session on the selected date
                 for (ClassSession session : sessionsOnSelectedDate) {
                     // session.getId() must return String
-                    if (session.getId() == null || session.getId().trim().isEmpty()) continue; // Skip sessions with no ID
+                    if (session.getId() == null || session.getId().trim().isEmpty()) {
+                        System.err.println("Skipping session with null or empty ID for attendance lookup.");
+                        continue; // Skip sessions with no ID
+                    }
 
                     // Get all attendance records for this session
-                    // attendanceController.getAttendanceBySessionId must accept String
+                    // attendanceController.getAttendanceBySessionId must accept String and return List<Attendance>
                     List<Attendance> sessionAttendance = attendanceController.getAttendanceBySessionId(session.getId());
 
                     // Filter to only include absences (where isPresent is false)
@@ -467,26 +477,24 @@ public class AbsenceCallScreenView extends BaseScreenView {
                             .filter(a -> !a.isPresent()) // Requires isPresent() method in Attendance model
                             .collect(Collectors.toList());
 
-                    // Add session and student info to Absence objects if needed for table display
-                    // Assuming Attendance object already links back to Student and ClassSession
+                    // Populate ClassSession and Student details for each attendance record if they are not already populated by the DAO
+                    // This is crucial for the table view to display names and other details
                     absences.forEach(a -> {
-                        if (a.getStudent() == null) {
-                            // Try to set student if not already set (might require fetching student by ID)
-                            // This depends on how your Attendance model is populated
+                        // Check if student and session are already populated
+                        if (a.getStudent() == null || a.getSession() == null) {
                             try {
-                                Student student = attendanceController.getStudentById(a.getStudentId()); // Requires getStudentId() on Attendance and getStudentById(String) on Controller
-                                a.setStudent(student); // Requires setStudent() on Attendance
+                                // Attempt to fetch and set Student and ClassSession if IDs are available
+                                if (a.getStudentId() != null && a.getStudent() == null) {
+                                    Student student = attendanceController.getStudentById(a.getStudentId()); // Requires getStudentId() on Attendance and getStudentById(String) on Controller
+                                    a.setStudent(student); // Requires setStudent() on Attendance
+                                }
+                                if (a.getSessionId() != null && a.getSession() == null) {
+                                    ClassSession sessionObj = attendanceController.getClassSessionById(a.getSessionId()); // Requires getSessionId() on Attendance and getClassSessionById(String) on Controller
+                                    a.setSession(sessionObj); // Requires setSession() on Attendance
+                                }
                             } catch (SQLException e) {
-                                System.err.println("Failed to get student for attendance " + a.getId() + ": " + e.getMessage());
-                            }
-                        }
-                        if (a.getSession() == null) {
-                            // Try to set session if not already set
-                            try {
-                                ClassSession sessionObj = attendanceController.getClassSessionById(a.getSessionId()); // Requires getSessionId() on Attendance and getClassSessionById(String) on Controller
-                                a.setSession(sessionObj); // Requires setSession() on Attendance
-                            } catch (SQLException e) {
-                                System.err.println("Failed to get session for attendance " + a.getId() + ": " + e.getMessage());
+                                System.err.println("Failed to populate student or session for attendance " + a.getId() + ": " + e.getMessage());
+                                // Optionally log this or show an error, but don't stop loading other data
                             }
                         }
                     });
@@ -496,9 +504,10 @@ public class AbsenceCallScreenView extends BaseScreenView {
                 }
             }
         } catch (SQLException e) {
-            showError("Không thể tải dữ liệu vắng học: " + e.getMessage());
+            showError("Lỗi khi tải dữ liệu vắng học từ cơ sở dữ liệu: " + e.getMessage());
             e.printStackTrace(); // Print stack trace for debugging
-            absenceData = FXCollections.observableArrayList(); // Initialize empty list on error
+            // Initialize empty lists on error
+            absenceData = FXCollections.observableArrayList();
             filteredData = new FilteredList<>(absenceData);
             absenceTable.setItems(filteredData);
             updateProgressBar();
@@ -507,7 +516,8 @@ public class AbsenceCallScreenView extends BaseScreenView {
         } catch (Exception e) {
             showError("Lỗi không xác định khi tải dữ liệu vắng học: " + e.getMessage());
             e.printStackTrace();
-            absenceData = FXCollections.observableArrayList(); // Initialize empty list on error
+            // Initialize empty lists on error
+            absenceData = FXCollections.observableArrayList();
             filteredData = new FilteredList<>(absenceData);
             absenceTable.setItems(filteredData);
             updateProgressBar();
@@ -525,7 +535,10 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
 
     private void applyFilters() {
-        if (filteredData == null) return;
+        if (filteredData == null) {
+            System.err.println("filteredData is null in applyFilters.");
+            return;
+        }
 
         filteredData.setPredicate(attendance -> {
             // Ensure attendance, student, and session objects are not null before accessing properties
@@ -533,18 +546,27 @@ public class AbsenceCallScreenView extends BaseScreenView {
             Student student = attendance.getStudent();
             ClassSession session = attendance.getSession();
 
+            // Ensure student and session are populated before accessing their properties for filtering
+            // If they are null, this attendance record likely couldn't be fully loaded, exclude it.
+            if (student == null || session == null) {
+                // Optionally log a warning if a record couldn't be fully populated
+                // System.err.println("Skipping attendance record " + attendance.getId() + " due to unpopulated student or session.");
+                return false;
+            }
+
+
             boolean matchesDayFilter = true;
             boolean matchesCallStatusFilter = true;
             boolean matchesSearchText = true;
 
             // Day filter
             if (!"Tất cả".equals(currentDayFilter)) {
-                if (session != null && session.getDate() != null) {
+                if (session.getDate() != null) {
                     int dayOfWeek = session.getDate().getDayOfWeek().getValue();
                     String dayName = getDayNameFromDayOfWeek(dayOfWeek);
                     matchesDayFilter = currentDayFilter.equals(dayName);
                 } else {
-                    matchesDayFilter = false; // Session or date is null, doesn't match specific day
+                    matchesDayFilter = false; // Session date is null, doesn't match specific day
                 }
             }
 
@@ -557,38 +579,28 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
             // Search text filter
             if (!currentSearchText.isEmpty()) {
-                boolean nameMatches = student != null &&
-                        student.getName() != null &&
-                        student.getName().toLowerCase().contains(currentSearchText);
+                String lowerSearchText = currentSearchText.toLowerCase();
 
-                boolean parentMatches = student != null &&
-                        student.getParent() != null &&
-                        student.getParent().getName() != null && // Requires getParent().getName()
-                        student.getParent().getName().toLowerCase().contains(currentSearchText);
+                boolean nameMatches = student.getName() != null && student.getName().toLowerCase().contains(lowerSearchText);
 
-                boolean contactMatches = student != null &&
-                        student.getContactNumber() != null && // Requires getContactNumber()
-                        student.getContactNumber().toLowerCase().contains(currentSearchText);
+                // Check parent existence and then parent name
+                boolean parentMatches = student.getParent() != null &&
+                        student.getParent().getName() != null &&
+                        student.getParent().getName().toLowerCase().contains(lowerSearchText);
+
+                boolean contactMatches = student.getContactNumber() != null && student.getContactNumber().toLowerCase().contains(lowerSearchText);
 
 
-                boolean classMatches = session != null &&
-                        session.getClassName() != null && // Requires getClassName()
-                        session.getClassName().toLowerCase().contains(currentSearchText);
+                boolean classMatches = session.getClassName() != null && session.getClassName().toLowerCase().contains(lowerSearchText);
 
-                // Note: The controller's searchSessions method was designed to search the main session list,
-                // not necessarily filter a list of attendance records by session properties.
-                // For this view, direct matching on student/session properties is more appropriate.
-                // Removing the call to attendanceController.searchSessions here.
-                // If complex search on sessions is needed, the controller might need a different method.
-
-
+                // Match if any of the conditions are true
                 matchesSearchText = nameMatches || parentMatches || contactMatches || classMatches;
             }
 
             return matchesDayFilter && matchesCallStatusFilter && matchesSearchText;
         });
 
-        updateProgressBar();
+        updateProgressBar(); // Update progress bar based on filtered data
     }
 
     private String getDayNameFromDayOfWeek(int dayOfWeek) {
@@ -605,7 +617,12 @@ public class AbsenceCallScreenView extends BaseScreenView {
     }
 
     private void updateProgressBar() {
-        if (filteredData == null) return;
+        if (filteredData == null) {
+            callProgressBar.setProgress(0);
+            callProgressLabel.setText("0/0 (0%)");
+            totalAbsencesLabel.setText("Tổng số vắng: 0");
+            return;
+        }
 
         int total = filteredData.size();
         int called = (int) filteredData.stream().filter(Attendance::isCalled).count(); // Requires isCalled()
@@ -620,26 +637,37 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
     public void handleExportToExcel() {
         if (attendanceController != null && filteredData != null) {
+            // Get the data from the filtered list, which is currently displayed
             List<Attendance> dataToExport = new ArrayList<>(filteredData);
+
+            if (dataToExport.isEmpty()) {
+                showInfo("Không có dữ liệu để xuất.");
+                return;
+            }
+
             // Include the selected date in the filename
             String filename = "danh_sach_vang_" + selectedDate.format(DateTimeFormatter.ofPattern("dd_MM_yyyy")) + ".xlsx";
 
             try {
-                // Ensure the controller has an export method that accepts a List<Attendance>
-                // and uses the provided filename.
-                // For example: attendanceController.exportAbsencesToExcel(dataToExport, filename);
-                showError("Chức năng xuất Excel chưa được triển khai hoàn toàn trong bộ điều khiển.");
-                // If the controller method existed and returned boolean:
-                // boolean success = attendanceController.exportAbsencesToExcel(dataToExport, filename);
-                // if (success) {
-                //     showInfo("Xuất Excel thành công: " + filename);
-                // } else {
-                //     showError("Không thể xuất dữ liệu Excel.");
-                // }
-            } catch (Exception e) {
-                showError("Lỗi khi xuất Excel: " + e.getMessage());
+                // Call the controller method to handle the export logic
+                // Assuming the controller has a method like exportAbsencesToExcel that takes List<Attendance> and filename
+                // Note: This method does not exist in the AttendanceController code provided previously.
+                // A placeholder call is added, and you would need to implement this method in your controller.
+                boolean success = false;
+
+                        //attendanceController.exportAbsencesToExcel(dataToExport, filename); // This method needs to be implemented in AttendanceController
+
+                if (success) {
+                    showInfo("Xuất Excel thành công vào tệp: " + filename);
+                    // Optionally, provide a way for the user to open the file
+                } else {
+                    showError("Không thể xuất dữ liệu Excel. Vui lòng kiểm tra log để biết chi tiết.");
+                }
+            } catch (Exception e) { // Catch any other unexpected exceptions
+                showError("Lỗi không xác định khi xuất Excel: " + e.getMessage());
                 e.printStackTrace();
             }
+
         } else {
             showError("Không thể xuất dữ liệu. Bộ điều khiển hoặc dữ liệu không khả dụng.");
         }
@@ -648,8 +676,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
     public void setupActionHandlers() {
         exportExcelButton.setOnAction(e -> handleExportToExcel());
 
-        // Removed the searchField.setOnAction as it's handled in createFilterSection
-        // The searchButton handler is sufficient.
+        // The searchButton handler is already set up in createFilterSection
     }
 
     @Override
@@ -657,18 +684,20 @@ public class AbsenceCallScreenView extends BaseScreenView {
         switch (actionId) {
             case "exportExcel":
                 handleExportToExcel();
-                return true;
+                return true; // Indicate action was handled
             case "refresh":
                 loadAbsenceData(); // Reload data explicitly
-                return true;
+                return true; // Indicate action was handled
             case "search":
                 if (params instanceof String) {
                     searchField.setText((String) params);
                     currentSearchText = searchField.getText().trim().toLowerCase();
                     applyFilters();
+                    return true; // Indicate action was handled
                 }
-                return true;
+                return false; // Indicate action was not handled as expected
             default:
+                // Let the base class handle unknown actions
                 return super.handleAction(actionId, params);
         }
     }
@@ -689,38 +718,30 @@ public class AbsenceCallScreenView extends BaseScreenView {
         // Add other relevant system messages here
     }
 
+    // Placeholder method - implement this logic if needed
     private ImageView createButtonIcon(String iconName, String color) {
         // Placeholder for icon creation - you need actual icon loading logic here
         // Example using Rectangle as a placeholder:
         Rectangle rect = new Rectangle(16, 16);
-        // You would map iconName to a specific shape or graphic
-        // For now, just color the rectangle
         try {
             rect.setFill(Color.web(color));
         } catch (IllegalArgumentException e) {
             rect.setFill(Color.BLACK); // Default color if color string is invalid
         }
-
-
+        // This placeholder does not return an ImageView suitable for setGraphic(arrow) if the graphic is expected to be an ImageView
+        // Returning null or a dummy ImageView here, actual icon loading needs to be implemented
         ImageView imageView = new ImageView();
         imageView.setFitHeight(16);
         imageView.setFitWidth(16);
-        imageView.setPickOnBounds(true); // Allows clicking the transparent parts
-
         // In a real app, load image:
         // try {
-        //     Image iconImage = new Image("/icons/" + iconName + "_" + color + ".png"); // Assuming icons are named like this
+        //     Image iconImage = new Image(getClass().getResourceAsStream("/icons/" + iconName + ".png")); // Assuming icons are named like this
         //     imageView.setImage(iconImage);
-        // } catch (IllegalArgumentException e) {
-        //     System.err.println("Could not load icon: /icons/" + iconName + "_" + color + ".png");
-        //     // Fallback to a default graphic or leave it empty
-        //     imageView.setImage(null);
+        // } catch (Exception e) {
+        //     System.err.println("Could not load icon: " + iconName);
+        //     // Fallback: maybe use a default image or leave empty
         // }
-
-        // Returning the placeholder rectangle for now
-        // If you want ImageView, you'd need to load an actual image into it.
-        return imageView; // This will return an empty ImageView if image loading fails
-        // return new ImageView(new Image(getClass().getResourceAsStream("/icons/" + iconName + ".png"))); // Example loading from resources
+        return imageView; // Returns an empty or image-loaded ImageView
     }
 
     /**
@@ -744,6 +765,18 @@ public class AbsenceCallScreenView extends BaseScreenView {
         alert.setContentText(message);
         alert.showAndWait();
     }
+
+    /**
+     * Shows a simple info dialog.
+     */
+    public void showInfo(String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Thông báo");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
 
     @Override
     public void onActivate() {

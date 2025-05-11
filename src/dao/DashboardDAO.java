@@ -6,6 +6,7 @@ import javafx.scene.chart.PieChart;
 import src.model.ClassSession;
 import src.model.system.schedule.ScheduleItem;
 import utils.DatabaseConnection;
+import src.model.system.course.Course;
 
 import java.sql.*;
 import java.time.LocalDate;
@@ -16,172 +17,176 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
+/**
+ * Data Access Object for retrieving Dashboard-related data.
+ * Manages its own database connections per public operation.
+ */
 public class DashboardDAO {
 
+    private static final Logger LOGGER = Logger.getLogger(DashboardDAO.class.getName());
+
     /**
-     * Adds a new dashboard event (schedule item) to the database
+     * Constructor.
+     */
+    public DashboardDAO() {
+        // No dependencies to inject for this DAO based on current implementation
+    }
+
+    /**
+     * Adds a new dashboard event (schedule item) to the database.
+     * Assumes the 'schedules' table exists with appropriate columns.
      *
      * @param scheduleItem The schedule item to add
      * @return true if successful, false otherwise
-     * @throws SQLException if a database error occurs
      */
-    public boolean addDashboardEvent(ScheduleItem scheduleItem) throws SQLException {
+    public boolean addDashboardEvent(ScheduleItem scheduleItem) {
         // Query updated to match the actual table structure, assuming 'schedules' table
         // has columns: name, description, start_time, end_time, schedule_type
         String query = "INSERT INTO schedules (name, description, start_time, end_time, schedule_type) VALUES (?, ?, ?, ?, ?)";
-        Connection conn = null;
-        PreparedStatement stmt = null;
 
-        try {
-            conn = DatabaseConnection.getConnection();
-            stmt = conn.prepareStatement(query);
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
 
-            // Using getTitle() and getDescription() as implied by controller logic
-            stmt.setString(1, scheduleItem.getTitle());
-            stmt.setString(2, scheduleItem.getDescription());
+            stmt.setString(1, scheduleItem.getTitle()); // Assuming getTitle() maps to 'name'
+            stmt.setString(2, scheduleItem.getDescription()); // Assuming getDescription() maps to 'description'
 
             // Convert LocalDateTime to Timestamp for database
             stmt.setTimestamp(3, Timestamp.valueOf(scheduleItem.getStartTime()));
             stmt.setTimestamp(4, Timestamp.valueOf(scheduleItem.getEndTime()));
 
-            // Default value for schedule_type as seen in the query structure
-            stmt.setString(5, "event"); // Assuming a default type 'event'
+            // Assuming a default type 'event' based on the query structure
+            stmt.setString(5, "event");
 
             int rowsAffected = stmt.executeUpdate();
             return rowsAffected > 0;
-        } finally {
-            if (stmt != null) stmt.close();
-            if (conn != null) conn.close();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error adding dashboard event: " + (scheduleItem != null ? scheduleItem.getTitle() : "null"), e);
+            return false;
         }
     }
 
     /**
-     * Retrieves today's class sessions from the database
+     * Retrieves today's class sessions from the database.
+     * Assumes 'class_sessions' table contains necessary denormalized fields.
      *
      * @return List of today's class sessions
-     * @throws SQLException if a database error occurs
      */
-    public List<ClassSession> getTodayClasses() throws SQLException {
-        // Assuming class_sessions table contains denormalized fields course_name, teacher_name, room
+    public List<ClassSession> getTodayClasses() {
+        // Adjusted query to select session_id explicitly and match column names used below
         String query = "SELECT c.session_id, c.course_name, c.teacher_name, c.room, c.class_date, " +
                 "c.start_time, c.end_time, c.class_id FROM class_sessions c " +
                 "WHERE c.class_date = ?";
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
         List<ClassSession> classes = new ArrayList<>();
 
-        try {
-            conn = DatabaseConnection.getConnection();
-            stmt = conn.prepareStatement(query);
+        try (Connection conn = DatabaseConnection.getConnection(); // Assuming DatabaseConnection is correctly implemented
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+
             stmt.setDate(1, java.sql.Date.valueOf(LocalDate.now()));
 
-            rs = stmt.executeQuery();
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    // Retrieve data from the ResultSet, using correct column names
+                    String id = rs.getString("session_id"); // Match query column name
+                    String courseName = rs.getString("course_name");
+                    String teacher = rs.getString("teacher_name");
+                    String room = rs.getString("room");
 
-            while (rs.next()) {
-                // Mapping columns to ClassSession constructor parameters
-                String id = rs.getString("id");
-                String courseName = rs.getString("course_name");
-                String teacher = rs.getString("teacher_name");
-                String room = rs.getString("room");
-                LocalDate date = rs.getDate("class_date").toLocalDate();
-                LocalTime startTime = rs.getTime("start_time").toLocalTime();
-                LocalTime endTime = rs.getTime("end_time").toLocalTime();
-                String classId = rs.getString("class_id"); // Assuming this maps to a class/grouping ID
+                    // Check for null dates and times before converting
+                    Date dateDb = rs.getDate("class_date");
+                    LocalDate date = (dateDb != null) ? dateDb.toLocalDate() : null;
 
-                // Create ClassSession object - ensure your ClassSession model matches these fields
-                ClassSession classSession = new ClassSession(id, courseName, teacher, room, date, startTime, endTime, classId);
-                classes.add(classSession);
+                    Time startTimeDb = rs.getTime("start_time");
+                    LocalTime startTime = (startTimeDb != null) ? startTimeDb.toLocalTime() : null;
+
+                    Time endTimeDb = rs.getTime("end_time");
+                    LocalTime endTime = (endTimeDb != null) ? endTimeDb.toLocalTime() : null;
+
+                    String classId = rs.getString("class_id"); // Assuming this links to Class/Course
+
+                    // Create a minimal Course object with available information
+                    // Assuming class_id from the database maps to the Course ID or similar identifier
+                    Course course = new Course();
+                    course.setCourseId(classId); // Using class_id as a Course identifier
+                    course.setCourseName(courseName);
+
+                    // Create ClassSession object using the appropriate constructor
+                    // Assuming ClassSession has a constructor like:
+                    // ClassSession(String id, Course course, String teacher, String room, LocalDate date, LocalTime startTime, LocalTime endTime, String classId)
+                    ClassSession classSession = new ClassSession(id, course, teacher, room, date, startTime, endTime, classId);
+
+                    classes.add(classSession);
+                }
             }
-
             return classes;
-        } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (conn != null) conn.close();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error retrieving today's class sessions.", e);
+            return new ArrayList<>(); // Return empty list on error
         }
     }
 
+
     /**
-     * Gets the total number of students in the system
+     * Gets the total number of students in the system with 'active' status.
+     * Assumes 'students' table has 'status' column.
      *
-     * @return The total number of students
-     * @throws SQLException if a database error occurs
+     * @return The total number of active students
      */
-    public int getTotalStudents() throws SQLException {
-        // Assuming 'students' table has a 'status' column
+    public int getTotalStudents() {
         String query = "SELECT COUNT(*) FROM students WHERE status = 'active'";
-        Connection conn = null;
-        Statement stmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = DatabaseConnection.getConnection();
-            stmt = conn.createStatement();
-            rs = stmt.executeQuery(query);
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
 
             if (rs.next()) {
                 return rs.getInt(1);
             }
             return 0;
-        } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (conn != null) conn.close();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error getting total active students.", e);
+            return 0; // Return 0 on error
         }
     }
 
     /**
-     * Gets the total number of classes in the system
+     * Gets the total number of classes in the system with 'active' status.
+     * Assumes 'classes' table has 'status' column.
      *
-     * @return The total number of classes
-     * @throws SQLException if a database error occurs
+     * @return The total number of active classes
      */
-    public int getTotalClasses() throws SQLException {
-        // Assuming 'classes' table has a 'status' column
+    public int getTotalClasses() {
         String query = "SELECT COUNT(*) FROM classes WHERE status = 'active'";
-        Connection conn = null;
-        Statement stmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = DatabaseConnection.getConnection();
-            stmt = conn.createStatement();
-            rs = stmt.executeQuery(query);
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
 
             if (rs.next()) {
                 return rs.getInt(1);
             }
             return 0;
-        } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (conn != null) conn.close();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error getting total active classes.", e);
+            return 0; // Return 0 on error
         }
     }
 
     /**
-     * Gets the attendance rate across all classes based on 'Present' status
+     * Gets the attendance rate across all recorded attendance based on 'Present' status.
+     * Assumes 'attendance' table has 'status' column.
      *
-     * @return The attendance rate as a percentage
-     * @throws SQLException if a database error occurs
+     * @return The attendance rate as a percentage (0.0 if no attendance records)
      */
-    public double getAttendanceRate() throws SQLException {
-        // Fixed the query to check for status = 'Present'
+    public double getAttendanceRate() {
         String query = "SELECT " +
-                "(SELECT COUNT(*) FROM attendance WHERE status = 'Present') AS present_count, " + // Assuming 'Present' is the status
+                "(SELECT COUNT(*) FROM attendance WHERE status = 'Present') AS present_count, " + // Assuming 'Present' status
                 "(SELECT COUNT(*) FROM attendance) AS total_count";
 
-        Connection conn = null;
-        Statement stmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = DatabaseConnection.getConnection();
-            stmt = conn.createStatement();
-            rs = stmt.executeQuery(query);
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
 
             if (rs.next()) {
                 int presentCount = rs.getInt("present_count");
@@ -192,36 +197,32 @@ public class DashboardDAO {
                 }
             }
             return 0.0;
-        } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (conn != null) conn.close();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error getting attendance rate.", e);
+            return 0.0; // Return 0.0 on error
         }
     }
 
     /**
-     * Gets the course distribution data for the pie chart
+     * Gets the course distribution data for a pie chart.
+     * Assumes 'courses' table has 'course_name' and 'course_id' as PK,
+     * and 'class_sessions' table links via 'course_id'.
      *
      * @return ObservableList of PieChart.Data for the course distribution
-     * @throws SQLException if a database error occurs
      */
-    public ObservableList<PieChart.Data> getCourseDistribution() throws SQLException {
+    public ObservableList<PieChart.Data> getCourseDistribution() {
         // Adjusted JOIN condition to use courses.course_id as primary key,
         // assuming class_sessions links to courses via course_id column
         String query = "SELECT c.course_name, COUNT(cs.course_id) as class_count " +
                 "FROM courses c " +
-                "JOIN class_sessions cs ON c.course_id = cs.course_id " + // Assumes courses PK is course_id
+                "JOIN class_sessions cs ON c.course_id = cs.course_id " + // Assumes courses PK is course_id and class_sessions foreign key is course_id
                 "GROUP BY c.course_name";
 
-        Connection conn = null;
-        Statement stmt = null;
-        ResultSet rs = null;
         ObservableList<PieChart.Data> pieChartData = FXCollections.observableArrayList();
 
-        try {
-            conn = DatabaseConnection.getConnection();
-            stmt = conn.createStatement();
-            rs = stmt.executeQuery(query);
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
 
             while (rs.next()) {
                 String courseName = rs.getString("course_name");
@@ -231,58 +232,52 @@ public class DashboardDAO {
             }
 
             return pieChartData;
-        } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (conn != null) conn.close();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error getting course distribution data.", e);
+            return FXCollections.observableArrayList(); // Return empty list on error
         }
     }
 
     /**
-     * Gets upcoming schedule data for the dashboard
+     * Gets upcoming schedule data for the dashboard.
+     * Assumes 'schedules' table has columns id, name, description, start_time, end_time, schedule_type.
+     * Retrieves events starting from the current timestamp.
      *
      * @param limit Maximum number of records to return
      * @return List of Object arrays containing schedule data
-     * @throws SQLException if a database error occurs
      */
-    public List<Object[]> getUpcomingSchedulesData(int limit) throws SQLException {
-        // Assuming 'schedules' table has columns id, name, description, start_time, end_time, schedule_type
+    public List<Object[]> getUpcomingSchedulesData(int limit) {
         String query = "SELECT id, name, description, start_time, end_time, schedule_type " +
                 "FROM schedules " +
                 "WHERE start_time >= CURRENT_TIMESTAMP " +
                 "ORDER BY start_time " +
                 "LIMIT ?";
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
         List<Object[]> scheduleData = new ArrayList<>();
 
-        try {
-            conn = DatabaseConnection.getConnection();
-            stmt = conn.prepareStatement(query);
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+
             stmt.setInt(1, limit);
 
-            rs = stmt.executeQuery();
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    // Populate Object array matching the likely expectation (e.g., for TableView)
+                    Object[] row = new Object[6];
+                    row[0] = rs.getString("id"); // Assuming id is String
+                    row[1] = rs.getString("name");
+                    row[2] = rs.getString("description");
+                    row[3] = rs.getTimestamp("start_time"); // Timestamp for conversion to LocalDateTime
+                    row[4] = rs.getTimestamp("end_time");   // Timestamp for conversion to LocalDateTime
+                    row[5] = rs.getString("schedule_type");
 
-            while (rs.next()) {
-                // Populate Object array matching the controller's expectation
-                Object[] row = new Object[6];
-                row[0] = rs.getString("id"); // Assuming id is stored/retrieved as String if ScheduleItem id is String
-                row[1] = rs.getString("name");
-                row[2] = rs.getString("description");
-                row[3] = rs.getTimestamp("start_time"); // Timestamp for conversion to LocalDateTime in controller
-                row[4] = rs.getTimestamp("end_time");   // Timestamp for conversion to LocalDateTime in controller
-                row[5] = rs.getString("schedule_type");
-
-                scheduleData.add(row);
+                    scheduleData.add(row);
+                }
             }
-
             return scheduleData;
-        } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (conn != null) conn.close();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error getting upcoming schedules data.", e);
+            return new ArrayList<>(); // Return empty list on error
         }
     }
 }

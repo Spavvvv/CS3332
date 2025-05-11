@@ -4,6 +4,7 @@ import src.dao.TeachingStatisticsDAO;
 import javafx.collections.ObservableList;
 import src.model.teaching.TeacherStatisticsModel;
 import src.model.teaching.TeachingStatisticsFilter;
+import utils.DaoManager; // Import DaoManager
 
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -16,21 +17,16 @@ public class TeachingStatisticsController {
 
     public TeachingStatisticsController() {
         this.filter = new TeachingStatisticsFilter();
-        this.teachingStatisticsDAO = new TeachingStatisticsDAO();
+        // Get TeachingStatisticsDAO instance from DaoManager
+        this.teachingStatisticsDAO = DaoManager.getInstance().getTeachingStatisticsDAO();
     }
 
     public ObservableList<TeacherStatisticsModel> getTeacherStatistics() {
-        try {
-            return teachingStatisticsDAO.getTeacherStatistics(
-                    filter.getFromDate(),
-                    filter.getToDate(),
-                    filter.getStatus()
-            );
-        } catch (SQLException e) {
-            System.err.println("Error fetching teacher statistics: " + e.getMessage());
-            e.printStackTrace();
-            return null;
-        }
+        return teachingStatisticsDAO.getTeacherStatistics(
+                filter.getFromDate(),
+                filter.getToDate(),
+                filter.getStatus()
+        );
     }
 
     public TeachingStatisticsFilter getFilter() {

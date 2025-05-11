@@ -6,31 +6,46 @@ import utils.DatabaseConnection;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional; // Using Optional for findById
+import java.util.logging.Level;
+import java.util.logging.Logger; // Using Logger instead of System.err
 
 /**
  * Data Access Object for Classroom entity.
  * Provides methods to interact with the classroom table in the database.
+ * Each public method manages its own database connection.
  */
 public class ClassroomDAO {
+
+    private static final Logger LOGGER = Logger.getLogger(ClassroomDAO.class.getName());
+
+    /**
+     * Constructor.
+     */
+    public ClassroomDAO() {
+        // No dependencies to inject for this DAO based on current implementation
+    }
 
     /**
      * Retrieves all classrooms from the database.
      *
-     * @return List of all classrooms
+     * @return List of all classrooms, or an empty list if an error occurs.
      */
     public List<Classroom> findAll() {
         List<Classroom> classrooms = new ArrayList<>();
-        String sql = "SELECT * FROM rooms ORDER BY code";
+        String sql = "SELECT id, code, name, floor, capacity, status FROM rooms ORDER BY code"; // Explicitly list columns
 
-        try {
-            ResultSet rs = DatabaseConnection.executeQuery(sql);
+        try (Connection conn = DatabaseConnection.getConnection(); // Get connection
+             PreparedStatement stmt = conn.prepareStatement(sql); // Use PreparedStatement even for no params for consistency
+             ResultSet rs = stmt.executeQuery()) { // Execute query
+
             int stt = 1;
             while (rs.next()) {
                 classrooms.add(extractClassroomFromResultSet(rs, stt++));
             }
-            rs.close();
         } catch (SQLException e) {
-            System.err.println("Error retrieving classrooms: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error retrieving classrooms", e);
+            // Return empty list on error
         }
 
         return classrooms;
@@ -39,42 +54,57 @@ public class ClassroomDAO {
     /**
      * Finds classrooms matching the specified search criteria.
      *
-     * @param keyword Keyword to search for in classroom data
-     * @param status Status filter
-     * @return List of matching classrooms
+     * @param keyword Keyword to search for in classroom data (code, name, floor)
+     * @param status Status filter ("All" means no filter)
+     * @return List of matching classrooms, or an empty list if an error occurs.
      */
     public List<Classroom> findBySearchCriteria(String keyword, String status) {
         List<Classroom> classrooms = new ArrayList<>();
         List<Object> params = new ArrayList<>();
 
-        StringBuilder sql = new StringBuilder("SELECT * FROM rooms WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT id, code, name, floor, capacity, status FROM rooms WHERE 1=1"); // Explicitly list columns
 
         // Add search conditions
-        if (keyword != null && !keyword.isEmpty()) {
-            sql.append(" AND (code LIKE ? OR name LIKE ? OR CAST(floor AS CHAR) LIKE ?)");
-            String searchPattern = "%" + keyword + "%";
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            // Using OR for multiple column search, casting floor to CHAR/VARCHAR if needed by DB
+            sql.append(" AND (LOWER(code) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?) OR CAST(floor AS VARCHAR) LIKE ?)"); // Use LOWER for case-insensitive search
+            String searchPattern = "%" + keyword.trim() + "%";
             params.add(searchPattern);
             params.add(searchPattern);
-            params.add(searchPattern);
+            params.add(searchPattern); // Match VARCHAR type for floor search
         }
 
         // Add status filter
-        if (status != null && !status.equals("All")) {
+        if (status != null && !status.equals("All") && !status.trim().isEmpty()) {
             sql.append(" AND status = ?");
             params.add(status);
         }
 
         sql.append(" ORDER BY code");
 
-        try {
-            ResultSet rs = DatabaseConnection.executeQuery(sql.toString(), params.toArray());
-            int stt = 1;
-            while (rs.next()) {
-                classrooms.add(extractClassroomFromResultSet(rs, stt++));
+        try (Connection conn = DatabaseConnection.getConnection(); // Get connection
+             PreparedStatement stmt = conn.prepareStatement(sql.toString())) { // Prepare statement
+
+            // Set parameters based on the dynamic query
+            for (int i = 0; i < params.size(); i++) {
+                Object param = params.get(i);
+                if (param instanceof String) {
+                    stmt.setString(i + 1, (String) param);
+                } else if (param instanceof Integer) {
+                    stmt.setInt(i + 1, (Integer) param);
+                }
+                // Add more types if needed
             }
-            rs.close();
+
+            try (ResultSet rs = stmt.executeQuery()) { // Execute query
+                int stt = 1;
+                while (rs.next()) {
+                    classrooms.add(extractClassroomFromResultSet(rs, stt++));
+                }
+            }
         } catch (SQLException e) {
-            System.err.println("Error searching classrooms: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error searching classrooms", e);
+            // Return empty list on error
         }
 
         return classrooms;
@@ -84,131 +114,153 @@ public class ClassroomDAO {
      * Finds a classroom by its ID.
      *
      * @param id The ID of the classroom to find
-     * @return The found classroom, or null if not found
+     * @return An Optional containing the found classroom, or empty if not found or an error occurs.
      */
-    public Classroom findById(int id) {
-        String sql = "SELECT * FROM rooms WHERE id = ?";
+    public Optional<Classroom> findById(int id) {
+        String sql = "SELECT id, code, name, floor, capacity, status FROM rooms WHERE id = ?"; // Explicitly list columns
 
-        try {
-            ResultSet rs = DatabaseConnection.executeQuery(sql, id);
-            if (rs.next()) {
-                Classroom classroom = extractClassroomFromResultSet(rs, 1);
-                rs.close();
-                return classroom;
+        try (Connection conn = DatabaseConnection.getConnection(); // Get connection
+             PreparedStatement stmt = conn.prepareStatement(sql)) { // Prepare statement
+
+            stmt.setInt(1, id);
+
+            try (ResultSet rs = stmt.executeQuery()) { // Execute query
+                if (rs.next()) {
+                    return Optional.of(extractClassroomFromResultSet(rs, 1)); // Return Optional with found classroom
+                }
             }
-            rs.close();
         } catch (SQLException e) {
-            System.err.println("Error finding classroom by ID: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error finding classroom by ID: " + id, e);
+            // Return empty optional on error
         }
 
-        return null;
+        return Optional.empty(); // Return empty optional if not found or error
     }
 
     /**
      * Saves a classroom to the database.
-     * If ID is 0, inserts a new record; otherwise updates existing one.
+     * If ID is 0, inserts a new record and sets the generated ID; otherwise updates existing one.
      *
      * @param classroom The classroom to save
-     * @return The saved classroom with updated ID (if inserted)
+     * @return The saved classroom with updated ID (if inserted), or null if the operation failed.
      */
     public Classroom save(Classroom classroom) {
-        try {
+        if (classroom == null) {
+            LOGGER.warning("Attempted to save a null classroom.");
+            return null;
+        }
+
+        try (Connection conn = DatabaseConnection.getConnection()) { // Get connection
             if (classroom.getId() == 0) {
                 // Insert new classroom
                 String sql = "INSERT INTO rooms (code, name, floor, capacity, status) VALUES (?, ?, ?, ?, ?)";
 
-                // Use prepared statement to get generated keys
-                Connection conn = DatabaseConnection.getConnection();
-                PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-                stmt.setString(1, classroom.getMa());
-                stmt.setString(2, classroom.getTen());
-                stmt.setInt(3, classroom.getTang());
-                stmt.setInt(4, classroom.getSucChua());
-                stmt.setString(5, classroom.getTrangThai());
+                try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) { // Prepare statement and request generated keys
+                    stmt.setString(1, classroom.getMa());
+                    stmt.setString(2, classroom.getTen());
+                    stmt.setInt(3, classroom.getTang());
+                    stmt.setInt(4, classroom.getSucChua());
+                    stmt.setString(5, classroom.getTrangThai());
 
-                int affectedRows = stmt.executeUpdate();
+                    int affectedRows = stmt.executeUpdate();
 
-                if (affectedRows == 0) {
-                    throw new SQLException("Creating classroom failed, no rows affected.");
+                    if (affectedRows == 0) {
+                        throw new SQLException("Creating classroom failed, no rows affected.");
+                    }
+
+                    try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                        if (generatedKeys.next()) {
+                            int id = generatedKeys.getInt(1);
+                            classroom.setId(id); // Set the generated ID back to the object
+                        } else {
+                            throw new SQLException("Creating classroom failed, no ID obtained.");
+                        }
+                    }
                 }
-
-                ResultSet generatedKeys = stmt.getGeneratedKeys();
-                if (generatedKeys.next()) {
-                    int id = generatedKeys.getInt(1);
-                    classroom.setId(id);
-                } else {
-                    throw new SQLException("Creating classroom failed, no ID obtained.");
-                }
-                generatedKeys.close();
-                stmt.close();
             } else {
                 // Update existing classroom
                 String sql = "UPDATE rooms SET code=?, name=?, floor=?, capacity=?, status=? WHERE id=?";
 
-                int affectedRows = DatabaseConnection.executeUpdate(sql,
-                        classroom.getMa(),
-                        classroom.getTen(),
-                        classroom.getTang(),
-                        classroom.getSucChua(),
-                        classroom.getTrangThai(),
-                        classroom.getId()
-                );
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) { // Prepare statement
+                    stmt.setString(1, classroom.getMa());
+                    stmt.setString(2, classroom.getTen());
+                    stmt.setInt(3, classroom.getTang());
+                    stmt.setInt(4, classroom.getSucChua());
+                    stmt.setString(5, classroom.getTrangThai());
+                    stmt.setInt(6, classroom.getId());
 
-                if (affectedRows == 0) {
-                    System.err.println("Classroom update failed, no matching ID found.");
-                    return null;
+                    int affectedRows = stmt.executeUpdate();
+
+                    if (affectedRows == 0) {
+                        LOGGER.warning("Classroom update failed, no matching ID found for ID: " + classroom.getId());
+                        return null; // Indicate update failed if no rows affected
+                    }
                 }
             }
 
-            return classroom;
+            return classroom; // Return the classroom object (with updated ID if inserted)
         } catch (SQLException e) {
-            System.err.println("Error saving classroom: " + e.getMessage());
-            return null;
+            LOGGER.log(Level.SEVERE, "Error saving classroom: " + (classroom != null ? classroom.getMa() : "null"), e);
+            return null; // Indicate failure
         }
     }
 
     /**
-     * Updates the status of a classroom.
+     * Updates the status of a classroom by ID.
      *
      * @param id The ID of the classroom to update
      * @param newStatus The new status value
-     * @return true if successful, false otherwise
+     * @return true if successful (at least one row updated), false otherwise
      */
     public boolean updateStatus(int id, String newStatus) {
+        if (newStatus == null || newStatus.trim().isEmpty()) {
+            LOGGER.warning("Attempted to update classroom status to null or empty for ID: " + id);
+            return false;
+        }
         String sql = "UPDATE rooms SET status=? WHERE id=?";
 
-        try {
-            int affectedRows = DatabaseConnection.executeUpdate(sql, newStatus, id);
-            return affectedRows > 0;
+        try (Connection conn = DatabaseConnection.getConnection(); // Get connection
+             PreparedStatement stmt = conn.prepareStatement(sql)) { // Prepare statement
+
+            stmt.setString(1, newStatus);
+            stmt.setInt(2, id);
+
+            int affectedRows = stmt.executeUpdate();
+            return affectedRows > 0; // Return true if at least one row was updated
         } catch (SQLException e) {
-            System.err.println("Error updating classroom status: " + e.getMessage());
-            return false;
+            LOGGER.log(Level.SEVERE, "Error updating classroom status for ID: " + id, e);
+            return false; // Indicate failure
         }
     }
 
     /**
-     * Deletes a classroom from the database.
+     * Deletes a classroom from the database by ID.
      *
      * @param id The ID of the classroom to delete
-     * @return true if successful, false otherwise
+     * @return true if successful (at least one row deleted), false otherwise
      */
     public boolean delete(int id) {
         String sql = "DELETE FROM rooms WHERE id=?";
 
-        try {
-            int affectedRows = DatabaseConnection.executeUpdate(sql, id);
-            return affectedRows > 0;
+        try (Connection conn = DatabaseConnection.getConnection(); // Get connection
+             PreparedStatement stmt = conn.prepareStatement(sql)) { // Prepare statement
+
+            stmt.setInt(1, id);
+
+            int affectedRows = stmt.executeUpdate();
+            return affectedRows > 0; // Return true if at least one row was deleted
         } catch (SQLException e) {
-            System.err.println("Error deleting classroom: " + e.getMessage());
-            return false;
+            LOGGER.log(Level.SEVERE, "Error deleting classroom with ID: " + id, e);
+            return false; // Indicate failure
         }
     }
 
     /**
      * Helper method to extract classroom data from a ResultSet.
+     * Assumes the ResultSet cursor is currently on a valid row.
      *
      * @param rs ResultSet containing classroom data
-     * @param stt Sequence number for display
+     * @param stt Sequence number for display purposes (not from DB)
      * @return Classroom object populated with data
      * @throws SQLException If a database access error occurs
      */
@@ -220,6 +272,7 @@ public class ClassroomDAO {
         int capacity = rs.getInt("capacity");
         String status = rs.getString("status");
 
+        // Assuming Classroom constructor is Classroom(int id, int stt, String code, String name, int floor, int capacity, String status)
         return new Classroom(id, stt, code, name, floor, capacity, status);
     }
 }

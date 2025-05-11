@@ -37,7 +37,7 @@ public class StudentSchedule extends Schedule {
         // Implementation to check if adding a new course would create a conflict
         for (Course existingCourse : courses) {
             // Check if dates overlap
-            if (existingCourse.getDate().overlaps(newCourse.getDate())) {
+            if (existingCourse.getDate().overlapsDateRange(newCourse.getDate())) {
                 // For simplicity, assuming time conflict if date overlaps
                 // In a real system, you'd check specific time slots
                 return true; // Conflict exists

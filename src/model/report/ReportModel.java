@@ -33,18 +33,14 @@ public class ReportModel {
     }
 
     public void loadReportData(LocalDate fromDate, LocalDate toDate, String status) {
-        try {
-            // Clear existing data
-            classReportData.clear();
+        // Clear existing data
+        classReportData.clear();
 
-            // Load data from database through DAO
-            classReportData.addAll(reportDAO.getClassReportData(fromDate, toDate, status));
+        // Load data from database through DAO
+        classReportData.addAll(reportDAO.getClassReportData(fromDate, toDate, status));
 
-            // Calculate statistics based on the loaded data
-            calculateStatistics();
-        } catch (SQLException e) {
-            throw new RuntimeException("Error loading report data: " + e.getMessage(), e);
-        }
+        // Calculate statistics based on the loaded data
+        calculateStatistics();
     }
 
     private void calculateStatistics() {

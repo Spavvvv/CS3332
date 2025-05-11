@@ -2,19 +2,23 @@ package src.controller;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.scene.image.ImageView;
-import src.dao.AbsenceRecordDAO; // Import the DAO
 import src.model.absence.AbsenceRecord;
 import view.components.AbsenceCallView;
 
-import java.sql.SQLException; // Import SQLException
-import java.time.LocalDate; // Import LocalDate
-import java.time.format.DateTimeFormatter; // Import DateTimeFormatter
-import java.time.format.DateTimeParseException; // Import DateTimeParseException
-import java.util.List; // Import List
-import java.util.logging.Level; // Import logging levels
-import java.util.logging.Logger; // Import Logger
-import java.util.UUID; // Import UUID for dummy data generation (if needed)
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.UUID;
+
+// Import the DaoManager
+import utils.DaoManager;
+// Import the specific DAO class if you need its type for the instance variable
+import src.dao.AbsenceRecordDAO;
+
 
 /**
  * Controller for the Absence Call functionality
@@ -25,12 +29,14 @@ public class AbsenceCallController {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy"); // Formatter for view dates
 
     private final AbsenceCallView view;
-    private final AbsenceRecordDAO absenceRecordDAO; // Instance of the DAO
+    // Keep the type declaration, but get the instance from DaoManager
+    private final AbsenceRecordDAO absenceRecordDAO;
     private ObservableList<AbsenceRecord> absenceRecords = FXCollections.observableArrayList();
 
     public AbsenceCallController(AbsenceCallView view) {
         this.view = view;
-        this.absenceRecordDAO = new AbsenceRecordDAO(); // Initialize the DAO
+        // Initialize the DAO using the DaoManager singleton
+        this.absenceRecordDAO = DaoManager.getInstance().getAbsenceRecordDAO();
         initializeController();
     }
 
