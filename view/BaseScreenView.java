@@ -6,6 +6,7 @@ import javafx.scene.Node;
 import javafx.scene.layout.VBox;
 import src.controller.NavigationController;
 import src.controller.MainController;
+import src.model.person.Person;
 
 /**
  * Lớp cơ sở triển khai interface ScreenView.
@@ -32,6 +33,12 @@ public abstract class BaseScreenView implements ScreenView {
         this.title.set(title);
     }
 
+    protected Person getCurrentUser() {
+        if (mainController != null) {
+            return mainController.getCurrentUser();
+        }
+        return null;
+    }
     public BaseScreenView(String title, String viewId) {
         this(title);
         this.viewId = viewId;
@@ -183,4 +190,5 @@ public abstract class BaseScreenView implements ScreenView {
         ensureInitialized();
         System.out.println("BaseScreenView.onShow() cho " + viewId);
     }
+
 }

@@ -20,7 +20,6 @@ import src.model.person.Parent;
 import src.model.person.Student;
 import src.model.person.Teacher;
 import src.model.person.Person;
-import src.model.person.UserRole;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.time.LocalDate;
@@ -42,7 +41,7 @@ public class LoginUI {
     private String currentTheme = "light"; // Mặc định là theme sáng
     private NavigationController navigationController;
     private MainController mainController;
-    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
+    private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
@@ -535,9 +534,9 @@ public class LoginUI {
             uiStage.setMaximized(true); // Mở rộng cửa sổ
 
             // Xử lý sự kiện đóng cửa sổ
-//            uiStage.setOnCloseRequest(event -> {
-//                mainController1.onAppExit();
-//            });
+            uiStage.setOnCloseRequest(event -> {
+                mainController1.onAppExit();
+            });
 
             uiStage.show();
 

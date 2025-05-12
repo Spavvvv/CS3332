@@ -11,8 +11,8 @@ public class Admin extends Person {
     }
 
     @Override
-    public String getRole() {
-        return "Admin";
+    public Role getRole() {
+        return Role.ADMIN;
     }
 
     // Admin-specific methods
