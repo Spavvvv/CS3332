@@ -10,10 +10,26 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class HolidayDAO {
+
+    private static final Logger LOGGER = Logger.getLogger(HolidayDAO.class.getName());
+
+    /**
+     * Constructor.
+     */
+    public HolidayDAO() {
+        // No dependencies to inject for this DAO based on current implementation
+    }
+
     // Holiday-related methods
     public Holiday findHolidayById(Long id) {
+        if (id == null) {
+            LOGGER.log(Level.WARNING, "Attempted to find holiday with null ID.");
+            return null;
+        }
         String sql = "SELECT id, name, start_date, end_date, color_hex FROM holidays WHERE id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -24,7 +40,9 @@ public class HolidayDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding holiday by ID: " + id, e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error finding holiday by ID: " + id, e);
         }
         return null;
     }
@@ -39,20 +57,24 @@ public class HolidayDAO {
                 holidays.add(mapResultSetToHoliday(rs));
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding all holidays.", e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error finding all holidays.", e);
         }
         return holidays;
     }
 
     public List<Holiday> findHolidaysByYear(int year) {
         List<Holiday> holidays = new ArrayList<>();
+        // Handle cases where start_date or end_date is in the specified year, or the holiday spans the entire year
         String sql = "SELECT id, name, start_date, end_date, color_hex FROM holidays " +
-                "WHERE YEAR(start_date) = ? OR YEAR(end_date) = ? " +
-                "OR (start_date <= ? AND end_date >= ?)";
+                "WHERE (STRFTIME('%Y', start_date) = ? OR STRFTIME('%Y', end_date) = ?) " + // Use STRFTIME for year extraction (SQLite/MySQL compatible)
+                "OR (start_date <= ? AND end_date >= ?)"; // Handle holidays spanning the year
+
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, year);
-            stmt.setInt(2, year);
+            stmt.setString(1, String.valueOf(year));
+            stmt.setString(2, String.valueOf(year));
             stmt.setDate(3, Date.valueOf(LocalDate.of(year, 12, 31)));
             stmt.setDate(4, Date.valueOf(LocalDate.of(year, 1, 1)));
             try (ResultSet rs = stmt.executeQuery()) {
@@ -61,12 +83,19 @@ public class HolidayDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding holidays by year: " + year, e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error finding holidays by year: " + year, e);
         }
         return holidays;
     }
 
+
     public Holiday saveHoliday(Holiday holiday) {
+        if (holiday == null) {
+            LOGGER.log(Level.WARNING, "Attempted to save a null holiday.");
+            return null;
+        }
         if (holiday.getId() == null) {
             return insertHoliday(holiday);
         } else {
@@ -96,7 +125,11 @@ public class HolidayDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error inserting holiday: " + holiday.getName(), e);
+            holiday = null; // Indicate failure
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error inserting holiday: " + holiday.getName(), e);
+            holiday = null; // Indicate failure
         }
         return holiday;
     }
@@ -113,27 +146,39 @@ public class HolidayDAO {
 
             stmt.executeUpdate();
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error updating holiday with ID: " + holiday.getId(), e);
+            holiday = null; // Indicate failure
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error updating holiday with ID: " + holiday.getId(), e);
+            holiday = null; // Indicate failure
         }
         return holiday;
     }
 
     public void deleteHoliday(Long id) {
+        if (id == null) {
+            LOGGER.log(Level.WARNING, "Attempted to delete holiday with null ID.");
+            return;
+        }
         String sql = "DELETE FROM holidays WHERE id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, id);
             stmt.executeUpdate();
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error deleting holiday with ID: " + id, e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error deleting holiday with ID: " + id, e);
         }
     }
 
     private Holiday mapResultSetToHoliday(ResultSet rs) throws SQLException {
         Long id = rs.getLong("id");
         String name = rs.getString("name");
-        LocalDate startDate = rs.getDate("start_date").toLocalDate();
-        LocalDate endDate = rs.getDate("end_date").toLocalDate();
+        Date startDateSql = rs.getDate("start_date");
+        Date endDateSql = rs.getDate("end_date");
+        LocalDate startDate = startDateSql != null ? startDateSql.toLocalDate() : null;
+        LocalDate endDate = endDateSql != null ? endDateSql.toLocalDate() : null;
         String colorHex = rs.getString("color_hex");
 
         return new Holiday(id, name, startDate, endDate, colorHex);
@@ -141,6 +186,10 @@ public class HolidayDAO {
 
     // History-related methods
     public HolidayHistory findHistoryById(Long id) {
+        if (id == null) {
+            LOGGER.log(Level.WARNING, "Attempted to find history with null ID.");
+            return null;
+        }
         String sql = "SELECT id, user, action, timestamp FROM holiday_history WHERE id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -151,7 +200,9 @@ public class HolidayDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding history by ID: " + id, e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error finding history by ID: " + id, e);
         }
         return null;
     }
@@ -166,12 +217,18 @@ public class HolidayDAO {
                 histories.add(mapResultSetToHistory(rs));
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding all history.", e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error finding all history.", e);
         }
         return histories;
     }
 
     public List<HolidayHistory> findRecentHistory(int limit) {
+        if (limit <= 0) {
+            LOGGER.log(Level.WARNING, "Attempted to find recent history with non-positive limit: " + limit);
+            return new ArrayList<>();
+        }
         List<HolidayHistory> histories = new ArrayList<>();
         String sql = "SELECT id, user, action, timestamp FROM holiday_history ORDER BY timestamp DESC LIMIT ?";
         try (Connection conn = DatabaseConnection.getConnection();
@@ -183,12 +240,18 @@ public class HolidayDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding recent history with limit: " + limit, e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error finding recent history with limit: " + limit, e);
         }
         return histories;
     }
 
     public HolidayHistory saveHistory(HolidayHistory history) {
+        if (history == null) {
+            LOGGER.log(Level.WARNING, "Attempted to save a null history entry.");
+            return null;
+        }
         if (history.getId() == null) {
             return insertHistory(history);
         } else {
@@ -217,7 +280,11 @@ public class HolidayDAO {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error inserting history for user: " + history.getUser(), e);
+            history = null; // Indicate failure
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error inserting history for user: " + history.getUser(), e);
+            history = null; // Indicate failure
         }
         return history;
     }
@@ -233,7 +300,11 @@ public class HolidayDAO {
 
             stmt.executeUpdate();
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error updating history with ID: " + history.getId(), e);
+            history = null; // Indicate failure
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error updating history with ID: " + history.getId(), e);
+            history = null; // Indicate failure
         }
         return history;
     }
@@ -242,7 +313,8 @@ public class HolidayDAO {
         Long id = rs.getLong("id");
         String user = rs.getString("user");
         String action = rs.getString("action");
-        LocalDateTime timestamp = rs.getTimestamp("timestamp").toLocalDateTime();
+        Timestamp timestampSql = rs.getTimestamp("timestamp");
+        LocalDateTime timestamp = timestampSql != null ? timestampSql.toLocalDateTime() : null;
 
         return new HolidayHistory(id, user, action, timestamp);
     }

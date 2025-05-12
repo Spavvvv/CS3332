@@ -3,6 +3,7 @@ package src.controller;
 import java.time.LocalDate;
 import src.model.report.ReportModel;
 import view.components.ReportView;
+import utils.DaoManager;
 
 public class ReportController {
     private final ReportModel model;

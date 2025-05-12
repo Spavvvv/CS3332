@@ -31,6 +31,8 @@ public class Attendance {
         this.called = false;
         this.hasPermission = false;
         this.recordTime = LocalDateTime.now();
+        this.student = new Student();
+        this.session = new ClassSession();
     }
 
     /**

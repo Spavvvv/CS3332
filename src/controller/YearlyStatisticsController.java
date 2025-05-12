@@ -6,6 +6,7 @@ import src.model.teaching.yearly.TeacherYearlyStatisticsModel;
 import src.model.teaching.yearly.StatisticsSummaryModel;
 import view.components.YearlyTeachingStatisticsView;
 import src.dao.TeacherYearlyStatisticsDAO;
+import utils.DaoManager; // Import DaoManager
 
 public class YearlyStatisticsController {
     private YearlyTeachingStatisticsView view;
@@ -17,7 +18,8 @@ public class YearlyStatisticsController {
 
     public YearlyStatisticsController(YearlyTeachingStatisticsView view) {
         this.view = view;
-        this.statisticsDAO = new TeacherYearlyStatisticsDAO();
+        // Get TeacherYearlyStatisticsDAO instance from DaoManager
+        this.statisticsDAO = DaoManager.getInstance().getTeacherYearlyStatisticsDAO();
 
         // Default filter values
         // Assuming a default year is needed, e.g., the current year
@@ -122,8 +124,11 @@ public class YearlyStatisticsController {
      * Clean up resources when controller is no longer needed
      */
     public void cleanup() {
-        if (statisticsDAO != null) {
-            statisticsDAO.closeConnection();
-        }
+        // The DAO connection should be managed by the DaoManager,
+        // so explicit closing here might not be necessary depending on DaoManager's implementation.
+        // If DaoManager has a global cleanup method, call that instead.
+        // if (statisticsDAO != null) {
+        //     statisticsDAO.closeConnection(); // Remove if DaoManager handles lifecycle
+        // }
     }
 }

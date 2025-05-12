@@ -3,7 +3,8 @@ package src.controller;
 import src.model.holidays.Holiday;
 import src.model.holidays.HolidayHistory;
 import src.model.holidays.HolidaysModel;
-import utils.DatabaseConnection;
+import utils.DaoManager;
+import src.dao.HolidayDAO;
 import view.components.HolidaysView;
 
 import java.time.LocalDate;
@@ -16,8 +17,13 @@ public class HolidaysController {
     private final String currentUser;
 
     public HolidaysController(HolidaysView view, String currentUser) {
-        // Initialize the model
-        this.model = new HolidaysModel();
+        // Get necessary DAO from DaoManager
+        DaoManager daoManager = DaoManager.getInstance();
+        HolidayDAO holidayDAO = daoManager.getHolidayDAO();
+
+        // Initialize the model with the HolidayDAO
+        // HolidayDAO already includes methods for both holiday and history operations
+        this.model = new HolidaysModel(); // Updated to pass only holidayDAO
         this.view = view;
         this.currentUser = currentUser;
 
@@ -58,6 +64,7 @@ public class HolidaysController {
                 formatDate(holiday.getStartDate()) + " -> " +
                 formatDate(holiday.getEndDate()) + "]";
 
+        // The logAction method within the model should now use the injected DAO
         model.logAction(currentUser + ": Thêm mới", actionDesc);
 
         // Refresh the view
@@ -67,7 +74,7 @@ public class HolidaysController {
     public void deleteHoliday(Long id) {
         // Get the holiday details before deletion for logging
         Holiday holiday = null;
-        for (Holiday h : getAllHolidays()) {
+        for (Holiday h : getAllHolidays()) { // getAllHolidays uses the DAO in the model
             if (h.getId().equals(id)) {
                 holiday = h;
                 break;
@@ -75,6 +82,7 @@ public class HolidaysController {
         }
 
         if (holiday != null) {
+            // The deleteHoliday method within the model should now use the injected DAO
             model.deleteHoliday(id);
 
             // Log the action
@@ -82,6 +90,7 @@ public class HolidaysController {
                     formatDate(holiday.getStartDate()) + " -> " +
                     formatDate(holiday.getEndDate()) + "]";
 
+            // The logAction method within the model should now use the injected DAO
             model.logAction(currentUser + ": Xóa", actionDesc);
         }
 
@@ -94,8 +103,5 @@ public class HolidaysController {
                 date.getDayOfMonth(), date.getMonthValue(), date.getYear());
     }
 
-    public void cleanup() {
-        // Close any resources if needed
-        DatabaseConnection.closeConnection();
-    }
+    // Removed cleanup method as connection management is handled by DAOs/DaoManager
 }

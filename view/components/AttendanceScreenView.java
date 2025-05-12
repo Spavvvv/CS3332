@@ -77,14 +77,7 @@ public class AttendanceScreenView extends BaseScreenView {
         sessionAttendanceMap = new HashMap<>();
 
         // Initialize controller - DAOs should be managed within the controller
-        try {
-            attendanceController = new AttendanceController();
-        } catch (SQLException e) {
-            // Handle the SQLException during controller initialization
-            showError("Lỗi khởi tạo bộ điều khiển điểm danh: " + e.getMessage());
-            e.printStackTrace();
-            // Consider exiting or disabling functionality if controller fails to initialize
-        }
+        attendanceController = new AttendanceController();
 
 
         initializeView();

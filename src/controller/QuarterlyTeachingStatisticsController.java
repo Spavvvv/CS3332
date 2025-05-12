@@ -7,6 +7,7 @@ import src.model.teaching.quarterly.TeacherQuarterlyStatisticsModel;
 import view.components.QuarterlyTeachingStatisticsView;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
+import utils.DaoManager;
 
 import java.time.Year;
 import java.util.Arrays;
@@ -25,7 +26,7 @@ public class QuarterlyTeachingStatisticsController {
 
     public QuarterlyTeachingStatisticsController(QuarterlyTeachingStatisticsView view) {
         this.view = view;
-        this.dao = new TeacherQuarterlyStatisticsDAO();
+        this.dao = DaoManager.getInstance().getTeacherQuarterlyStatisticsDAO();
         // Initial setup of view elements that don't depend on data or events
         setupViewInitialState();
         // Event handlers and data loading are now initiated by the view's onActivate

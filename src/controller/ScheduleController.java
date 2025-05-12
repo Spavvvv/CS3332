@@ -4,6 +4,8 @@ import src.model.ClassSession; // Requires ClassSession model to use String IDs
 import src.model.system.schedule.Schedule; // Requires Schedule model to use String IDs
 import src.model.system.schedule.RoomSchedule; // Requires RoomSchedule model to use String IDs
 import src.dao.ScheduleDAO; // Requires ScheduleDAO to use String IDs
+import src.model.system.course.Course;
+import utils.DaoManager;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -33,7 +35,8 @@ public class ScheduleController {
     private final Map<String, ClassSession> sessionCache; // Changed key type to String
 
     public ScheduleController() { // Constructor might throw SQLException if DAO initialization fails
-        this.scheduleDAO = new ScheduleDAO();
+        // Get the DAO from DaoManager instead of creating a new instance
+        this.scheduleDAO = DaoManager.getInstance().getScheduleDAO();
         this.sessionCache = new HashMap<>();
         // Only initialize DAOs strictly needed for schedule management if any besides ScheduleDAO
     }
@@ -68,9 +71,6 @@ public class ScheduleController {
             }
 
             return sessions;
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error retrieving schedules", e);
-            return new ArrayList<>();
         } catch (Exception e) { // Catch other potential exceptions during processing
             LOGGER.log(Level.SEVERE, "Unexpected error getting schedule", e);
             return new ArrayList<>();
@@ -94,9 +94,6 @@ public class ScheduleController {
                     .filter(teacher -> teacher != null && !teacher.trim().isEmpty()) // Filter out empty/null teachers
                     .distinct()
                     .collect(Collectors.toList());
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error retrieving teachers from schedules", e);
-            return new ArrayList<>();
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error getting teachers from schedules", e);
             return new ArrayList<>();
@@ -128,9 +125,6 @@ public class ScheduleController {
                     .filter(room -> room != null && !room.trim().isEmpty()) // Filter out empty/null rooms
                     .distinct()
                     .collect(Collectors.toList());
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error retrieving rooms from schedules", e);
-            return new ArrayList<>();
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error getting rooms from schedules", e);
             return new ArrayList<>();
@@ -154,9 +148,6 @@ public class ScheduleController {
                     .filter(course -> course != null && !course.trim().isEmpty()) // Filter out empty/null course names
                     .distinct()
                     .collect(Collectors.toList());
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error retrieving courses from schedules", e);
-            return new ArrayList<>();
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error getting courses from schedules", e);
             return new ArrayList<>();
@@ -193,8 +184,6 @@ public class ScheduleController {
                     return session; // Return potentially incomplete session
                 }
             }
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error retrieving session by ID: " + sessionId, e);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error getting session by ID: " + sessionId, e);
         }
@@ -221,9 +210,6 @@ public class ScheduleController {
             return convertToClassSessions(allSchedules).stream()
                     .filter(session -> session != null && session.isTaughtBy(teacherName)) // Requires isTaughtBy
                     .collect(Collectors.toList());
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error retrieving sessions by teacher: " + teacherName, e);
-            return new ArrayList<>();
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error getting sessions by teacher: " + teacherName, e);
             return new ArrayList<>();
@@ -248,9 +234,6 @@ public class ScheduleController {
             List<Schedule> schedules = scheduleDAO.findByTimeRange(startOfDay, endOfDay);
             // Using convertToClassSessions to utilize caching and consistent object representation
             return convertToClassSessions(schedules);
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error retrieving sessions by date: " + date, e);
-            return new ArrayList<>();
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error getting sessions by date: " + date, e);
             return new ArrayList<>();
@@ -275,9 +258,6 @@ public class ScheduleController {
                 sessionCache.remove(sessionId); // Uses String key
             }
             return result;
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error deleting session: " + sessionId, e);
-            return false;
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error deleting session: " + sessionId, e);
             return false;
@@ -324,9 +304,6 @@ public class ScheduleController {
             }
 
             return result;
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error adding session", e);
-            return false;
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error adding session", e);
             return false;
@@ -346,8 +323,8 @@ public class ScheduleController {
             return null;
         }
 
-        String name = session.getCourseName();
-        if (name == null) name = "Unknown Course";
+        String scheduleName = session.getCourseName();
+        if (scheduleName == null) scheduleName = "Unknown Course";
 
 
         // Store teacher in description
@@ -400,7 +377,7 @@ public class ScheduleController {
             // Note: Capacity and roomType are hardcoded here. You might need to get these from the ClassSession or elsewhere.
             return new RoomSchedule(
                     id, // Use String ID
-                    name,
+                    scheduleName, // Use schedule name derived from ClassSession's course name
                     description,
                     startDateTime,
                     endDateTime,
@@ -441,9 +418,6 @@ public class ScheduleController {
             }
 
             return result;
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error updating session: " + session.getId(), e);
-            return false;
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error updating session: " + session.getId(), e);
             return false;
@@ -536,9 +510,6 @@ public class ScheduleController {
             }
 
             return false; // No conflict found
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error checking schedule conflicts", e);
-            return false;
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error checking schedule conflicts", e);
             return false;
@@ -548,7 +519,7 @@ public class ScheduleController {
     /**
      * Convert a Schedule object to a ClassSession object (Handles String ID)
      * @param schedule The Schedule object to convert (Requires Schedule model to use String ID)
-     * @return Equivalent ClassSession object (Requires ClassSession model to use String ID)
+     * @return Equivalent ClassSession object, or null if conversion is not possible
      */
     private ClassSession convertToClassSession(Schedule schedule) {
         if (schedule == null) {
@@ -558,15 +529,16 @@ public class ScheduleController {
         // Ensure schedule.getId() returns String
         String id = schedule.getId(); // Get String ID
         if (id == null || id.trim().isEmpty()) {
-            LOGGER.log(Level.WARNING, "Schedule object with null or empty ID encountered during conversion.");
-            // Decide how to handle schedules without IDs. Returning null might break logic.
-            // Creating a ClassSession with a null ID might also cause issues.
-            // Let's proceed, but log the issue.
+            // Log a warning if the schedule ID is null or empty, but proceed if possible
+            // based on whether ClassSession constructor allows null ID or if a default can be used.
+            // For now, we will log and proceed, but this might need stricter handling depending on requirements.
+            // LOGGER.log(Level.WARNING, "Schedule object with null or empty ID encountered during conversion.");
+            // Assuming ClassSession ID cannot be null, returning null might be necessary here.
+            // Let's proceed for now assuming ClassSession can handle a null ID if the first parameter is the ID.
         }
 
-        String courseName = schedule.getName(); // Use schedule name as course name
-        if (courseName == null) courseName = "Unknown Course";
-
+        String scheduleName = schedule.getName(); // Use schedule name
+        // We will use scheduleName as courseName for the minimal Course object
 
         // Extract teacher from description (format expected: "Teacher: {name}")
         String teacher = "Unknown";
@@ -577,61 +549,73 @@ public class ScheduleController {
             }
         }
 
-        // For room schedules, use the room ID
+        // Determine the room
         String room = "Unknown";
         if (schedule instanceof RoomSchedule) {
-            // Requires RoomSchedule.getRoomId() to return String
             String roomId = ((RoomSchedule) schedule).getRoomId();
             if (roomId != null && !roomId.trim().isEmpty()) {
                 room = roomId;
             }
         } else {
-            // Handle other Schedule types if necessary, but RoomSchedule is the main focus for ClassSession
-            room = "N/A"; // Example fallback for non-RoomSchedules
+            // Handle other Schedule types if necessary, or default room value
+            room = "N/A";
         }
 
-
-        // Extract date and time slot
+        // Extract date, start time, and end time as LocalTime objects
         LocalDate date = null;
-        String timeSlot = "Unknown - Unknown";
-        if (schedule.getStartTime() != null && schedule.getEndTime() != null) {
+        LocalTime startTime = null;
+        LocalTime endTime = null;
+
+        if (schedule.getStartTime() != null) {
             date = schedule.getStartTime().toLocalDate();
-            try {
-                timeSlot = String.format("%s - %s",
-                        schedule.getStartTime().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")),
-                        schedule.getEndTime().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Error formatting time slot for schedule ID " + id, e);
-            }
-        } else if (schedule.getStartTime() != null) {
-            date = schedule.getStartTime().toLocalDate();
-            try {
-                timeSlot = schedule.getStartTime().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) + " - Unknown";
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Error formatting start time for schedule ID " + id, e);
-            }
-        } else if (schedule.getEndTime() != null) {
-            try {
-                timeSlot = "Unknown - " + schedule.getEndTime().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"));
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Error formatting end time for schedule ID " + id, e);
-            }
-        } else {
-            // Date and time unknown
-            date = null; // Keep date as null if unknown
-            timeSlot = "Unknown - Unknown";
+            startTime = schedule.getStartTime().toLocalTime();
+        }
+
+        if (schedule.getEndTime() != null) {
+            // If schedule.getStartTime() was null, date might be null. We need a date for ClassSession.
+            // If end time is available but start time isn't, we might not have a definitive date.
+            // Assuming a schedule always has a start time for a specific date/time.
+            // If end time exists, use its time part. Date is already set from startTime if available.
+            endTime = schedule.getEndTime().toLocalTime();
         }
 
 
-        // Create ClassSession with String ID
-        // Ensure ClassSession constructor accepts String ID, String courseName, String teacher, String room, LocalDate date, String timeSlot
+        // *** MODIFICATION START ***
+        // Create a minimal Course object.
+        // We can use the schedule ID as a potential course identifier and the schedule name as the course name.
+        Course course = new Course();
+        // Using schedule.getId() as a placeholder for course ID for this minimal object.
+        // In a real system, you might need a mapping or a different approach if Schedule ID != Course ID.
+        course.setCourseId(id); // Set course ID using schedule ID
+        course.setCourseName(scheduleName); // Set course name using schedule name
+
+        // Determine the class ID for the ClassSession object.
+        // Based on the previous getTodayClasses method, ClassSession's constructor
+        // takes a String classId. If schedule.getId() is already used for the first 'id' parameter,
+        // and also as the courseId for the minimal Course, the purpose of the 'classId'
+        // parameter in ClassSession's constructor needs clarification.
+        // Assuming 'classId' in ClassSession is also the Schedule ID for linking.
+        String classSessionClassId = id; // Using schedule ID again for the classId parameter
+
+        // Create ClassSession object using the constructor that expects a Course object
+        // Based on prior code fixes, the constructor is likely:
+        // ClassSession(String id, Course course, String teacher, String room, LocalDate date,
+        //              LocalTime startTime, LocalTime endTime, String classId)
         try {
-            return new ClassSession(id, courseName, teacher, room, date, timeSlot); // ClassSession constructor must accept String ID
+            // Ensure date, startTime, endTime are not null before passing if constructor requires it.
+            // If date is null, conversion is likely not valid.
+            if (date == null || startTime == null || endTime == null) {
+                // LOGGER.log(Level.WARNING, "Schedule object with ID " + id + " has incomplete date/time information. Cannot convert to ClassSession.");
+                return null; // Cannot create a valid ClassSession without date/time
+            }
+            return new ClassSession(id, course, teacher, room, date, startTime, endTime, classSessionClassId);
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error creating ClassSession from Schedule object with ID: " + id, e);
+            // LOGGER.log(Level.SEVERE, "Error creating ClassSession from Schedule object with ID: " + id, e);
             return null; // Return null if ClassSession creation fails
         }
+        // *** MODIFICATION END ***
     }
+
 
     /**
      * Convert multiple Schedule objects to ClassSession objects (Handles String IDs)

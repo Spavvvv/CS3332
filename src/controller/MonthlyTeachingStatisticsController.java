@@ -5,6 +5,7 @@ import src.dao.TeacherMonthlyStatisticsDAO;
 import javafx.collections.ObservableList;
 import src.model.teaching.monthly.MonthlyTeachingStatisticsModel;
 import src.model.teaching.monthly.MonthlyTeachingStatisticsModel.TeacherMonthlyStatistics;
+import utils.DaoManager;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -19,7 +20,8 @@ public class MonthlyTeachingStatisticsController {
 
     public MonthlyTeachingStatisticsController() {
         this.model = new MonthlyTeachingStatisticsModel();
-        this.dao = new TeacherMonthlyStatisticsDAO();
+        // Get the DAO from DaoManager instead of creating a new instance
+        this.dao = DaoManager.getInstance().getTeacherMonthlyStatisticsDAO();
     }
 
     public MonthlyTeachingStatisticsModel getModel() {
@@ -37,27 +39,16 @@ public class MonthlyTeachingStatisticsController {
      * @return true if search was successful, false if there was an error.
      */
     public boolean searchStatistics(Month fromMonth, int fromYear, Month toMonth, int toYear, String status) {
-        try {
-            // Calculate LocalDate range from Month and Year inputs
-            LocalDate fromDate = LocalDate.of(fromYear, fromMonth, 1);
-            LocalDate toDate = YearMonth.of(toYear, toMonth).atEndOfMonth();
+        // Calculate LocalDate range from Month and Year inputs
+        LocalDate fromDate = LocalDate.of(fromYear, fromMonth, 1);
+        LocalDate toDate = YearMonth.of(toYear, toMonth).atEndOfMonth();
 
-            // Call DAO with the calculated LocalDate range and status
-            ObservableList<TeacherMonthlyStatistics> statistics =
-                    dao.getTeachingStatistics(fromDate, toDate, status);
+        // Call DAO with the calculated LocalDate range and status
+        ObservableList<TeacherMonthlyStatistics> statistics =
+                dao.getTeachingStatistics(fromDate, toDate, status);
 
-            model.setTeacherStatisticsList(statistics);
-            return true;
-        } catch (SQLException e) {
-            System.err.println("Error searching statistics: " + e.getMessage());
-            e.printStackTrace();
-            // Do not load fallback data as it was removed from DAO.
-            // You might want to clear the list or show an error message in the UI.
-            model.setTeacherStatisticsList(FXCollections.observableArrayList()); // Clear the list on error
-            // Optionally, you could add logic here to update a status property in the model
-            // to indicate that an error occurred, which the UI could then display.
-            return false;
-        }
+        model.setTeacherStatisticsList(statistics);
+        return true;
     }
 
     /**
@@ -68,23 +59,14 @@ public class MonthlyTeachingStatisticsController {
         Month currentMonth = currentYearMonth.getMonth();
         int currentYear = currentYearMonth.getYear();
 
-        try {
-            // Calculate the start and end dates for the current month
-            LocalDate fromDate = LocalDate.of(currentYear, currentMonth, 1);
-            LocalDate toDate = currentYearMonth.atEndOfMonth();
+        // Calculate the start and end dates for the current month
+        LocalDate fromDate = LocalDate.of(currentYear, currentMonth, 1);
+        LocalDate toDate = currentYearMonth.atEndOfMonth();
 
-            // Call DAO with the current month's date range and "Tất cả" status
-            ObservableList<TeacherMonthlyStatistics> statistics =
-                    dao.getTeachingStatistics(fromDate, toDate, "Tất cả");
+        // Call DAO with the current month's date range and "Tất cả" status
+        ObservableList<TeacherMonthlyStatistics> statistics =
+                dao.getTeachingStatistics(fromDate, toDate, "Tất cả");
 
-            model.setTeacherStatisticsList(statistics);
-        } catch (SQLException e) {
-            System.err.println("Error loading initial data: " + e.getMessage());
-            e.printStackTrace();
-            // Do not load fallback data as it was removed from DAO.
-            // Clear the list on error.
-            model.setTeacherStatisticsList(FXCollections.observableArrayList()); // Clear the list on error
-            // Optionally, indicate error in model status.
-        }
+        model.setTeacherStatisticsList(statistics);
     }
 }
