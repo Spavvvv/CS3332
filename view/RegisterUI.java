@@ -1,4 +1,5 @@
 package view;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -39,12 +40,10 @@ public class RegisterUI {
     private NavigationController navigationController;
     private MainController mainController;
     private String currentTheme = "light"; // Mặc định là theme sáng
+
     // File path for storing user accounts
     private String ACCOUNTS_FILE;
-    private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
-    private final static String TEACHER_FOLDER = FILE_PATH + "\\Teacher";
-    private final static String STUDENT_FOLDER = FILE_PATH + "\\Student";
-    private final static String PARENT_FOLDER = FILE_PATH + "\\Parent";
+    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
 
     // Định dạng ngày tháng
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -62,117 +61,90 @@ public class RegisterUI {
     }
 
     // Create accounts file if it doesn't exist
-    private void createAccountsFileIfNotExists(String username, String role) {
+    private void createAccountsFileIfNotExists(String username) {
         ACCOUNTS_FILE = username + ".txt";
-        String folderPath;
-        folderPath = STUDENT_FOLDER;
-        // Xác định đường dẫn thư mục dựa trên vai trò
-        if (role.equals("Giáo viên")) {
-            folderPath = TEACHER_FOLDER;
-        } else if (role.equals("Học viên")) {
-            folderPath = STUDENT_FOLDER;
-        } else if(role.equals("Phụ Huynh")) { // Phụ huynh
-            folderPath = PARENT_FOLDER;
-        }
-
-        File file = new File(folderPath, ACCOUNTS_FILE);
+        File file = new File(FILE_PATH, ACCOUNTS_FILE);
         if (!file.exists()) {
             try {
                 // Tạo thư mục nếu chưa tồn tại
-                File directory = new File(folderPath);
+                File directory = new File(FILE_PATH);
                 if (!directory.exists()) {
                     directory.mkdirs();
                 }
                 file.createNewFile();
-                System.out.println("Created new accounts file: " + file.getAbsolutePath());
+                System.out.println("Created new accounts file: " + ACCOUNTS_FILE);
             } catch (IOException e) {
                 System.err.println("Error creating accounts file: " + e.getMessage());
             }
         }
     }
 
-
     // Check if username already exists in the file
     private boolean isUsernameTaken(String username) {
-        // Kiểm tra trong tất cả các thư mục
-        File teacherFile = new File(TEACHER_FOLDER, username + ".txt");
-        File studentFile = new File(STUDENT_FOLDER, username + ".txt");
-        File parentFile = new File(PARENT_FOLDER, username + ".txt");
-
-        return teacherFile.exists() || studentFile.exists() || parentFile.exists();
+        ACCOUNTS_FILE = username + ".txt";
+        File file = new File(FILE_PATH, ACCOUNTS_FILE);
+        return file.exists();
     }
-
 
     // Check if email already exists in the file
     private boolean isEmailTaken(String email) {
-        // Danh sách thư mục cần kiểm tra
-        String[] directories = {TEACHER_FOLDER, STUDENT_FOLDER, PARENT_FOLDER};
+        File directory = new File(FILE_PATH);
+        if (!directory.exists() || !directory.isDirectory()) {
+            return false;
+        }
 
-        for (String directoryPath : directories) {
-            File directory = new File(directoryPath);
-            if (!directory.exists() || !directory.isDirectory()) {
-                continue;
-            }
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return false;
+        }
 
-            File[] files = directory.listFiles();
-            if (files == null) {
-                continue;
-            }
-
-            for (File file : files) {
-                if (file.isFile() && file.getName().endsWith(".txt")) {
-                    try (Scanner scanner = new Scanner(file)) {
-                        while (scanner.hasNextLine()) {
-                            String line = scanner.nextLine();
-                            String[] parts = line.split(",");
-                            if (parts.length >= 4 && parts[3].trim().equalsIgnoreCase(email.trim())) {
-                                return true;
-                            }
+        for (File file : files) {
+            if (file.isFile() && file.getName().endsWith(".txt")) {
+                try (Scanner scanner = new Scanner(file)) {
+                    while (scanner.hasNextLine()) {
+                        String line = scanner.nextLine();
+                        String[] parts = line.split(",");
+                        if (parts.length >= 4 && parts[3].trim().equalsIgnoreCase(email.trim())) {
+                            return true;
                         }
-                    } catch (FileNotFoundException e) {
-                        System.err.println("Error checking email: " + e.getMessage());
                     }
+                } catch (FileNotFoundException e) {
+                    System.err.println("Error checking email: " + e.getMessage());
                 }
             }
         }
         return false;
     }
-
 
     // Kiểm tra xem ID đã tồn tại trong hệ thống chưa
     private boolean isIDTaken(String id) {
-        String[] directories = {TEACHER_FOLDER, STUDENT_FOLDER, PARENT_FOLDER};
+        File directory = new File(FILE_PATH);
+        if (!directory.exists() || !directory.isDirectory()) {
+            return false;
+        }
 
-        for (String directoryPath : directories) {
-            File directory = new File(directoryPath);
-            if (!directory.exists() || !directory.isDirectory()) {
-                continue;
-            }
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return false;
+        }
 
-            File[] files = directory.listFiles();
-            if (files == null) {
-                continue;
-            }
-
-            for (File file : files) {
-                if (file.isFile() && file.getName().endsWith(".txt")) {
-                    try (Scanner scanner = new Scanner(file)) {
-                        while (scanner.hasNextLine()) {
-                            String line = scanner.nextLine();
-                            String[] parts = line.split(",");
-                            if (parts.length >= 9 && parts[8].trim().equals(id.trim())) {
-                                return true;
-                            }
+        for (File file : files) {
+            if (file.isFile() && file.getName().endsWith(".txt")) {
+                try (Scanner scanner = new Scanner(file)) {
+                    while (scanner.hasNextLine()) {
+                        String line = scanner.nextLine();
+                        String[] parts = line.split(",");
+                        if (parts.length >= 9 && parts[8].trim().equals(id.trim())) {
+                            return true;
                         }
-                    } catch (FileNotFoundException e) {
-                        System.err.println("Error checking ID: " + e.getMessage());
                     }
+                } catch (FileNotFoundException e) {
+                    System.err.println("Error checking ID: " + e.getMessage());
                 }
             }
         }
         return false;
     }
-
 
     // Tạo ID ngẫu nhiên 6 chữ số dựa trên vai trò
     private String generateUniqueID(String role) {
@@ -199,18 +171,7 @@ public class RegisterUI {
     // Save a new account to the file
     private void saveAccount(String username, String password, String fullName, String email, String phone, String role, LocalDate dob, int age, String userId) {
         ACCOUNTS_FILE = username + ".txt";
-        String folderPath;
-
-        // Xác định đường dẫn thư mục dựa trên vai trò
-        if (role.equals("Giáo viên")) {
-            folderPath = TEACHER_FOLDER;
-        } else if (role.equals("Học viên")) {
-            folderPath = STUDENT_FOLDER;
-        } else { // Phụ huynh
-            folderPath = PARENT_FOLDER;
-        }
-
-        File file = new File(folderPath, ACCOUNTS_FILE);
+        File file = new File(FILE_PATH, ACCOUNTS_FILE);
 
         try (FileWriter writer = new FileWriter(file, true)) {
             // Format: username,password,fullName,email,phone,role,dob,age,userId
@@ -218,12 +179,11 @@ public class RegisterUI {
             String accountInfo = String.format("%s,%s,%s,%s,%s,%s,%s,%d,%s%n",
                     username.trim(), password, fullName.trim(), email.trim(), phone.trim(), role.trim(), dobString, age, userId);
             writer.write(accountInfo);
-            System.out.println("Account saved: " + username + " with ID: " + userId + " in folder: " + folderPath);
+            System.out.println("Account saved: " + username + " with ID: " + userId);
         } catch (IOException e) {
             System.err.println("Error saving account: " + e.getMessage());
         }
     }
-
 
     private void setupStage() {
         root = new StackPane();
@@ -767,11 +727,8 @@ public class RegisterUI {
             userId = generateUniqueID(role);
         } while (isIDTaken(userId));
 
-        // Sau khi đã kiểm tra hết, thì mớ
-        // i tạo file
-        String role1 = roleComboBox.getValue();
-        createAccountsFileIfNotExists(username, role1);
-
+        // Sau khi đã kiểm tra hết, thì mới tạo file
+        createAccountsFileIfNotExists(username);
 
         // Lưu tài khoản mới vào file (bao gồm ngày sinh, tuổi và ID)
         saveAccount(

@@ -12,7 +12,7 @@ import src.model.ClassSession;
  * Mỗi bản ghi Attendance thể hiện trạng thái điểm danh của một học sinh trong một buổi học cụ thể
  */
 public class Attendance {
-    private long id;
+    private String id;
     private Student student;
     private ClassSession session;
     private boolean present;
@@ -58,7 +58,7 @@ public class Attendance {
      * @param checkInTime   Thời gian học sinh điểm danh (nếu có mặt)
      * @param recordTime    Thời gian ghi nhận bản ghi
      */
-    public Attendance(long id, Student student, ClassSession session, boolean present,
+    public Attendance(String id, Student student, ClassSession session, boolean present,
                       String note, boolean called, boolean hasPermission,
                       LocalDateTime checkInTime, LocalDateTime recordTime) {
         this.id = id;
@@ -79,7 +79,7 @@ public class Attendance {
      *
      * @return ID bản ghi
      */
-    public long getId() {
+    public String getId() {
         return id;
     }
 
@@ -88,7 +88,7 @@ public class Attendance {
      *
      * @param id ID bản ghi
      */
-    public void setId(long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -142,8 +142,8 @@ public class Attendance {
      *
      * @return ID buổi học
      */
-    public long getSessionId() {
-        return session != null ? session.getId() : 0;
+    public String getSessionId() {
+        return session != null ? session.getId() : null;
     }
 
     /**
@@ -395,7 +395,7 @@ public class Attendance {
      * Thiết lập ID của buổi học
      * @param sessionId ID buổi học
      */
-    public void setSessionId(long sessionId) {
+    public void setSessionId(String sessionId) {
         if (this.session == null) {
             this.session = new ClassSession();
         }
@@ -471,4 +471,11 @@ public class Attendance {
         return session != null ? session.getDayOfWeek() : "";
     }
 
+    public void setStudentId(String studentId) {
+        student.setId(studentId);
+    }
+
+    public void setStudentName(String studentName) {
+        student.setName(studentName);
+    }
 }

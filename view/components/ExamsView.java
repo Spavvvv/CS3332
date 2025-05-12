@@ -13,10 +13,14 @@ import javafx.scene.Node;
 import javafx.util.Callback;
 import src.model.ClassSession;
 import view.BaseScreenView;
+import src.controller.ExamsController;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * View class for the Exams screen
+ */
 public class ExamsView extends BaseScreenView {
 
     // UI Components
@@ -27,12 +31,21 @@ public class ExamsView extends BaseScreenView {
     private Button searchButton;
     private TableView<ClassSession> sessionTable;
 
-    // Data
-    private ObservableList<ClassSession> sessionsList = FXCollections.observableArrayList();
+    // Data references (view shouldn't own data)
     private FilteredList<ClassSession> filteredSessions;
+
+    // Controller reference
+    private ExamsController controller;
 
     public ExamsView() {
         super("Kỳ thi", "exams");
+    }
+
+    /**
+     * Set the controller for this view
+     */
+    public void setController(ExamsController controller) {
+        this.controller = controller;
     }
 
     @Override
@@ -52,9 +65,6 @@ public class ExamsView extends BaseScreenView {
 
         root.setSpacing(15);
         root.setPadding(new Insets(20));
-
-        // Load sample data
-        loadSampleData();
     }
 
     private HBox createTitleBar() {
@@ -95,7 +105,15 @@ public class ExamsView extends BaseScreenView {
         searchButton.setPrefHeight(38);
 
         // Add search action
-        searchButton.setOnAction(e -> performSearch());
+        searchButton.setOnAction(e -> {
+            if (controller != null) {
+                controller.performSearch(
+                        keywordField.getText(),
+                        fromDatePicker.getValue(),
+                        toDatePicker.getValue()
+                );
+            }
+        });
     }
 
     private Node createSearchIcon() {
@@ -181,6 +199,11 @@ public class ExamsView extends BaseScreenView {
 
         pageSizeComboBox.setStyle(fieldStyle);
         pageSizeComboBox.setPrefHeight(38);
+        pageSizeComboBox.setOnAction(e -> {
+            if (controller != null) {
+                controller.updatePageSize(pageSizeComboBox.getValue());
+            }
+        });
 
         HBox pageSizeBox = new HBox(pageSizeLabel, pageSizeComboBox);
 
@@ -245,13 +268,14 @@ public class ExamsView extends BaseScreenView {
 
         TableColumn<ClassSession, String> statusColumn = new TableColumn<>("Trạng thái");
         statusColumn.setCellValueFactory(cellData -> {
-            return new SimpleStringProperty("Khởi tạo");
+            // Status mapping should be in controller or a util class
+            return new SimpleStringProperty(controller != null ?
+                    controller.getStatusDisplay(cellData.getValue().getStatus()) : "Khởi tạo");
         });
         statusColumn.setGraphic(createSortIcon());
 
         TableColumn<ClassSession, Void> scoreColumn = new TableColumn<>("Điểm");
         scoreColumn.setCellFactory(getScoreButtonCellFactory());
-
 
         // Add columns to table
         sessionTable.getColumns().addAll(
@@ -274,9 +298,6 @@ public class ExamsView extends BaseScreenView {
             }
         });
 
-        // Setup filtered list
-        filteredSessions = new FilteredList<>(sessionsList, p -> true);
-        sessionTable.setItems(filteredSessions);
         sessionTable.setPrefHeight(300);
     }
 
@@ -297,7 +318,9 @@ public class ExamsView extends BaseScreenView {
                                 "-fx-border-radius: 20; -fx-background-radius: 20; -fx-min-width: 100;");
                         scoreBtn.setOnAction(event -> {
                             ClassSession session = getTableView().getItems().get(getIndex());
-                            showScores(session);
+                            if (controller != null) {
+                                controller.showScores(session);
+                            }
                         });
                     }
 
@@ -315,56 +338,45 @@ public class ExamsView extends BaseScreenView {
         };
     }
 
-    private void showScores(ClassSession session) {
-        System.out.println("Show scores for session: " + session.getCourseName());
-        mainController.setSessionDetail(session);
-        navigationController.navigateTo("details-view");
+    /**
+     * Set the data to be displayed in the table
+     */
+    public void setSessionData(FilteredList<ClassSession> filteredData) {
+        this.filteredSessions = filteredData;
+        sessionTable.setItems(filteredSessions);
     }
 
-    private void performSearch() {
-        filteredSessions.setPredicate(session -> {
-            boolean matchesKeyword = true;
-            boolean matchesDateRange = true;
+    /**
+     * Get UI component values for controller use
+     */
+    public String getKeyword() {
+        return keywordField.getText();
+    }
 
-            if (keywordField.getText() != null && !keywordField.getText().isEmpty()) {
-                String keyword = keywordField.getText().toLowerCase();
-                matchesKeyword = session.getCourseName().toLowerCase().contains(keyword) ||
-                        session.getRoom().toLowerCase().contains(keyword);
-            }
+    public LocalDate getFromDate() {
+        return fromDatePicker.getValue();
+    }
 
-            if (fromDatePicker.getValue() != null) {
-                matchesDateRange = !session.getDate().isBefore(fromDatePicker.getValue());
-            }
+    public LocalDate getToDate() {
+        return toDatePicker.getValue();
+    }
 
-            if (toDatePicker.getValue() != null) {
-                matchesDateRange = matchesDateRange && !session.getDate().isAfter(toDatePicker.getValue());
-            }
-
-            return matchesKeyword && matchesDateRange;
-        });
+    public Integer getPageSize() {
+        return pageSizeComboBox.getValue();
     }
 
     @Override
     public void refreshView() {
-        filteredSessions.setPredicate(p -> true);
+        if (sessionTable != null) {
+            sessionTable.refresh();
+        }
     }
 
-    private void loadSampleData() {
-        // Create sample ClassSession with 2 students instead of just showing 0
-        ClassSession session = new ClassSession(
-                1,
-                "LỚP 5 - THÁNG 12/2024",
-                "Giảng viên",
-                "Cơ sở Láng Hạ",
-                LocalDate.of(2024, 12, 25),
-                "08:00 - 10:00",
-                1
-        );
-
-        // Add two students to the session
-        //session.getStudents().add(1); // Add student ID 1
-        //session.getStudents().add(2); // Add student ID 2
-
-        sessionsList.add(session);
+    @Override
+    public void onShow() {
+        super.onShow();
+        if (controller != null) {
+            controller.loadData();
+        }
     }
 }

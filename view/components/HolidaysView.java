@@ -1,7 +1,5 @@
 package view.components;
 
-import javafx.beans.property.IntegerProperty;
-import javafx.beans.property.SimpleIntegerProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -11,34 +9,38 @@ import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.TextAlignment;
+import src.controller.HolidaysController;
+import src.model.holidays.Holiday;
+import src.model.holidays.HolidayHistory;
 import view.BaseScreenView;
 
 import java.time.LocalDate;
-import java.time.Month;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class HolidaysView extends BaseScreenView {
 
-    private IntegerProperty currentYear = new SimpleIntegerProperty();
+    private HolidaysController controller;
     private ComboBox<Integer> yearComboBox;
     private GridPane calendarGrid;
     private VBox historyBox;
-
-    // Maps to store holiday information
-    private Map<LocalDate, Holiday> holidays = new HashMap<>();
+    private Map<String, Holiday> uniqueHolidays = new HashMap<>();
 
     public HolidaysView() {
         super("Ngày nghỉ", "holidays");
-        currentYear.set(2025); // Default to 2025 as shown in the image
+        // Controller will be set later via setController method
+    }
+
+    public void setController(HolidaysController controller) {
+        this.controller = controller;
+        refreshView();
     }
 
     @Override
     public void initializeView() {
-        // Initialize holidays data
-        initializeHolidays();
-
         // Main layout
         root.setSpacing(20);
         root.setPadding(new Insets(30));
@@ -73,12 +75,6 @@ public class HolidaysView extends BaseScreenView {
 
         // Add all components to root
         root.getChildren().addAll(titleBox, yearContainer, contentContainer);
-
-        // Update calendar when year changes
-        currentYear.addListener((obs, oldVal, newVal) -> updateCalendar());
-
-        // Initial calendar update
-        updateCalendar();
     }
 
     private HBox createYearSelector() {
@@ -90,7 +86,11 @@ public class HolidaysView extends BaseScreenView {
         prevYearBtn.setStyle("-fx-background-color: #f0f2f5; -fx-text-fill: #0095f6; -fx-background-radius: 5;");
         prevYearBtn.setPrefWidth(40);
         prevYearBtn.setPrefHeight(40);
-        prevYearBtn.setOnAction(e -> currentYear.set(currentYear.get() - 1));
+        prevYearBtn.setOnAction(e -> {
+            if (controller != null) {
+                controller.changeYear(controller.getCurrentYear() - 1);
+            }
+        });
 
         // Year combobox
         yearComboBox = new ComboBox<>();
@@ -102,15 +102,26 @@ public class HolidaysView extends BaseScreenView {
         for (int year = 2020; year <= 2030; year++) {
             yearComboBox.getItems().add(year);
         }
-        yearComboBox.setValue(currentYear.get());
-        yearComboBox.setOnAction(e -> currentYear.set(yearComboBox.getValue()));
+
+        // Set current year (will be updated when controller is set)
+        yearComboBox.setValue(LocalDate.now().getYear());
+
+        yearComboBox.setOnAction(e -> {
+            if (controller != null) {
+                controller.changeYear(yearComboBox.getValue());
+            }
+        });
 
         // Next year button
         Button nextYearBtn = new Button("►");
         nextYearBtn.setStyle("-fx-background-color: #f0f2f5; -fx-text-fill: #0095f6; -fx-background-radius: 5;");
         nextYearBtn.setPrefWidth(40);
         nextYearBtn.setPrefHeight(40);
-        nextYearBtn.setOnAction(e -> currentYear.set(currentYear.get() + 1));
+        nextYearBtn.setOnAction(e -> {
+            if (controller != null) {
+                controller.changeYear(controller.getCurrentYear() + 1);
+            }
+        });
 
         box.getChildren().addAll(prevYearBtn, yearComboBox, nextYearBtn);
         return box;
@@ -165,11 +176,14 @@ public class HolidaysView extends BaseScreenView {
     }
 
     private void updateCalendar() {
+        if (controller == null) return;
+
         // Update year selector
-        yearComboBox.setValue(currentYear.get());
+        yearComboBox.setValue(controller.getCurrentYear());
 
         // Clear and rebuild calendar grid
         calendarGrid.getChildren().clear();
+        uniqueHolidays.clear();
 
         // Recreate the month panes
         for (int row = 0; row < 4; row++) {
@@ -179,15 +193,17 @@ public class HolidaysView extends BaseScreenView {
                 monthPane.setStyle("-fx-border-color: #e0e0e0; -fx-border-width: 1; -fx-background-color: white;");
 
                 // Fill the month with days
-                fillMonthWithDays(monthPane, month, currentYear.get());
+                fillMonthWithDays(monthPane, month);
 
                 calendarGrid.add(monthPane, col, row);
             }
         }
     }
 
-    private void fillMonthWithDays(GridPane monthPane, int month, int year) {
-        YearMonth yearMonth = YearMonth.of(year, month);
+    private void fillMonthWithDays(GridPane monthPane, int month) {
+        if (controller == null) return;
+
+        YearMonth yearMonth = controller.getYearMonth(month);
         LocalDate firstOfMonth = yearMonth.atDay(1);
 
         // Determine which day of the week the month starts on (0 = Sunday, 1 = Monday, etc.)
@@ -208,11 +224,16 @@ public class HolidaysView extends BaseScreenView {
             dayLabel.setTextFill(Color.BLACK);
 
             // Check if this date is a holiday
-            LocalDate date = LocalDate.of(year, month, day);
-            if (holidays.containsKey(date)) {
-                Holiday holiday = holidays.get(date);
+            LocalDate date = LocalDate.of(controller.getCurrentYear(), month, day);
+            Holiday holiday = controller.getHolidayForDate(date);
+
+            if (holiday != null) {
+                // Add to unique holidays for legend
+                String key = holiday.getName() + holiday.getStartDate() + holiday.getEndDate();
+                uniqueHolidays.put(key, holiday);
+
                 StackPane dayCell = new StackPane();
-                dayCell.setStyle("-fx-background-color: " + holiday.colorHex + "; -fx-background-radius: 3;");
+                dayCell.setStyle("-fx-background-color: " + holiday.getColorHex() + "; -fx-background-radius: 3;");
                 dayCell.getChildren().add(dayLabel);
                 monthPane.add(dayCell, col, row);
             } else {
@@ -239,23 +260,10 @@ public class HolidaysView extends BaseScreenView {
         // History section
         Label historyTitle = new Label("Lịch sử");
         historyTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
-        historyTitle.setTextFill(Color.BLACK); // Set text color to black
+        historyTitle.setTextFill(Color.BLACK);
 
         historyBox = new VBox(10);
         historyBox.setPrefWidth(350);
-
-        // Add history items
-        addHistoryItem("iclass.quanly@gmail.com: Thêm mới",
-                "Nghỉ tết dương lịch 2025[01/01/2025 -> 01/01/2025]",
-                "17:27:12/20/12/2024");
-
-        addHistoryItem("iclass.quanly@gmail.com: Thêm mới",
-                "NGHỈ TẾT ÂM LỊCH [26/01/2025 -> 02/02/2025]",
-                "17:28:26/20/12/2024");
-
-        addHistoryItem("iclass.quanly@gmail.com: Thêm mới",
-                "Giỗ tổ Hùng Vương [10/04/2025 -> 10/04/2025]",
-                "17:29:27/20/12/2024");
 
         panel.getChildren().addAll(legendsBox, historyTitle, historyBox);
         return panel;
@@ -263,33 +271,37 @@ public class HolidaysView extends BaseScreenView {
 
     private VBox createLegendsBox() {
         VBox legendsBox = new VBox(15);
-
-        // New Year holiday legend
-        HBox newYearLegend = createLegendItem(
-                Color.rgb(220, 35, 65),
-                "NGHỈ TẾT DƯƠNG LỊCH 2025",
-                "01/01/2025 - 01/01/2025"
-        );
-
-        // Lunar New Year holiday legend
-        HBox lunarNewYearLegend = createLegendItem(
-                Color.rgb(62, 187, 79),
-                "NGHỈ TẾT ÂM LỊCH",
-                "26/01/2025 - 02/02/2025"
-        );
-
-        // Hung Kings Commemoration legend
-        HBox hungKingsLegend = createLegendItem(
-                Color.rgb(255, 204, 0),
-                "GIỖ TỔ HÙNG VƯƠNG",
-                "10/04/2025 - 10/04/2025"
-        );
-
-        legendsBox.getChildren().addAll(newYearLegend, lunarNewYearLegend, hungKingsLegend);
+        // Legends will be populated in updateLegends method
         return legendsBox;
     }
 
-    // And make sure the legend text is also black:
+    private void updateLegends(VBox legendsBox) {
+        legendsBox.getChildren().clear();
+
+        // Add legends for each unique holiday
+        for (Holiday holiday : uniqueHolidays.values()) {
+            String dateRangeText = formatDateRange(holiday.getStartDate(), holiday.getEndDate());
+            HBox legendItem = createLegendItem(
+                    Color.web(holiday.getColorHex()),
+                    holiday.getName().toUpperCase(),
+                    dateRangeText
+            );
+            legendsBox.getChildren().add(legendItem);
+        }
+    }
+
+    private String formatDateRange(LocalDate start, LocalDate end) {
+        if (start.equals(end)) {
+            return formatDate(start);
+        } else {
+            return formatDate(start) + " - " + formatDate(end);
+        }
+    }
+
+    private String formatDate(LocalDate date) {
+        return String.format("%02d/%02d/%d", date.getDayOfMonth(), date.getMonthValue(), date.getYear());
+    }
+
     private HBox createLegendItem(Color color, String title, String dateRange) {
         HBox item = new HBox(15);
 
@@ -301,11 +313,11 @@ public class HolidaysView extends BaseScreenView {
         VBox textBox = new VBox(5);
         Label titleLabel = new Label(title);
         titleLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
-        titleLabel.setTextFill(Color.BLACK); // Set text color to black
+        titleLabel.setTextFill(Color.BLACK);
 
         Label dateLabel = new Label(dateRange);
         dateLabel.setFont(Font.font("System", 12));
-        dateLabel.setTextFill(Color.BLACK); // Set text color to black
+        dateLabel.setTextFill(Color.BLACK);
 
         textBox.getChildren().addAll(titleLabel, dateLabel);
         item.getChildren().addAll(colorCircle, textBox);
@@ -313,8 +325,19 @@ public class HolidaysView extends BaseScreenView {
         return item;
     }
 
-    // You'll also need to update the addHistoryItem method:
-    private void addHistoryItem(String user, String action, String timestamp) {
+    private void updateHistoryItems() {
+        if (controller == null) return;
+
+        historyBox.getChildren().clear();
+
+        // Add history items from controller
+        List<HolidayHistory> historyItems = controller.getRecentHistory(10); // Get 10 most recent items
+        for (HolidayHistory history : historyItems) {
+            addHistoryItemToView(history);
+        }
+    }
+
+    private void addHistoryItemToView(HolidayHistory history) {
         HBox item = new HBox(15);
         item.setPadding(new Insets(15));
         item.setStyle("-fx-border-color: #f0f2f5; -fx-border-width: 0 0 1 0; -fx-background-color: #ffffff;");
@@ -324,25 +347,31 @@ public class HolidaysView extends BaseScreenView {
         Circle avatarCircle = new Circle(20);
         avatarCircle.setFill(Color.rgb(51, 0, 111));
 
-        Label initials = new Label("IQ");
-        initials.setTextFill(Color.WHITE);
-        initials.setFont(Font.font("System", FontWeight.BOLD, 12));
+        // Get initials from user name
+        String initials = getInitials(history.getUser());
+        Label initialsLabel = new Label(initials);
+        initialsLabel.setTextFill(Color.WHITE);
+        initialsLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
 
-        avatar.getChildren().addAll(avatarCircle, initials);
+        avatar.getChildren().addAll(avatarCircle, initialsLabel);
 
         // Text content
         VBox content = new VBox(5);
-        Label userLabel = new Label(user);
+        Label userLabel = new Label(history.getUser());
         userLabel.setFont(Font.font("System", 12));
-        userLabel.setTextFill(Color.BLACK); // Set text color to black
+        userLabel.setTextFill(Color.BLACK);
 
-        Label actionLabel = new Label(action);
+        Label actionLabel = new Label(history.getAction());
         actionLabel.setFont(Font.font("System", 14));
-        actionLabel.setTextFill(Color.BLACK); // Set text color to black
+        actionLabel.setTextFill(Color.BLACK);
 
-        Label timeLabel = new Label(timestamp);
+        // Format timestamp
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+        String formattedTime = history.getTimestamp().format(formatter);
+
+        Label timeLabel = new Label(formattedTime);
         timeLabel.setFont(Font.font("System", 12));
-        timeLabel.setTextFill(Color.GRAY); // Keep timestamp gray as in the image
+        timeLabel.setTextFill(Color.GRAY);
 
         content.getChildren().addAll(userLabel, actionLabel, timeLabel);
 
@@ -350,53 +379,41 @@ public class HolidaysView extends BaseScreenView {
         historyBox.getChildren().add(item);
     }
 
-    private void initializeHolidays() {
-        // New Year's Day
-        addHoliday("Tết Dương Lịch",
-                LocalDate.of(2025, 1, 1),
-                LocalDate.of(2025, 1, 1),
-                "#dc2341");
-
-        // Lunar New Year (Tet)
-        addHoliday("Tết Âm Lịch",
-                LocalDate.of(2025, 1, 26),
-                LocalDate.of(2025, 2, 2),
-                "#3ebb4f");
-
-        // Hung Kings Commemoration Day
-        addHoliday("Giỗ Tổ Hùng Vương",
-                LocalDate.of(2025, 4, 10),
-                LocalDate.of(2025, 4, 10),
-                "#ffcc00");
-
-        // Add any other days shown as highlighted in the image
-    }
-
-    private void addHoliday(String name, LocalDate startDate, LocalDate endDate, String colorHex) {
-        LocalDate current = startDate;
-        while (!current.isAfter(endDate)) {
-            holidays.put(current, new Holiday(name, startDate, endDate, colorHex));
-            current = current.plusDays(1);
+    private String getInitials(String userName) {
+        if (userName == null || userName.isEmpty()) {
+            return "?";
         }
-    }
 
-    // Holiday class
-    private class Holiday {
-        String name;
-        LocalDate startDate;
-        LocalDate endDate;
-        String colorHex;
-
-        public Holiday(String name, LocalDate startDate, LocalDate endDate, String colorHex) {
-            this.name = name;
-            this.startDate = startDate;
-            this.endDate = endDate;
-            this.colorHex = colorHex;
+        String[] parts = userName.split("\\s+");
+        if (parts.length == 1) {
+            return parts[0].substring(0, Math.min(2, parts[0].length())).toUpperCase();
+        } else {
+            return (parts[0].charAt(0) + "" + parts[parts.length - 1].charAt(0)).toUpperCase();
         }
     }
 
     @Override
     public void refreshView() {
-        updateCalendar();
+        if (controller != null) {
+            updateCalendar();
+
+            // Find and update legends box
+            for (javafx.scene.Node node : root.getChildren()) {
+                if (node instanceof HBox) {
+                    HBox contentContainer = (HBox) node;
+                    for (javafx.scene.Node contentNode : contentContainer.getChildren()) {
+                        if (contentNode instanceof VBox) {
+                            VBox rightPanel = (VBox) contentNode;
+                            if (rightPanel.getChildren().size() > 0 && rightPanel.getChildren().get(0) instanceof VBox) {
+                                VBox legendsBox = (VBox) rightPanel.getChildren().get(0);
+                                updateLegends(legendsBox);
+                            }
+                        }
+                    }
+                }
+            }
+
+            updateHistoryItems();
+        }
     }
 }

@@ -3,6 +3,8 @@ import src.model.ClassSession;
 import view.*;
 import view.components.*;
 import src.model.attendance.*;
+
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import src.model.person.Person;
@@ -32,7 +34,7 @@ public class MainController {
      @param ui Interface người dùng
      @param navigationController Controller điều hướng
      */
-    public MainController(UI ui, NavigationController navigationController) {
+    public MainController(UI ui, NavigationController navigationController) throws SQLException {
         this.ui = ui;
         this.navigationController = navigationController;
         initialize();
@@ -50,15 +52,16 @@ public class MainController {
     /**
      Khởi tạo controller và đăng ký các màn hình
      */
-    private void initialize() {
+    private void initialize() throws SQLException {
         registerViews();
-// Thiết lập main controller cho tất cả các view đã đăng ký
+
+        // Thiết lập main controller cho tất cả các view đã đăng ký
         setMainControllerForAllViews();
     }
     /**
      Đăng ký các view với NavigationController
      */
-    private void registerViews() {
+    private void registerViews() throws SQLException {
 // Đăng ký các views với NavigationController
         navigationController.registerView("dashboard", new DashboardView());
 // TODO: Đăng ký thêm các views khác
@@ -74,10 +77,10 @@ public class MainController {
         navigationController.registerView("ClassListView", new ClassListScreenView());
         navigationController.registerView("StudentListView", new StudentListScreenView());
         navigationController.registerView("learning-reports", new ReportView());
-        navigationController.registerView("teaching-statistics", new TeachingStatistics());
-        navigationController.registerView("monthly-teaching", new MonthlyTeachingStatistics());
-        navigationController.registerView("quarterly-teaching", new QuarterlyTeachingStatistics());
-        navigationController.registerView("yearly-teaching", new YearlyTeachingStatistics());
+        navigationController.registerView("teaching-statistics", new TeachingStatisticsView());
+        navigationController.registerView("monthly-teaching", new MonthlyTeachingStatisticsView());
+        navigationController.registerView("quarterly-teaching", new QuarterlyTeachingStatisticsView());
+        navigationController.registerView("yearly-teaching", new YearlyTeachingStatisticsView());
         navigationController.registerView("classrooms", new RoomView());
         navigationController.registerView("holidays", new HolidaysView());
     }
@@ -170,7 +173,7 @@ public class MainController {
      @param id ID của buổi học
      @return Thông tin buổi học hoặc null nếu không tìm thấy
      */
-    public ClassSession getClassSessionById(long id) {
+    public ClassSession getClassSessionById(String id) {
 // TODO: Implement - Truy vấn dữ liệu từ database dựa vào ID
 // Giả lập: Nếu ID trùng với currentSessionDetail thì trả về
         if (currentSessionDetail != null && id == currentSessionDetail.getId()) {
@@ -183,11 +186,11 @@ public class MainController {
      @param id ID của buổi học cần xóa
      @return true nếu xóa thành công
      */
-    public boolean deleteClassSession(long id) {
-// TODO: Implement - Xóa session từ database
-// Giả lập: Luôn trả về thành công
+    public boolean deleteClassSession(String id) {
+    // TODO: Implement - Xóa session từ database
+    // Giả lập: Luôn trả về thành công
         if (currentSessionDetail != null && id == currentSessionDetail.getId()) {
-// Thông báo cho các view rằng session đã bị xóa
+    // Thông báo cho các view rằng session đã bị xóa
             if (navigationController != null) {
                 navigationController.getCurrentView().handleSystemMessage("class_deleted", id);
             }
@@ -235,22 +238,17 @@ public class MainController {
      Lấy danh sách các ID lớp học mà giáo viên hiện tại phụ trách
      @return Danh sách các ID lớp học
      */
-    public List<Long> getTeacherClassIds() {
-// Kiểm tra nếu người dùng hiện tại là giáo viên
+    public List<Object> getTeacherClassIds() {
+        // Kiểm tra nếu người dùng hiện tại là giáo viên
         if (currentUser instanceof Teacher) {
-// TODO: Truy vấn cơ sở dữ liệu để lấy danh sách các lớp của giáo viên
-            List<Long> teacherClassIds = new ArrayList<>();
-            // Giả lập dữ liệu cho mục đích demo
-            teacherClassIds.add(1L);
-            teacherClassIds.add(2L);
-            teacherClassIds.add(3L);
-
-
+            // TODO: Truy vấn cơ sở dữ liệu để lấy danh sách các lớp của giáo viên
+            List<Object> teacherClassIds = new ArrayList<>();
+            //take data by using DAO
             return teacherClassIds;
 
 
         }
-// Trả về danh sách trống nếu không phải giáo viên
+        // Trả về danh sách trống nếu không phải giáo viên
         return new ArrayList<>();
     }
     /**
@@ -271,11 +269,11 @@ public class MainController {
      Lấy ID lớp học của buổi học hiện tại
      @return ID lớp học hoặc -1 nếu không có buổi học nào được chọn
      */
-    public long getCurrentClassId() {
+    public String getCurrentClassId() {
         if (currentSessionDetail != null) {
             return currentSessionDetail.getClassId();
         }
-        return -1;
+        return null;
     }
     /**
      Đặt người dùng hiện tại cho hệ thống
@@ -359,40 +357,15 @@ public class MainController {
      Thiết lập quyền truy cập dựa trên loại người dùng
      */
     private void setupAccessPermissions() {
-// Thiết lập quyền truy cập cho các chức năng dựa vào loại người dùng
         if (currentUser == null) return;
-// Tùy thuộc vào UI của bạn, có thể cần thêm phương thức hoặc sửa lại
-// Ví dụ:
-/*
-if (currentUser instanceof Admin) {
-ui.showAdminFeatures(true);
-ui.showTeacherFeatures(true);
-ui.showStudentFeatures(true);
-ui.showParentFeatures(true);
-} else if (currentUser instanceof Teacher) {
-ui.showAdminFeatures(false);
-ui.showTeacherFeatures(true);
-ui.showStudentFeatures(false);
-ui.showParentFeatures(false);
-} else if (currentUser instanceof Student) {
-ui.showAdminFeatures(false);
-ui.showTeacherFeatures(false);
-ui.showStudentFeatures(true);
-ui.showParentFeatures(false);
-} else if (currentUser instanceof Parent) {
-ui.showAdminFeatures(false);
-ui.showTeacherFeatures(false);
-ui.showStudentFeatures(false);
-ui.showParentFeatures(true);
-}
-*/
+
     }
     /**
      Lấy thông tin của một ClassSession từ cơ sở dữ liệu
      @param sessionId ID của buổi học cần lấy thông tin
      @return Đối tượng ClassSession hoặc null nếu không tìm thấy
      */
-    public ClassSession getClassSessionDetails(long sessionId) {
+    public ClassSession getClassSessionDetails(String sessionId) {
 // Kiểm tra cache trước
         if (currentSessionDetail != null && currentSessionDetail.getId() == sessionId) {
             return currentSessionDetail;
@@ -429,12 +402,12 @@ ui.showParentFeatures(true);
      @param session Thông tin ClassSession cần tạo
      @return ID của ClassSession mới tạo, hoặc -1 nếu thất bại
      */
-    public long createClassSession(ClassSession session) {
-        if (session == null) return -1;
+    public String createClassSession(ClassSession session) {
+        if (session == null) return null;
         try {
-// TODO: Thêm vào cơ sở dữ liệu và lấy ID mới
+        // TODO: Thêm vào cơ sở dữ liệu và lấy ID mới
             // Giả lập ID cho môi trường phát triển
-            long newId = System.currentTimeMillis();
+            String newId = String.valueOf(System.currentTimeMillis());
             session.setId(newId);
 
 
@@ -444,7 +417,7 @@ ui.showParentFeatures(true);
         } catch (Exception e) {
             System.err.println("Lỗi khi tạo buổi học mới: " + e.getMessage());
             e.printStackTrace();
-            return -1;
+            return null;
         }
     }
     /**

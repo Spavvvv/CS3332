@@ -2,72 +2,71 @@ package view.components;
 
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.scene.shape.Circle;
-import javafx.scene.Node;
+import src.controller.ClassroomController;
+import src.model.classroom.Classroom;
 import view.BaseScreenView;
 
 /**
- * Màn hình quản lý phòng học
+ * View for Classroom Management Screen
  */
 public class RoomView extends BaseScreenView {
 
-    // Các thành phần UI
+    // UI components
     private TextField txtKeyword;
     private ComboBox<String> cmbStatus;
     private ComboBox<String> cmbPageSize;
-    private TableView<PhongHoc> tblPhongHoc;
-    private FilteredList<PhongHoc> filteredData;
+    private TableView<Classroom> tblClassroom;
+
+    // Controller
+    private ClassroomController controller;
 
     public RoomView() {
         super("Phòng học", "classrooms");
+        this.controller = new ClassroomController();
     }
 
     @Override
     public void initializeView() {
-        // Tạo layout chính với padding
+        // Main layout with padding
         root.setSpacing(10);
         root.setPadding(new Insets(20));
 
-        // Tạo tiêu đề màn hình
+        // Screen title
         Label lblTitle = new Label("Phòng học");
         lblTitle.setFont(Font.font("System", FontWeight.BOLD, 24));
         lblTitle.setTextFill(Color.web("#1E88E5"));
 
-        // Tạo vùng tìm kiếm và lọc
+        // Search and filter area
         HBox searchBar = createSearchBar();
         searchBar.setPadding(new Insets(10));
         searchBar.setStyle("-fx-background-color: #f8f9fa; -fx-border-radius: 5; -fx-background-radius: 5;");
 
-        // Tạo bảng hiển thị danh sách phòng học
+        // Create table view
         createTableView();
 
-        // Thêm tất cả vào layout chính
-        root.getChildren().addAll(lblTitle, searchBar, tblPhongHoc);
-        VBox.setVgrow(tblPhongHoc, Priority.ALWAYS);
+        // Add all to main layout
+        root.getChildren().addAll(lblTitle, searchBar, tblClassroom);
+        VBox.setVgrow(tblClassroom, Priority.ALWAYS);
 
-        // Nạp dữ liệu mẫu vào bảng
-        loadSampleData();
+        // Load data into table
+        refreshView();
     }
 
     private HBox createSearchBar() {
         HBox searchBar = new HBox(15);
         searchBar.setAlignment(Pos.CENTER_LEFT);
 
-        // Trường từ khóa
+        // Keyword field
         Label lblKeyword = new Label("Từ khóa:");
         lblKeyword.setMinWidth(70);
         lblKeyword.setTextFill(Color.BLACK);
@@ -75,15 +74,16 @@ public class RoomView extends BaseScreenView {
         txtKeyword.setPromptText("Từ khóa");
         txtKeyword.setPrefWidth(350);
 
-        // Combo box trạng thái
+        // Status combobox
         Label lblStatus = new Label("Trạng thái:");
         lblStatus.setTextFill(Color.BLACK);
         cmbStatus = new ComboBox<>();
         cmbStatus.setPromptText("Chọn");
-        cmbStatus.setItems(FXCollections.observableArrayList("Tất cả", "Đang sử dụng", "Bảo trì", "Không sử dụng"));
+        cmbStatus.setItems(FXCollections.observableArrayList("Tất cả", "Sử dụng", "Bảo trì", "Không sử dụng"));
+        cmbStatus.setValue("Tất cả");
         cmbStatus.setPrefWidth(200);
 
-        // Combo box kích thước trang
+        // Page size combobox
         Label lblPageSize = new Label("Cỡ trang:");
         lblPageSize.setTextFill(Color.BLACK);
         cmbPageSize = new ComboBox<>();
@@ -91,7 +91,7 @@ public class RoomView extends BaseScreenView {
         cmbPageSize.setValue("20");
         cmbPageSize.setPrefWidth(120);
 
-        // Nút tìm kiếm với biểu tượng tìm kiếm đơn giản
+        // Search button with simple search icon
         Button btnSearch = new Button();
         Text searchIcon = new Text("🔍"); // Unicode magnifying glass
         searchIcon.setFill(Color.WHITE);
@@ -99,11 +99,12 @@ public class RoomView extends BaseScreenView {
         btnSearch.setStyle("-fx-background-color: #1E88E5; -fx-text-fill: white;");
         btnSearch.setPrefSize(40, 10);
 
-        // Thêm sự kiện tìm kiếm
+        // Add search event
         btnSearch.setOnAction(e -> performSearch());
         txtKeyword.setOnAction(e -> performSearch());
+        cmbStatus.setOnAction(e -> performSearch());
 
-        // Thêm khoảng trống linh hoạt trước nút tìm kiếm
+        // Add flexible space before search button
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -112,59 +113,73 @@ public class RoomView extends BaseScreenView {
     }
 
     private void createTableView() {
-        tblPhongHoc = new TableView<>();
-        tblPhongHoc.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tblClassroom = new TableView<>();
+        tblClassroom.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        // Cột STT
-        TableColumn<PhongHoc, Integer> colSTT = new TableColumn<>("STT");
+        // STT Column
+        TableColumn<Classroom, Integer> colSTT = new TableColumn<>("STT");
         colSTT.setCellValueFactory(new PropertyValueFactory<>("stt"));
         colSTT.setMaxWidth(70);
         colSTT.setMinWidth(50);
         colSTT.setSortable(false);
 
-        // Cột Mã
-        TableColumn<PhongHoc, String> colMa = new TableColumn<>("Mã");
+        // Code Column
+        TableColumn<Classroom, String> colMa = new TableColumn<>("Mã");
         colMa.setCellValueFactory(new PropertyValueFactory<>("ma"));
         colMa.setMaxWidth(100);
         colMa.setMinWidth(80);
 
-        // Cột Tên
-        TableColumn<PhongHoc, String> colTen = new TableColumn<>("Tên");
+        // Name Column
+        TableColumn<Classroom, String> colTen = new TableColumn<>("Tên");
         colTen.setCellValueFactory(new PropertyValueFactory<>("ten"));
 
-        // Cột Tầng
-        TableColumn<PhongHoc, Integer> colTang = new TableColumn<>("Tầng");
+        // Floor Column
+        TableColumn<Classroom, Integer> colTang = new TableColumn<>("Tầng");
         colTang.setCellValueFactory(new PropertyValueFactory<>("tang"));
         colTang.setMaxWidth(100);
         colTang.setMinWidth(80);
 
-        // Cột Sức chứa
-        TableColumn<PhongHoc, Integer> colSucChua = new TableColumn<>("Sức chứa");
+        // Capacity Column
+        TableColumn<Classroom, Integer> colSucChua = new TableColumn<>("Sức chứa");
         colSucChua.setCellValueFactory(new PropertyValueFactory<>("sucChua"));
         colSucChua.setMaxWidth(100);
         colSucChua.setMinWidth(80);
 
-        // Cột Trạng thái
-        TableColumn<PhongHoc, String> colTrangThai = new TableColumn<>("Trạng thái");
-        colTrangThai.setCellValueFactory(cellData -> {
-            return new SimpleStringProperty("Sử dụng");
-        });
+        // Status Column
+        TableColumn<Classroom, String> colTrangThai = new TableColumn<>("Trạng thái");
+        colTrangThai.setCellValueFactory(new PropertyValueFactory<>("trangThai"));
         colTrangThai.setMaxWidth(150);
         colTrangThai.setMinWidth(120);
 
-        // Cài đặt cell factory cho cột trạng thái để hiển thị nút
+        // Set cell factory for status column to display button
         colTrangThai.setCellFactory(column -> {
             return new TableCell<>() {
-                final Button button = new Button("Sử dụng");
+                final Button button = new Button();
 
                 @Override
                 protected void updateItem(String item, boolean empty) {
                     super.updateItem(item, empty);
 
-                    if (empty) {
+                    if (empty || item == null) {
                         setGraphic(null);
                     } else {
-                        button.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-background-radius: 20;");
+                        button.setText(item);
+
+                        // Style based on status
+                        switch (item) {
+                            case "Sử dụng":
+                                button.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-background-radius: 20;");
+                                break;
+                            case "Bảo trì":
+                                button.setStyle("-fx-background-color: #FFC107; -fx-text-fill: white; -fx-background-radius: 20;");
+                                break;
+                            case "Không sử dụng":
+                                button.setStyle("-fx-background-color: #F44336; -fx-text-fill: white; -fx-background-radius: 20;");
+                                break;
+                            default:
+                                button.setStyle("-fx-background-color: #9E9E9E; -fx-text-fill: white; -fx-background-radius: 20;");
+                        }
+
                         button.setPrefWidth(100);
                         setGraphic(button);
                     }
@@ -172,147 +187,199 @@ public class RoomView extends BaseScreenView {
             };
         });
 
-        // Cột Chi tiết
-        TableColumn<PhongHoc, Void> colChiTiet = new TableColumn<>("Chi tiết");
-        colChiTiet.setCellFactory(column -> {
+        // Action Column for details and edit
+        TableColumn<Classroom, Void> colActions = new TableColumn<>("Thao tác");
+        colActions.setCellFactory(column -> {
             return new TableCell<>() {
-                final Button button = new Button();
+                final Button btnView = new Button();
+                final Button btnEdit = new Button();
+                final HBox hbox = new HBox(10);
 
                 {
-                    // Tạo biểu tượng "eye" đơn giản
+                    // Details button with eye icon
                     HBox eyeIcon = createEyeIcon();
-                    button.setGraphic(eyeIcon);
-                    button.setStyle("-fx-background-color: transparent;");
+                    btnView.setGraphic(eyeIcon);
+                    btnView.setStyle("-fx-background-color: transparent;");
+                    btnView.setTooltip(new Tooltip("Xem chi tiết"));
 
-                    button.setOnAction(event -> {
-                        PhongHoc data = getTableView().getItems().get(getIndex());
+                    // Edit button with pencil icon
+                    Text editIcon = new Text("✏️"); // Unicode pencil
+                    btnEdit.setGraphic(editIcon);
+                    btnEdit.setStyle("-fx-background-color: transparent;");
+                    btnEdit.setTooltip(new Tooltip("Sửa"));
+
+                    // Add actions
+                    btnView.setOnAction(event -> {
+                        Classroom data = getTableView().getItems().get(getIndex());
                         showDetails(data);
                     });
+
+                    btnEdit.setOnAction(event -> {
+                        Classroom data = getTableView().getItems().get(getIndex());
+                        editClassroom(data);
+                    });
+
+                    hbox.setAlignment(Pos.CENTER);
+                    hbox.getChildren().addAll(btnView, btnEdit);
                 }
 
                 @Override
                 protected void updateItem(Void item, boolean empty) {
                     super.updateItem(item, empty);
-                    setGraphic(empty ? null : button);
+                    setGraphic(empty ? null : hbox);
                 }
             };
         });
-        colChiTiet.setMaxWidth(80);
-        colChiTiet.setMinWidth(80);
-        colChiTiet.setSortable(false);
+        colActions.setMaxWidth(120);
+        colActions.setMinWidth(100);
+        colActions.setSortable(false);
 
-        // Thêm các cột vào bảng
-        tblPhongHoc.getColumns().addAll(colSTT, colMa, colTen, colTang, colSucChua, colTrangThai, colChiTiet);
+        // Add columns to table
+        tblClassroom.getColumns().addAll(colSTT, colMa, colTen, colTang, colSucChua, colTrangThai, colActions);
     }
 
     /**
-     * Tạo biểu tượng con mắt đơn giản thay thế cho FontAwesome
+     * Create a simple eye icon
      */
     private HBox createEyeIcon() {
         HBox container = new HBox();
         container.setAlignment(Pos.CENTER);
 
-        // Tạo hình tròn ngoài
+        // Create outer circle
         Circle outerCircle = new Circle(9, Color.web("#2E7D32"));
         outerCircle.setStroke(Color.web("#2E7D32"));
         outerCircle.setStrokeWidth(1.5);
         outerCircle.setFill(Color.TRANSPARENT);
 
-        // Tạo hình tròn trong (đồng tử)
+        // Create inner circle (pupil)
         Circle innerCircle = new Circle(3, Color.web("#2E7D32"));
 
-        // Xếp chồng các hình lên nhau
+        // Stack shapes
         container.getChildren().addAll(outerCircle, innerCircle);
 
         return container;
     }
 
-    private void loadSampleData() {
-        // Tạo dữ liệu mẫu
-        ObservableList<PhongHoc> data = FXCollections.observableArrayList(
-                new PhongHoc(1, "101", "Phòng sinh hoạt", 1, 7),
-                new PhongHoc(2, "201", "Phòng 201", 2, 25),
-                new PhongHoc(3, "202", "Phòng 202", 2, 30),
-                new PhongHoc(4, "301", "Phòng 301", 3, 27),
-                new PhongHoc(5, "302", "Phòng 302", 3, 30),
-                new PhongHoc(6, "401", "Phòng 401", 4, 25),
-                new PhongHoc(7, "402", "Phòng 402", 4, 30)
-        );
-
-        // Tạo filtered list để tìm kiếm
-        filteredData = new FilteredList<>(data, p -> true);
-        tblPhongHoc.setItems(filteredData);
-    }
-
     private void performSearch() {
-        String keyword = txtKeyword.getText().toLowerCase();
+        String keyword = txtKeyword.getText().trim();
         String status = cmbStatus.getValue();
 
-        filteredData.setPredicate(phongHoc -> {
-            // Nếu không có từ khóa hoặc trạng thái thì hiện tất cả
-            if (keyword == null || keyword.isEmpty()) {
-                return true;
-            }
+        // Use controller to filter classrooms
+        controller.filterClassrooms(keyword, status);
 
-            // Lọc theo từ khóa
-            if (phongHoc.getMa().toLowerCase().contains(keyword) ||
-                    phongHoc.getTen().toLowerCase().contains(keyword) ||
-                    String.valueOf(phongHoc.getTang()).contains(keyword)) {
-                return true;
-            }
+        // Refresh view to show filtered data
+        refreshView();
+    }
 
-            return false;
+    private void showDetails(Classroom classroom) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Chi tiết phòng học");
+        alert.setHeaderText("Thông tin phòng học: " + classroom.getTen());
+
+        // Create formatted content
+        StringBuilder content = new StringBuilder();
+        content.append("Mã: ").append(classroom.getMa()).append("\n");
+        content.append("Tên: ").append(classroom.getTen()).append("\n");
+        content.append("Tầng: ").append(classroom.getTang()).append("\n");
+        content.append("Sức chứa: ").append(classroom.getSucChua()).append(" người\n");
+        content.append("Trạng thái: ").append(classroom.getTrangThai());
+
+        alert.setContentText(content.toString());
+        alert.showAndWait();
+    }
+
+    private void editClassroom(Classroom classroom) {
+        // Create dialog for editing
+        Dialog<Classroom> dialog = new Dialog<>();
+        dialog.setTitle("Chỉnh sửa phòng học");
+        dialog.setHeaderText("Chỉnh sửa thông tin phòng " + classroom.getTen());
+
+        // Set buttons
+        ButtonType saveButtonType = new ButtonType("Lưu", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+
+        // Create form grid
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20, 150, 10, 10));
+
+        // Create form fields with existing data
+        TextField txtMa = new TextField(classroom.getMa());
+        TextField txtTen = new TextField(classroom.getTen());
+        Spinner<Integer> spnTang = new Spinner<>(1, 20, classroom.getTang());
+        Spinner<Integer> spnSucChua = new Spinner<>(10, 500, classroom.getSucChua());
+        ComboBox<String> cmbTrangThai = new ComboBox<>();
+        cmbTrangThai.getItems().addAll("Sử dụng", "Bảo trì", "Không sử dụng");
+        cmbTrangThai.setValue(classroom.getTrangThai());
+
+        // Add fields to grid
+        grid.add(new Label("Mã:"), 0, 0);
+        grid.add(txtMa, 1, 0);
+        grid.add(new Label("Tên:"), 0, 1);
+        grid.add(txtTen, 1, 1);
+        grid.add(new Label("Tầng:"), 0, 2);
+        grid.add(spnTang, 1, 2);
+        grid.add(new Label("Sức chứa:"), 0, 3);
+        grid.add(spnSucChua, 1, 3);
+        grid.add(new Label("Trạng thái:"), 0, 4);
+        grid.add(cmbTrangThai, 1, 4);
+
+        dialog.getDialogPane().setContent(grid);
+
+        // Request focus on the first field
+        txtMa.requestFocus();
+
+        // Convert the result
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == saveButtonType) {
+                // Update classroom properties
+                classroom.setMa(txtMa.getText());
+                classroom.setTen(txtTen.getText());
+                classroom.setTang(spnTang.getValue());
+                classroom.setSucChua(spnSucChua.getValue());
+                classroom.setTrangThai(cmbTrangThai.getValue());
+                return classroom;
+            }
+            return null;
+        });
+
+        // Show dialog and process result
+        dialog.showAndWait().ifPresent(updatedClassroom -> {
+            // Save to database using controller
+            Classroom savedClassroom = controller.saveClassroom(updatedClassroom);
+            if (savedClassroom != null) {
+                // Success
+                refreshView();
+                showAlert(Alert.AlertType.INFORMATION, "Thành công",
+                        "Cập nhật phòng học thành công",
+                        "Thông tin phòng học đã được cập nhật.");
+            } else {
+                // Error
+                showAlert(Alert.AlertType.ERROR, "Lỗi",
+                        "Không thể cập nhật phòng học",
+                        "Có lỗi xảy ra khi lưu thông tin phòng học.");
+            }
         });
     }
 
-    private void showDetails(PhongHoc phongHoc) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Chi tiết phòng học");
-        alert.setHeaderText("Thông tin phòng học: " + phongHoc.getTen());
-
-        String content = "Mã phòng: " + phongHoc.getMa() + "\n" +
-                "Tên phòng: " + phongHoc.getTen() + "\n" +
-                "Tầng: " + phongHoc.getTang() + "\n" +
-                "Sức chứa: " + phongHoc.getSucChua() + " người";
-
+    private void showAlert(Alert.AlertType type, String title, String header, String content) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
         alert.setContentText(content);
         alert.showAndWait();
     }
 
     @Override
     public void refreshView() {
-        // Làm mới dữ liệu khi cần
-        // loadData();
+        // Set items in table view from controller's filtered list
+        tblClassroom.setItems(controller.getFilteredClassrooms());
     }
 
     @Override
     public boolean requiresAuthentication() {
-        // Yêu cầu xác thực để truy cập màn hình này
+        // Require authentication to access this screen
         return true;
-    }
-
-    /**
-     * Lớp đối tượng dữ liệu Phòng học
-     */
-    public static class PhongHoc {
-        private final int stt;
-        private final String ma;
-        private final String ten;
-        private final int tang;
-        private final int sucChua;
-
-        public PhongHoc(int stt, String ma, String ten, int tang, int sucChua) {
-            this.stt = stt;
-            this.ma = ma;
-            this.ten = ten;
-            this.tang = tang;
-            this.sucChua = sucChua;
-        }
-
-        public int getStt() { return stt; }
-        public String getMa() { return ma; }
-        public String getTen() { return ten; }
-        public int getTang() { return tang; }
-        public int getSucChua() { return sucChua; }
     }
 }
