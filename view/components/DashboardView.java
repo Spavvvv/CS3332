@@ -622,7 +622,7 @@ public class DashboardView extends BaseScreenView {
 
                 // Navigate to class detail screen
                 if (navigationController != null) {
-                    navigationController.navigateTo("class-detail");
+                    navigationController.navigateTo("details-view");
                 }
             } else {
                 showErrorAlert("Lỗi", "Không tìm thấy lớp học",

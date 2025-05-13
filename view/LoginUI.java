@@ -20,13 +20,9 @@ import src.model.person.Parent;
 import src.model.person.Student;
 import src.model.person.Teacher;
 import src.model.person.Person;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.time.LocalDate;
+import src.dao.AccountDAO;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Scanner;
 import java.util.prefs.Preferences;
 
@@ -438,66 +434,40 @@ public class LoginUI {
      */
     private void handleLogin() {
         String username = usernameField.getText().trim();
-        String password = passwordField.getText();
+        String password = passwordField.getText().trim();
         boolean rememberMe = rememberMeCheck.isSelected();
 
-        // Lưu thông tin đăng nhập nếu được chọn
-        saveCredentials(username, rememberMe);
-
-        // Kiểm tra đầu vào
+        // Kiểm tra nếu username hoặc password rỗng
         if (username.isEmpty() || password.isEmpty()) {
             showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu");
             return;
         }
 
-        // Đường dẫn đến file tài khoản
-        String filePath = FILE_PATH + "\\" + username + ".txt";
-        File file = new File(filePath);
+        try {
+            // Sử dụng DAO để xác thực
+            AccountDAO accountDAO = new AccountDAO();
+            Optional<Person> userOptional = accountDAO.authenticate(username, password);
 
-        if (!file.exists()) {
-            showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Tên đăng nhập không tồn tại");
-            return;
-        }
+            if (userOptional.isPresent()) {
+                // Đăng nhập thành công
+                Person user = userOptional.get();
+                System.out.println("Đăng nhập thành công với vai trò: " + user.getRole());
 
-        try (Scanner scanner = new Scanner(file)) {
-            if (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                String[] parts = line.split(",");
+                // Lưu thông tin đăng nhập nếu cần
+                saveCredentials(username, rememberMe);
 
-                // Kiểm tra định dạng dữ liệu và xác thực mật khẩu
-                if (parts.length >= 9 && parts[0].equals(username) && parts[1].equals(password)) {
-                    // Đăng nhập thành công
-                    System.out.println("Đăng nhập thành công!");
-
-                    // Phân tích dữ liệu người dùng từ file
-                    String userId = parts[8].trim(); // ID độc nhất
-                    String fullName = parts[2].trim(); // Họ tên
-                    String email = parts[3].trim(); // Email
-                    String phone = parts[4].trim(); // Số điện thoại
-                    String role = parts[5].trim(); // Vai trò
-                    String dobString = parts[6].trim(); // Ngày sinh
-
-                    // Lấy giới tính nếu có, mặc định là "Nam" nếu không có thông tin
-                    String gender = parts.length > 7 ? parts[7].trim() : "Nam";
-
-                    // Tạo đối tượng người dùng dựa trên vai trò
-                    Person user = createPersonObject(role, userId, fullName, gender, phone, dobString, email);
-
-                    // Tạo và hiển thị giao diện chính
-                    launchMainUI(user, fullName);
-                    return;
-                }
+                // Gọi giao diện chính
+                launchMainUI(user, user.getName());
+            } else {
+                // Đăng nhập thất bại
+                showAlert(Alert.AlertType.ERROR, "Lỗi đăng nhập", "Tên đăng nhập hoặc mật khẩu không đúng");
             }
-            showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Mật khẩu không đúng");
-        } catch (FileNotFoundException e) {
-            showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Không tìm thấy file tài khoản");
-        } catch (DateTimeParseException e) {
-            showAlert(Alert.AlertType.ERROR, "Lỗi dữ liệu", "Định dạng ngày tháng trong file tài khoản không hợp lệ");
         } catch (Exception e) {
-            showAlert(Alert.AlertType.ERROR, "Lỗi hệ thống", "Lỗi xảy ra khi đăng nhập: " + e.getMessage());
+            showAlert(Alert.AlertType.ERROR, "Lỗi hệ thống", "Đã xảy ra lỗi: " + e.getMessage());
             e.printStackTrace();
         }
     }
+
 
     /**
      * Khởi chạy giao diện chính sau khi đăng nhập thành công

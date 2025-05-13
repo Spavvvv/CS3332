@@ -30,23 +30,38 @@ public class AccountDAO {
      *
      * @param username Username for the account
      * @param password Password for the account
-     * @param personId ID of the associated person
      * @param role Role of the user (TEACHER, STUDENT, PARENT)
      * @return true if successful, false otherwise
      */
-    public boolean save(String username, String password, String personId, String role) {
-        String sql = "INSERT INTO accounts (username, password, person_id, role) VALUES (?, ?, ?, ?)";
+    public boolean save(String username, String password, String role) {
+        // Thủ tục hai bước: lưu account trước, sau đó tạo user record liên kết với account
+        String sql = "INSERT INTO accounts (username, password, role) VALUES (?, ?, ?)";
 
         try (Connection conn = dbConnector.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             stmt.setString(1, username);
-            stmt.setString(2, password); // Should be hashed in production
-            stmt.setString(3, personId);
-            stmt.setString(4, role);
+            stmt.setString(2, password); // Nên mã hóa trong môi trường production
+            stmt.setString(3, role);
 
             int affectedRows = stmt.executeUpdate();
-            return affectedRows > 0;
+
+            if (affectedRows > 0) {
+                // Lấy ID của account vừa tạo
+                try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                    if (generatedKeys.next()) {
+                        String accountId = generatedKeys.getString(1);
+
+                        // Tạo user record mới với account_id
+                        String userSql = "INSERT INTO users (account_id, active) VALUES (?, true)";
+                        try (PreparedStatement userStmt = conn.prepareStatement(userSql)) {
+                            userStmt.setString(1, accountId);
+                            return userStmt.executeUpdate() > 0;
+                        }
+                    }
+                }
+            }
+            return false;
 
         } catch (SQLException e) {
             System.err.println("Error saving account: " + e.getMessage());
@@ -54,6 +69,7 @@ public class AccountDAO {
             return false;
         }
     }
+
 
     /**
      * Update an existing account
@@ -165,16 +181,19 @@ public class AccountDAO {
     /**
      * Find an account by person ID
      *
-     * @param personId Person ID to search for
+     * @param userId Person ID to search for
      * @return Optional containing the account data if found
      */
-    public Optional<Account> findByPersonId(String personId) {
-        String sql = "SELECT * FROM accounts WHERE person_id = ?";
+    public Optional<Account> findByUserId(String userId) {
+        // Thay đổi truy vấn để tìm account dựa trên user id từ bảng users
+        String sql = "SELECT a.* FROM accounts a " +
+                "JOIN users u ON u.account_id = a.id " +
+                "WHERE u.id = ?";
 
         try (Connection conn = dbConnector.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, personId);
+            stmt.setString(1, userId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -183,12 +202,13 @@ public class AccountDAO {
             }
 
         } catch (SQLException e) {
-            System.err.println("Error finding account by person ID: " + e.getMessage());
+            System.err.println("Error finding account by user ID: " + e.getMessage());
             e.printStackTrace();
         }
 
         return Optional.empty();
     }
+
 
     /**
      * Get all accounts
@@ -223,56 +243,86 @@ public class AccountDAO {
      * @return Optional containing the Person object if authentication successful
      */
     public Optional<Person> authenticate(String username, String password) {
-        String sql = "SELECT a.*, p.* FROM accounts a " +
-                "JOIN persons p ON a.person_id = p.id " +
+        // Truy vấn cả bảng accounts và users
+        String sql = "SELECT a.*, u.* FROM accounts a " +
+                "JOIN users u ON u.account_id = a.id " +
                 "WHERE a.username = ? AND a.password = ?";
 
         try (Connection conn = dbConnector.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, username);
-            stmt.setString(2, password); // Should be hashed in production
+            stmt.setString(2, password);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    String role = rs.getString("role");
-                    String personId = rs.getString("person_id");
+                    // Lấy thông tin từ bảng accounts
+                    String accountId = rs.getString("a.id");
+                    String role = rs.getString("a.role");
 
-                    // Based on role, retrieve appropriate person type
-                    return loadPersonByRole(role, personId);
+                    // Lấy thông tin từ bảng users
+                    String userId = rs.getString("u.id");
+                    String name = rs.getString("u.name");
+                    String email = rs.getString("u.email");
+                    boolean isActive = rs.getBoolean("u.active");
+
+                    // Kiểm tra trạng thái hoạt động
+                    if (!isActive) {
+                        System.out.println("Tài khoản không hoạt động.");
+                        return Optional.empty();
+                    }
+
+                    // Dựa vào vai trò, tạo đối tượng Person tương ứng
+                    return createPersonObject(role, userId, name, email);
                 }
             }
 
         } catch (SQLException e) {
-            System.err.println("Error authenticating user: " + e.getMessage());
+            System.err.println("Lỗi trong quá trình xác thực: " + e.getMessage());
             e.printStackTrace();
         }
 
         return Optional.empty();
     }
 
-    /**
-     * Load the appropriate Person subclass based on role and ID
-     *
-     * @param role User role
-     * @param personId Person ID
-     * @return Optional containing the Person object
-     */
-    private Optional<Person> loadPersonByRole(String role, String personId) throws SQLException {
+    // Hàm tạo đối tượng Person dựa vào vai trò
+    private Optional<Person> createPersonObject(String role, String userId, String name, String email) {
         switch (role.toUpperCase()) {
             case "TEACHER":
-                TeacherDAO teacherDAO = new TeacherDAO();
-                return teacherDAO.findById(personId).map(teacher -> (Person) teacher);
+                return Optional.of(new Teacher(userId, name, "Không xác định", email, "", "", userId, "Giáo viên"));
             case "STUDENT":
-                StudentDAO studentDAO = new StudentDAO();
-                return studentDAO.findById(personId).map(student -> (Person) student);
+                return Optional.of(new Student(userId, name, "Không xác định", email, "", "", null));
             case "PARENT":
-                ParentDAO parentDAO = new ParentDAO();
-                return parentDAO.findById(personId).map(parent -> (Person) parent);
+                return Optional.of(new Parent(userId, name, "Không xác định", email, "", "", ""));
             default:
                 return Optional.empty();
         }
     }
+
+    /**
+     * Load the appropriate Person subclass based on role and ID
+     *
+     * @param role User role
+     * @param userId Person ID
+     * @return Optional containing the Person object
+     */
+    private Optional<Person> loadPersonByRole(String role, String userId) throws SQLException {
+        // Thay đổi cách lấy dữ liệu từ DAO tương ứng với từng loại người dùng
+        switch (role.toUpperCase()) {
+            case "TEACHER":
+                TeacherDAO teacherDAO = new TeacherDAO();
+                return teacherDAO.findById(userId).map(teacher -> (Person) teacher);
+            case "STUDENT":
+                StudentDAO studentDAO = new StudentDAO();
+                return studentDAO.findById(userId).map(student -> (Person) student);
+            case "PARENT":
+                ParentDAO parentDAO = new ParentDAO();
+                return parentDAO.findById(userId).map(parent -> (Person) parent);
+            default:
+                return Optional.empty();
+        }
+    }
+
 
     /**
      * Change password for an account

@@ -14,10 +14,12 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import src.model.system.course.Course;
-import src.model.system.course.CourseDate;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 public class CreateClassScreenView {
     // Constants
@@ -213,22 +215,62 @@ public class CreateClassScreenView {
         cancelButton.setOnAction(e -> stage.close());
     }
 
+
     private void createCourse() {
         // Validate input fields
         if (validateInputs()) {
             try {
-                // Tạo đối tượng CourseDate
-                CourseDate courseDate = new CourseDate(
-                        startDatePicker.getValue(),
-                        endDatePicker.getValue()
-                );
+                LocalDate startDate = startDatePicker.getValue();
+                LocalDate endDate = endDatePicker.getValue();
 
-                // Tạo đối tượng Course
+                // Parse schedule information from the text area
+                // Format expected: "Thứ 2 - 8:00\nThứ 4 - 8:00"
+                String scheduleText = scheduleField.getText();
+                List<String> daysOfWeek = new ArrayList<>();
+                LocalTime startTime = LocalTime.of(8, 0); // Default value
+                LocalTime endTime = LocalTime.of(9, 30);  // Default value
+
+                if (!scheduleText.isEmpty()) {
+                    // Parse schedule text to extract days and times
+                    String[] scheduleLines = scheduleText.split("\n");
+                    for (String line : scheduleLines) {
+                        // Extract day of week from each line
+                        if (line.toLowerCase().contains("thứ")) {
+                            String day = line.split("-")[0].trim();
+                            daysOfWeek.add(day);
+                        }
+
+                        // Try to extract time if available
+                        if (line.contains("-") && line.split("-").length > 1) {
+                            String timeStr = line.split("-")[1].trim();
+                            try {
+                                // Assuming format like "8:00"
+                                String[] timeParts = timeStr.split(":");
+                                if (timeParts.length == 2) {
+                                    startTime = LocalTime.of(
+                                            Integer.parseInt(timeParts[0].trim()),
+                                            Integer.parseInt(timeParts[1].trim())
+                                    );
+                                    // Set endTime to be 90 minutes after startTime by default
+                                    endTime = startTime.plusMinutes(90);
+                                }
+                            } catch (Exception e) {
+                                // If parsing fails, keep default values
+                            }
+                        }
+                    }
+                }
+
+                // Create Course object with the updated constructor
                 Course course = new Course(
                         courseIdField.getText(),
                         courseNameField.getText(),
                         subjectField.getText(),
-                        courseDate
+                        startDate,
+                        endDate,
+                        startTime,
+                        endTime,
+                        daysOfWeek
                 );
 
                 // Set room ID if provided
@@ -249,6 +291,8 @@ public class CreateClassScreenView {
             }
         }
     }
+
+
 
     private boolean validateInputs() {
         StringBuilder errorMessage = new StringBuilder();

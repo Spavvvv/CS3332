@@ -18,7 +18,6 @@ import javafx.scene.text.FontWeight;
 import view.BaseScreenView;
 import src.model.system.course.Course;
 import view.components.ClassList.CreateClassScreenView;
-import src.model.system.course.CourseDate;
 
 import java.io.*;
 import java.time.format.DateTimeFormatter;
