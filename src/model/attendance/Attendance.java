@@ -21,6 +21,7 @@ public class Attendance {
     private boolean hasPermission;
     private LocalDateTime checkInTime;
     private LocalDateTime recordTime;
+    private String status; // Added status variable
 
     /**
      * Constructor mặc định
@@ -33,6 +34,7 @@ public class Attendance {
         this.recordTime = LocalDateTime.now();
         this.student = new Student();
         this.session = new ClassSession();
+        this.status = ""; // Initialize status
     }
 
     /**
@@ -42,7 +44,7 @@ public class Attendance {
      * @param session Buổi học diễn ra
      */
     public Attendance(Student student, ClassSession session) {
-        this();
+        this(); // Call default constructor for initializations
         this.student = student;
         this.session = session;
     }
@@ -59,10 +61,11 @@ public class Attendance {
      * @param hasPermission Có phép hay không
      * @param checkInTime   Thời gian học sinh điểm danh (nếu có mặt)
      * @param recordTime    Thời gian ghi nhận bản ghi
+     * @param status        Trạng thái của bản ghi (e.g., 'active', 'archived')
      */
     public Attendance(String id, Student student, ClassSession session, boolean present,
                       String note, boolean called, boolean hasPermission,
-                      LocalDateTime checkInTime, LocalDateTime recordTime) {
+                      LocalDateTime checkInTime, LocalDateTime recordTime, String status) { // Added status parameter
         this.id = id;
         this.student = student;
         this.session = session;
@@ -72,6 +75,7 @@ public class Attendance {
         this.hasPermission = hasPermission;
         this.checkInTime = checkInTime;
         this.recordTime = recordTime != null ? recordTime : LocalDateTime.now();
+        this.status = status; // Set status
     }
 
     // Getters và Setters
@@ -269,6 +273,24 @@ public class Attendance {
     }
 
     /**
+     * Lấy trạng thái của bản ghi
+     *
+     * @return Trạng thái của bản ghi
+     */
+    public String getStatus() { // Added getStatus method
+        return status;
+    }
+
+    /**
+     * Thiết lập trạng thái của bản ghi
+     *
+     * @param status Trạng thái của bản ghi
+     */
+    public void setStatus(String status) { // Added setStatus method
+        this.status = status;
+    }
+
+    /**
      * Lấy tên học sinh
      *
      * @return Tên học sinh
@@ -340,20 +362,23 @@ public class Attendance {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Attendance that = (Attendance) o;
-        return id == that.id &&
-                present == that.present &&
+        // Include 'status' in equals comparison
+        return present == that.present &&
                 called == that.called &&
                 hasPermission == that.hasPermission &&
+                Objects.equals(id, that.id) && // Changed to Objects.equals for String
                 Objects.equals(student, that.student) &&
                 Objects.equals(session, that.session) &&
                 Objects.equals(note, that.note) &&
                 Objects.equals(checkInTime, that.checkInTime) &&
-                Objects.equals(recordTime, that.recordTime);
+                Objects.equals(recordTime, that.recordTime) &&
+                Objects.equals(status, that.status); // Included status
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, student, session, present, note, called, hasPermission, checkInTime, recordTime);
+        // Include 'status' in hashCode calculation
+        return Objects.hash(id, student, session, present, note, called, hasPermission, checkInTime, recordTime, status); // Included status
     }
 
     @Override
@@ -368,6 +393,7 @@ public class Attendance {
                 ", hasPermission=" + hasPermission +
                 ", checkInTime=" + checkInTime +
                 ", recordTime=" + recordTime +
+                ", status='" + status + '\'' + // Included status in toString
                 '}';
     }
 
@@ -403,6 +429,29 @@ public class Attendance {
         }
         this.session.setId(sessionId);
     }
+
+    /**
+     * Thiết lập ID của học sinh
+     * @param studentId ID học sinh
+     */
+    public void setStudentId(String studentId) {
+        if (this.student == null) {
+            this.student = new Student();
+        }
+        this.student.setId(studentId);
+    }
+
+    /**
+     * Thiết lập tên học sinh
+     * @param studentName Tên học sinh
+     */
+    public void setStudentName(String studentName) {
+        if (this.student == null) {
+            this.student = new Student();
+        }
+        this.student.setName(studentName);
+    }
+
 
     /**
      * Lấy loại vắng mặt của học sinh
@@ -462,22 +511,5 @@ public class Attendance {
      */
     public String getFormattedDate() {
         return session != null ? session.getFormattedDate() : "";
-    }
-
-    /**
-     * Lấy ngày trong tuần của buổi học
-     *
-     * @return Ngày trong tuần (Thứ 2, Thứ 3, v.v.)
-     */
-    public String getDayOfWeek() {
-        return session != null ? session.getDayOfWeek() : "";
-    }
-
-    public void setStudentId(String studentId) {
-        student.setId(studentId);
-    }
-
-    public void setStudentName(String studentName) {
-        student.setName(studentName);
     }
 }

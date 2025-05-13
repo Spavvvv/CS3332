@@ -33,15 +33,14 @@ public class ClassroomDAO {
      */
     public List<Classroom> findAll() {
         List<Classroom> classrooms = new ArrayList<>();
-        String sql = "SELECT id, code, name, floor, capacity, status FROM rooms ORDER BY code"; // Explicitly list columns
+        String sql = "SELECT room_id, code, room_name, floor, capacity, status FROM rooms ORDER BY code"; // Explicitly list columns
 
         try (Connection conn = DatabaseConnection.getConnection(); // Get connection
              PreparedStatement stmt = conn.prepareStatement(sql); // Use PreparedStatement even for no params for consistency
              ResultSet rs = stmt.executeQuery()) { // Execute query
 
-            int stt = 1;
             while (rs.next()) {
-                classrooms.add(extractClassroomFromResultSet(rs, stt++));
+                classrooms.add(extractClassroomFromResultSet(rs));
             }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error retrieving classrooms", e);
@@ -62,16 +61,16 @@ public class ClassroomDAO {
         List<Classroom> classrooms = new ArrayList<>();
         List<Object> params = new ArrayList<>();
 
-        StringBuilder sql = new StringBuilder("SELECT id, code, name, floor, capacity, status FROM rooms WHERE 1=1"); // Explicitly list columns
+        StringBuilder sql = new StringBuilder("SELECT room_id, code, room_name, floor, capacity, status FROM rooms WHERE 1=1"); // Explicitly list columns
 
         // Add search conditions
         if (keyword != null && !keyword.trim().isEmpty()) {
             // Using OR for multiple column search, casting floor to CHAR/VARCHAR if needed by DB
-            sql.append(" AND (LOWER(code) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?) OR CAST(floor AS VARCHAR) LIKE ?)"); // Use LOWER for case-insensitive search
+            sql.append(" AND (LOWER(code) LIKE LOWER(?) OR LOWER(room_name) LIKE LOWER(?) OR CAST(floor AS CHAR) LIKE ?)"); // Use LOWER for case-insensitive search
             String searchPattern = "%" + keyword.trim() + "%";
             params.add(searchPattern);
             params.add(searchPattern);
-            params.add(searchPattern); // Match VARCHAR type for floor search
+            params.add(searchPattern); // Match CHAR type for floor search
         }
 
         // Add status filter
@@ -97,9 +96,8 @@ public class ClassroomDAO {
             }
 
             try (ResultSet rs = stmt.executeQuery()) { // Execute query
-                int stt = 1;
                 while (rs.next()) {
-                    classrooms.add(extractClassroomFromResultSet(rs, stt++));
+                    classrooms.add(extractClassroomFromResultSet(rs));
                 }
             }
         } catch (SQLException e) {
@@ -117,7 +115,8 @@ public class ClassroomDAO {
      * @return An Optional containing the found classroom, or empty if not found or an error occurs.
      */
     public Optional<Classroom> findById(int id) {
-        String sql = "SELECT id, code, name, floor, capacity, status FROM rooms WHERE id = ?"; // Explicitly list columns
+        // Corrected column name to room_id to match database schema shown in the image
+        String sql = "SELECT room_id, code, room_name, floor, capacity, status FROM rooms WHERE room_id = ?"; // Explicitly list columns and use room_id
 
         try (Connection conn = DatabaseConnection.getConnection(); // Get connection
              PreparedStatement stmt = conn.prepareStatement(sql)) { // Prepare statement
@@ -126,7 +125,7 @@ public class ClassroomDAO {
 
             try (ResultSet rs = stmt.executeQuery()) { // Execute query
                 if (rs.next()) {
-                    return Optional.of(extractClassroomFromResultSet(rs, 1)); // Return Optional with found classroom
+                    return Optional.of(extractClassroomFromResultSet(rs)); // Return Optional with found classroom
                 }
             }
         } catch (SQLException e) {
@@ -153,7 +152,7 @@ public class ClassroomDAO {
         try (Connection conn = DatabaseConnection.getConnection()) { // Get connection
             if (classroom.getId() == 0) {
                 // Insert new classroom
-                String sql = "INSERT INTO rooms (code, name, floor, capacity, status) VALUES (?, ?, ?, ?, ?)";
+                String sql = "INSERT INTO rooms (code, room_name, floor, capacity, status) VALUES (?, ?, ?, ?, ?)";
 
                 try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) { // Prepare statement and request generated keys
                     stmt.setString(1, classroom.getMa());
@@ -170,6 +169,7 @@ public class ClassroomDAO {
 
                     try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
                         if (generatedKeys.next()) {
+                            // Assuming the generated key is the room_id (primary key)
                             int id = generatedKeys.getInt(1);
                             classroom.setId(id); // Set the generated ID back to the object
                         } else {
@@ -179,7 +179,8 @@ public class ClassroomDAO {
                 }
             } else {
                 // Update existing classroom
-                String sql = "UPDATE rooms SET code=?, name=?, floor=?, capacity=?, status=? WHERE id=?";
+                // Corrected WHERE clause to use room_id
+                String sql = "UPDATE rooms SET code=?, room_name=?, floor=?, capacity=?, status=? WHERE room_id=?";
 
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) { // Prepare statement
                     stmt.setString(1, classroom.getMa());
@@ -187,7 +188,7 @@ public class ClassroomDAO {
                     stmt.setInt(3, classroom.getTang());
                     stmt.setInt(4, classroom.getSucChua());
                     stmt.setString(5, classroom.getTrangThai());
-                    stmt.setInt(6, classroom.getId());
+                    stmt.setInt(6, classroom.getId()); // Use getId() which maps to room_id
 
                     int affectedRows = stmt.executeUpdate();
 
@@ -217,13 +218,14 @@ public class ClassroomDAO {
             LOGGER.warning("Attempted to update classroom status to null or empty for ID: " + id);
             return false;
         }
-        String sql = "UPDATE rooms SET status=? WHERE id=?";
+        // Corrected WHERE clause to use room_id
+        String sql = "UPDATE rooms SET status=? WHERE room_id=?";
 
         try (Connection conn = DatabaseConnection.getConnection(); // Get connection
              PreparedStatement stmt = conn.prepareStatement(sql)) { // Prepare statement
 
             stmt.setString(1, newStatus);
-            stmt.setInt(2, id);
+            stmt.setInt(2, id); // Use the provided id
 
             int affectedRows = stmt.executeUpdate();
             return affectedRows > 0; // Return true if at least one row was updated
@@ -240,12 +242,13 @@ public class ClassroomDAO {
      * @return true if successful (at least one row deleted), false otherwise
      */
     public boolean delete(int id) {
-        String sql = "DELETE FROM rooms WHERE id=?";
+        // Corrected WHERE clause to use room_id
+        String sql = "DELETE FROM rooms WHERE room_id=?";
 
         try (Connection conn = DatabaseConnection.getConnection(); // Get connection
              PreparedStatement stmt = conn.prepareStatement(sql)) { // Prepare statement
 
-            stmt.setInt(1, id);
+            stmt.setInt(1, id); // Use the provided id
 
             int affectedRows = stmt.executeUpdate();
             return affectedRows > 0; // Return true if at least one row was deleted
@@ -260,19 +263,19 @@ public class ClassroomDAO {
      * Assumes the ResultSet cursor is currently on a valid row.
      *
      * @param rs ResultSet containing classroom data
-     * @param stt Sequence number for display purposes (not from DB)
      * @return Classroom object populated with data
      * @throws SQLException If a database access error occurs
      */
-    private Classroom extractClassroomFromResultSet(ResultSet rs, int stt) throws SQLException {
-        int id = rs.getInt("id");
+    private Classroom extractClassroomFromResultSet(ResultSet rs) throws SQLException {
+        // Corrected column name to room_id to match database schema shown in the image
+        int id = rs.getInt("room_id");
         String code = rs.getString("code");
-        String name = rs.getString("name");
+        String name = rs.getString("room_name");
         int floor = rs.getInt("floor");
         int capacity = rs.getInt("capacity");
         String status = rs.getString("status");
 
-        // Assuming Classroom constructor is Classroom(int id, int stt, String code, String name, int floor, int capacity, String status)
-        return new Classroom(id, stt, code, name, floor, capacity, status);
+        // Instantiate Classroom using the updated constructor (without stt)
+        return new Classroom(id, code, name, floor, capacity, status);
     }
 }

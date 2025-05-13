@@ -17,5 +17,7 @@ module CS3323 {
     opens view.components.ClassList to javafx.base, javafx.fxml;
     exports src.model.dashboard;
     opens src.model.dashboard to javafx.fxml;
+    opens src.model.absence to javafx.base;
+    opens src.model.classroom to javafx.base;
 
 }

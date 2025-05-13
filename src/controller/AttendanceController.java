@@ -7,7 +7,10 @@ import src.model.person.Student;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.logging.Level; // Import Level
+import java.util.logging.Logger; // Import Logger
 import java.util.stream.Collectors;
 
 // Import the DaoManager
@@ -18,11 +21,18 @@ import src.dao.ClassSessionDAO;
 import src.dao.StudentDAO;
 
 /**
- * Controller for managing attendance records
- * Handles business logic between views and data access layer
+ * Controller for managing attendance records and generating absence reports.
+ * Handles business logic between views and data access layer.
+ * Modified to align with AbsenceRecord model without ImageView and use Attendance table data.
+ * Added Logger for error/warning reporting.
  */
 public class AttendanceController {
-    // Keep the type declarations, but get the instances from DaoManager
+
+    // Declare the Logger
+    private static final Logger LOGGER = Logger.getLogger(AttendanceController.class.getName());
+
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     private final AttendanceDAO attendanceDAO;
     private final ClassSessionDAO classSessionDAO;
     private final StudentDAO studentDAO;
@@ -36,8 +46,6 @@ public class AttendanceController {
         this.attendanceDAO = DaoManager.getInstance().getAttendanceDAO();
         this.classSessionDAO = DaoManager.getInstance().getClassSessionDAO();
         this.studentDAO = DaoManager.getInstance().getStudentDAO();
-        // The original constructor threw SQLException, but obtaining DAOs from
-        // DaoManager should not throw SQLException, so the throws clause is removed.
     }
 
     /**
@@ -47,7 +55,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public List<ClassSession> getAllClassSessions() throws SQLException {
-        // Use the classSessionDAO obtained from DaoManager
         return classSessionDAO.findAll();
     }
 
@@ -59,10 +66,7 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public List<ClassSession> getClassSessionsByClassId(String classId) throws SQLException {
-        // Use the classSessionDAO obtained from DaoManager
-        // Filter all sessions by classId - Note: It might be more efficient if the DAO has a findByClassId method.
-        // Keeping original logic that filters in controller for now.
-        List<ClassSession> allSessions = classSessionDAO.findAll(); // Still requires fetching all first
+        List<ClassSession> allSessions = classSessionDAO.findAll();
         return allSessions.stream()
                 .filter(session -> session.getClassId() != null && session.getClassId().equals(classId))
                 .collect(Collectors.toList());
@@ -76,7 +80,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public ClassSession getClassSessionById(String sessionId) throws SQLException {
-        // Use the classSessionDAO obtained from DaoManager
         Optional<ClassSession> session = classSessionDAO.findById(sessionId);
         return session.orElse(null);
     }
@@ -90,7 +93,6 @@ public class AttendanceController {
      */
     public List<Attendance> getAttendanceBySessionId(String sessionId) throws SQLException {
         selectedSessionId = sessionId;
-        // Use the attendanceDAO obtained from DaoManager
         return attendanceDAO.findBySessionId(sessionId);
     }
 
@@ -102,7 +104,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public List<Attendance> getAttendanceByStudentId(String studentId) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
         return attendanceDAO.findByStudentId(studentId);
     }
 
@@ -117,9 +118,6 @@ public class AttendanceController {
      */
     public List<Attendance> getAttendanceDataInRange(String classId, LocalDate startDate, LocalDate endDate)
             throws SQLException {
-        // This method's logic relies on getting sessions and then attendance.
-        // If the DAO had a direct method to get attendance by class and date range,
-        // that would be more efficient. Keeping current logic using multiple DAO calls.
         List<ClassSession> sessionsInRange = getClassSessionsByClassId(classId).stream()
                 .filter(s -> {
                     LocalDate sessionDate = s.getDate();
@@ -128,7 +126,6 @@ public class AttendanceController {
                 .collect(Collectors.toList());
 
         List<Attendance> result = new ArrayList<>();
-        // Use the attendanceDAO obtained from DaoManager
         for (ClassSession session : sessionsInRange) {
             List<Attendance> sessionAttendance = attendanceDAO.findBySessionId(session.getId());
             result.addAll(sessionAttendance);
@@ -146,24 +143,22 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public List<Attendance> getAttendanceByDateRange(LocalDate startDate, LocalDate endDate) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
-        // Assuming attendanceDAO has findByDateRange method that throws SQLException
         return attendanceDAO.findByDateRange(startDate, endDate);
     }
 
     /**
-     * Generate absence records from attendance data
+     * Generate absence records from attendance data.
+     * Filters for absent students and retrieves related student and class information.
      *
      * @param attendances List of attendance records
-     * @return List of absence records
+     * @return List of absence records (without image)
      * @throws SQLException if database operation fails (delegated to DAOs)
      */
     public List<AbsenceRecord> generateAbsenceRecords(List<Attendance> attendances) throws SQLException {
         List<AbsenceRecord> absenceRecords = new ArrayList<>();
 
-        // Use the studentDAO and classSessionDAO obtained from DaoManager
         for (Attendance attendance : attendances) {
-            // Skip present students
+            // Only generate AbsenceRecord for students who were not present
             if (attendance.isPresent()) {
                 continue;
             }
@@ -175,22 +170,25 @@ public class AttendanceController {
                 Student student = studentOpt.get();
                 ClassSession session = sessionOpt.get();
 
-                // Determine absence status
-                String status = attendance.hasPermission() ? "Excused" : "Absent";
+                String absenceStatusString = attendance.hasPermission() ? "Excused" : "Absent";
+
+                String formattedDate = session.getDate() != null ? session.getDate().format(DATE_FORMATTER) : "N/A";
 
                 AbsenceRecord absenceRecord = new AbsenceRecord(
                         attendance.getId(),
-                        null,                           // No image view yet
-                        student.getName(),              // Student name
-                        session.getClassName(),         // Class name
-                        session.getDate() != null ? session.getDate().toString() : "N/A", // Date as string
-                        status,                         // Attendance status
-                        attendance.getNote(),           // Notes
-                        attendance.isCalled(),          // Called status
-                        attendance.hasPermission()      // Approved status
+                        student.getName(),
+                        session.getClassName(),
+                        formattedDate,
+                        absenceStatusString,
+                        attendance.getNote(),
+                        attendance.isCalled(),
+                        attendance.hasPermission()
                 );
 
                 absenceRecords.add(absenceRecord);
+            } else {
+                // Log a warning if student or session data is missing for an attendance record
+                LOGGER.log(Level.WARNING, "Missing student or session data for attendance record ID: " + attendance.getId());
             }
         }
 
@@ -205,8 +203,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public List<Attendance> getAbsentStudentsBySession(String sessionId) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
-        // Assuming findAbsentBySession takes String sessionId and throws SQLException
         return attendanceDAO.findAbsentBySession(sessionId);
     }
 
@@ -218,7 +214,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public List<Attendance> getUncalledAbsencesForSession(String sessionId) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
         return attendanceDAO.findAbsentNotCalled(sessionId);
     }
 
@@ -230,10 +225,8 @@ public class AttendanceController {
      */
     public List<Attendance> getUncalledAbsences() throws SQLException {
         List<Attendance> allAttendances = new ArrayList<>();
-        // Get all class sessions using classSessionDAO from DaoManager
         List<ClassSession> allSessions = classSessionDAO.findAll();
 
-        // For each session, get all attendance records for absent students not called using attendanceDAO
         for (ClassSession session : allSessions) {
             List<Attendance> absentNotCalled = attendanceDAO.findAbsentNotCalled(session.getId());
             allAttendances.addAll(absentNotCalled);
@@ -250,11 +243,8 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public boolean markAttendanceAsCalled(String attendanceId) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
-        // Get the attendance record
         Optional<Attendance> attendanceOpt = attendanceDAO.findById(attendanceId);
         if (attendanceOpt.isPresent()) {
-            // Update the called status
             Attendance attendance = attendanceOpt.get();
             attendance.setCalled(true);
             return attendanceDAO.update(attendance);
@@ -271,15 +261,12 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public boolean excuseAbsence(String attendanceId, String note) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
-        // Get the attendance record
         Optional<Attendance> attendanceOpt = attendanceDAO.findById(attendanceId);
         if (attendanceOpt.isPresent()) {
-            // Update the permission status and note
             Attendance attendance = attendanceOpt.get();
             attendance.setHasPermission(true);
-            if (note != null && !note.trim().isEmpty()) {
-                attendance.setNote(note);
+            if (note != null) {
+                attendance.setNote(note.trim());
             }
             return attendanceDAO.update(attendance);
         }
@@ -312,7 +299,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public int batchSaveAttendance(List<Attendance> attendances) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
         return attendanceDAO.batchSave(attendances);
     }
 
@@ -324,7 +310,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public int batchUpdateAttendance(List<Attendance> attendances) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
         return attendanceDAO.batchUpdate(attendances);
     }
 
@@ -338,7 +323,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public AttendanceDAO.AttendanceStats getStudentAttendanceStats(String studentId, LocalDate startDate, LocalDate endDate) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
         return attendanceDAO.getStudentStats(studentId, startDate, endDate);
     }
 
@@ -356,8 +340,7 @@ public class AttendanceController {
 
         return sessions.stream()
                 .filter(session -> {
-                    // Get the scheduled day from the session and check if it matches the day string
-                    String sessionDay = session.getSchedule(); // Assuming getSchedule() returns a String representing day
+                    String sessionDay = session.getSchedule();
                     return sessionDay != null && sessionDay.equalsIgnoreCase(day);
                 })
                 .collect(Collectors.toList());
@@ -373,14 +356,13 @@ public class AttendanceController {
      */
     public List<ClassSession> searchSessions(List<ClassSession> sessions, String keyword) {
         if (sessions == null || keyword == null || keyword.trim().isEmpty()) {
-            return sessions; // Return the original list if no valid search criteria
+            return sessions;
         }
 
         String searchTerm = keyword.toLowerCase().trim();
 
         return sessions.stream()
                 .filter(session -> {
-                    // Check if keyword matches any of these fields
                     boolean matchesClassName = session.getClassName() != null &&
                             session.getClassName().toLowerCase().contains(searchTerm);
 
@@ -390,7 +372,6 @@ public class AttendanceController {
                     boolean matchesRoom = session.getRoom() != null &&
                             session.getRoom().toLowerCase().contains(searchTerm);
 
-                    // Match if any of the conditions are true
                     return matchesClassName || matchesTeacher || matchesRoom;
                 })
                 .collect(Collectors.toList());
@@ -404,7 +385,6 @@ public class AttendanceController {
      * @throws SQLException if database operation fails (delegated to DAO)
      */
     public int getAbsentCount(String studentId) throws SQLException {
-        // Use the attendanceDAO obtained from DaoManager
         List<Attendance> attendances = attendanceDAO.findByStudentId(studentId);
         return (int) attendances.stream()
                 .filter(a -> !a.isPresent())
@@ -419,14 +399,13 @@ public class AttendanceController {
      * @throws SQLException if a database error occurs.
      */
     public void updateAttendanceNote(String id, String newValue) throws SQLException {
-        if (newValue == null || newValue.trim().isEmpty()) {
-            return;
+        if (newValue != null) {
+            newValue = newValue.trim();
         }
-        // Use the attendanceDAO obtained from DaoManager
         Optional<Attendance> attendanceOpt = attendanceDAO.findById(id);
         if (attendanceOpt.isPresent()) {
             Attendance attendance = attendanceOpt.get();
-            attendance.setNote(newValue.trim());
+            attendance.setNote(newValue);
             attendanceDAO.update(attendance);
         }
     }
@@ -442,7 +421,6 @@ public class AttendanceController {
         if (newVal == null) {
             return;
         }
-        // Use the attendanceDAO obtained from DaoManager
         Optional<Attendance> attendanceOpt = attendanceDAO.findById(id);
         if (attendanceOpt.isPresent()) {
             Attendance attendance = attendanceOpt.get();
@@ -459,9 +437,7 @@ public class AttendanceController {
      * @throws SQLException if a database error occurs.
      */
     public Student getStudentById(String studentId) throws SQLException {
-        // Use the studentDAO obtained from DaoManager
-        if(studentId != null ) {
-            // Assuming studentDAO has a findById method that returns Optional<Student>
+        if(studentId != null && !studentId.trim().isEmpty()) {
             Optional<Student> studentOpt = studentDAO.findById(studentId);
             return studentOpt.orElse(null);
         }
