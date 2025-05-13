@@ -1,3 +1,4 @@
+
 package view.components;
 
 import javafx.geometry.Insets;
@@ -298,6 +299,7 @@ public class DashboardView extends BaseScreenView {
         section.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
 
         Label sectionTitle = new Label("Khóa học");
+        // The text color is already set to black here in the original code
         sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: Black;");
 
         // Create pie chart
@@ -341,6 +343,7 @@ public class DashboardView extends BaseScreenView {
         colorBox.setFill(color);
 
         Label label = new Label(text);
+        label.setStyle("-fx-text-fill: black;");
         item.getChildren().addAll(colorBox, label);
 
         return item;
@@ -465,19 +468,10 @@ public class DashboardView extends BaseScreenView {
         CustomCircle statusDot = new CustomCircle(5);
         statusDot.setFill(Color.web(statusColor));
 
-        VBox classDetails = new VBox(5);
-
-        // Format time based on session data
-        String timeText = session.getTimeSlot();
-        if (session.getStartTime() != null) {
-            timeText = session.getStartTime().format(TIME_FORMATTER);
-        }
-
-        Label timeLabel = new Label(timeText);
-        timeLabel.setStyle("-fx-font-weight: bold;");
-
+        // Label for class name, aligned horizontally
         Label classNameLabel = new Label(session.getCourseName());
-        classDetails.getChildren().addAll(timeLabel, classNameLabel);
+        // Keep existing style and add text color black
+        classNameLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: black;");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -486,7 +480,8 @@ public class DashboardView extends BaseScreenView {
         detailsButton.setStyle("-fx-background-color: transparent; -fx-text-fill: #2196F3;");
         detailsButton.setOnAction(event -> showClassDetails(String.valueOf(session.getId())));
 
-        item.getChildren().addAll(statusDot, classDetails, spacer, detailsButton);
+        // Add components directly to the HBox for horizontal alignment
+        item.getChildren().addAll(statusDot, classNameLabel, spacer, detailsButton);
         return item;
     }
 
@@ -758,3 +753,4 @@ public class DashboardView extends BaseScreenView {
         }
     }
 }
+
