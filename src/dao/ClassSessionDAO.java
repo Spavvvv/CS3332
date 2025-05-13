@@ -5,6 +5,7 @@ import utils.DatabaseConnection;
 
 import java.sql.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -520,4 +521,177 @@ public class ClassSessionDAO {
 
         return filteredSessions;
     }
+
+    /**
+     * Finds class sessions within a date and time range. Manages its own connection.
+     * Note: This method converts LocalDateTime to Date and Time for the underlying SQL query.
+     * For full time range accuracy, the SQL query should ideally compare timestamps.
+     * The internal method internalFindByDateRange only uses LocalDate. We'll need a new internal method.
+     * @param startDateTime the start date and time of the range
+     * @param endDateTime the end date and time of the range
+     * @return List of ClassSession objects within the date and time range
+     */
+    public List<ClassSession> findByTimeRange(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        if (startDateTime == null || endDateTime == null) {
+            System.err.println("Attempted to find class sessions with null start or end datetime.");
+            return new ArrayList<>();
+        }
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            // Implement a new internal method or adapt existing one
+            return internalFindByTimeRange(conn, startDateTime, endDateTime);
+        } catch (SQLException e) {
+            System.err.println("Error finding class sessions by time range (" + startDateTime + " to " + endDateTime + "): " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+
+    /**
+     * Finds class sessions by teacher name. Manages its own connection.
+     * @param teacherName the teacher name to search for
+     * @return List of ClassSession objects taught by the specified teacher
+     */
+    public List<ClassSession> findByTeacherName(String teacherName) {
+        if (teacherName == null || teacherName.trim().isEmpty()) {
+            System.err.println("Attempted to find class sessions with null or empty teacher name.");
+            return new ArrayList<>();
+        }
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            // Implement a new internal method
+            return internalFindByTeacherName(conn, teacherName);
+        } catch (SQLException e) {
+            System.err.println("Error finding class sessions by teacher name " + teacherName + ": " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+
+    /**
+     * Finds class sessions for a specific date. Manages its own connection.
+     * @param date the date to search for
+     * @return List of ClassSession objects on the specified date
+     */
+    public List<ClassSession> findByDate(LocalDate date) {
+        if (date == null) {
+            System.err.println("Attempted to find class sessions with null date.");
+            return new ArrayList<>();
+        }
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            // Can potentially reuse or adapt internalFindByDateRange for a single date
+            // A dedicated internal method for a single date might be slightly cleaner.
+            return internalFindByDate(conn, date);
+        } catch (SQLException e) {
+            System.err.println("Error finding class sessions by date " + date + ": " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Finds class sessions within a date and time range using an existing connection.
+     * Compares based on session_date and start_time/end_time.
+     *
+     * @param conn the active database connection
+     * @param startDateTime the start date and time of the range
+     * @param endDateTime the end date and time of the range
+     * @return List of ClassSession objects within the date and time range
+     * @throws SQLException if a database access error occurs
+     */
+    List<ClassSession> internalFindByTimeRange(Connection conn, LocalDateTime startDateTime, LocalDateTime endDateTime) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        // SQL to find sessions that overlap with the given time range.
+        // A session (start_time, end_time) overlaps with range (range_start, range_end) if
+        // (start_time < range_end AND end_time > range_start)
+        // Assuming class_date stores the date, and start_time/end_time store the time part within that date.
+        // Combining date and time for comparison:
+        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+                "start_time, end_time, class_id FROM class_sessions " +
+                "WHERE (class_date + start_time) < ? AND (class_date + end_time) > ?"; // This syntax depends on the specific SQL dialect (e.g., PostgreSQL needs specific syntax for adding TIME to DATE, MySQL might use DATETIME or TIMESTAMP columns)
+
+        // A more portable way might be comparing DATE and TIME components separately, or using TIMESTAMP columns.
+        // Assuming your database supports adding DATE and TIME for comparison or uses TIMESTAMP columns.
+        // If using TIMESTAMP columns for start_time and end_time, the query simplifies.
+        // Let's assume the columns 'start_time' and 'end_time' are actually TIMESTAMP types for easier range query.
+        // If they are TIME types and class_date is DATE, you might need vendor-specific functions like `TIMESTAMP(class_date, start_time)`.
+        // Let's use TIMESTAMP comparison assuming the columns support it or adjust the query for your specific DB.
+
+        // Let's adjust the SQL query assuming start_time and end_time columns are TIMESTAMP
+        String sqlAdjusted = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+                "start_time, end_time, class_id FROM class_sessions " +
+                "WHERE start_time < ? AND end_time > ?"; // Assumes start_time and end_time columns are TIMESTAMP
+
+        try (PreparedStatement stmt = conn.prepareStatement(sqlAdjusted)) {
+
+            // Set LocalDateTime parameters as Timestamp
+            stmt.setTimestamp(1, Timestamp.valueOf(endDateTime));
+            stmt.setTimestamp(2, Timestamp.valueOf(startDateTime));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(conn, rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
+
+    /**
+     * Finds class sessions by teacher name using an existing connection.
+     * Assumes teacher_name column exists in class_sessions table.
+     *
+     * @param conn the active database connection
+     * @param teacherName the teacher name to search for
+     * @return List of ClassSession objects taught by the specified teacher
+     * @throws SQLException if a database access error occurs
+     */
+    List<ClassSession> internalFindByTeacherName(Connection conn, String teacherName) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        // Assuming teacher_name in the database is a String/VARCHAR type
+        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+                "start_time, end_time, class_id FROM class_sessions WHERE teacher_name = ?";
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, teacherName); // Set as String
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(conn, rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
+    /**
+     * Finds class sessions for a specific date using an existing connection.
+     * Assumes class_date column exists in class_sessions table.
+     *
+     * @param conn the active database connection
+     * @param date the date to search for
+     * @return List of ClassSession objects on the specified date
+     * @throws SQLException if a database access error occurs
+     */
+    List<ClassSession> internalFindByDate(Connection conn, LocalDate date) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+                "start_time, end_time, class_id FROM class_sessions " +
+                "WHERE class_date = ?";
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setDate(1, Date.valueOf(date));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(conn, rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
 }

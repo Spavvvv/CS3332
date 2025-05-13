@@ -12,9 +12,11 @@ import java.util.Optional;
 
 /**
  * Data Access Object for Student entities
+ * Modified to use explicit methods for loading related entities (Parent, Courses)
+ * to avoid recursive loading issues.
  */
 public class StudentDAO {
-    // Removed the 'connection' class member. Each method will manage its own connection or use a passed one.
+
     private ParentDAO parentDAO; // This will be injected
     private CourseDAO courseDAO; // This will be injected
 
@@ -43,12 +45,11 @@ public class StudentDAO {
         this.courseDAO = courseDAO;
     }
 
-    // Removed the private getParentDAO() and getCourseDAO() methods that used lazy initialization
-    // Instead, access the injected DAOs directly and check for null if necessary,
-    // or rely on the DaoManager to ensure they are always set.
-
     /**
-     * Insert a new student into the database. Manages its own connection.
+     * Insert a new student into the database. Manages its own connection and transaction.
+     * Related entities (Parent, Courses) must be linked separately *after* the student is inserted,
+     * or included in the transaction here if the Student object already contains them.
+     * This version links parent and courses within the transaction if present in the student object.
      *
      * @param student the student to insert
      * @return true if successful
@@ -57,7 +58,7 @@ public class StudentDAO {
     public boolean insertStudent(Student student) throws SQLException {
         String sql = "INSERT INTO students (id, name, gender, contact_number, birthday, email) VALUES (?, ?, ?, ?, ?, ?)";
 
-        try (Connection conn = DatabaseConnection.getConnection(); // Get connection here
+        try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement statement = conn.prepareStatement(sql)) {
 
             conn.setAutoCommit(false); // Start transaction
@@ -67,6 +68,7 @@ public class StudentDAO {
             int rowsInserted = statement.executeUpdate();
 
             if (rowsInserted > 0) {
+                // Link related entities within the same transaction
                 if (student.getParent() != null) {
                     linkStudentToParent(conn, student.getId(), student.getParent().getId());
                 }
@@ -86,7 +88,8 @@ public class StudentDAO {
     }
 
     /**
-     * Update an existing student in the database. Manages its own connection.
+     * Update an existing student in the database. Manages its own connection and transaction.
+     * Updates basic student details and relationship links.
      *
      * @param student the student to update
      * @return true if successful
@@ -96,7 +99,7 @@ public class StudentDAO {
         String sql = "UPDATE students SET name = ?, gender = ?, contact_number = ?, " +
                 "birthday = ?, email = ? WHERE id = ?";
 
-        try (Connection conn = DatabaseConnection.getConnection(); // Get connection here
+        try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement statement = conn.prepareStatement(sql)) {
 
             conn.setAutoCommit(false); // Start transaction
@@ -111,13 +114,13 @@ public class StudentDAO {
             int rowsUpdated = statement.executeUpdate();
 
             if (rowsUpdated > 0) {
-                // Update parent relationship
+                // Update parent relationship by removing all and re-adding if parent exists
                 removeAllParentLinks(conn, student.getId());
                 if (student.getParent() != null) {
                     linkStudentToParent(conn, student.getId(), student.getParent().getId());
                 }
 
-                // Update course enrollments
+                // Update course enrollments by removing all and re-adding current ones
                 removeAllCourseEnrollments(conn, student.getId());
                 if (student.getCurrentCourses() != null) {
                     for (Course course : student.getCurrentCourses()) {
@@ -134,14 +137,15 @@ public class StudentDAO {
     }
 
     /**
-     * Delete a student from the database. Manages its own connection.
+     * Delete a student from the database. Manages its own connection and transaction.
+     * Removes related links before deleting the student record.
      *
      * @param studentId the ID of the student to delete
      * @return true if successful
      * @throws SQLException if a database access error occurs
      */
     public boolean deleteStudent(String studentId) throws SQLException {
-        try (Connection conn = DatabaseConnection.getConnection()) { // Get connection here
+        try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false); // Start transaction
 
             // Use the same connection for related operations within the transaction
@@ -165,12 +169,13 @@ public class StudentDAO {
 
     /**
      * Get a student by ID using an existing connection.
-     * Helper for scenarios where a connection is already active.
+     * This method *only* retrieves the basic student details.
+     * Related entities (Parent, Courses) are NOT loaded here.
      *
      * @param conn the active database connection
      * @param studentId the student ID
-     * @return the Student object or null if not found
-     * @throws SQLException if a database access error occurs, or ParentDAO/CourseDAO not set
+     * @return the Student object with basic details or null if not found
+     * @throws SQLException if a database access error occurs
      */
     public Student getStudentById(Connection conn, String studentId) throws SQLException {
         String sql = "SELECT id, name, gender, contact_number, birthday, email FROM students WHERE id = ?";
@@ -180,8 +185,8 @@ public class StudentDAO {
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
-                    // Pass the connection down to extract method for related lookups
-                    return extractStudentFromResultSet(conn, resultSet);
+                    // Extract basic student data ONLY
+                    return extractStudentFromResultSet(resultSet);
                 }
             }
         }
@@ -190,13 +195,15 @@ public class StudentDAO {
 
     /**
      * Get a student by ID. Manages its own connection.
+     * This method *only* retrieves the basic student details.
+     * Related entities (Parent, Courses) are NOT loaded here.
      *
      * @param studentId the student ID
-     * @return the Student object or null if not found
-     * @throws SQLException if a database access error occurs, or ParentDAO/CourseDAO not set
+     * @return the Student object with basic details or null if not found
+     * @throws SQLException if a database access error occurs
      */
     public Student getStudentById(String studentId) throws SQLException {
-        try (Connection conn = DatabaseConnection.getConnection()) { // Get and close connection here
+        try (Connection conn = DatabaseConnection.getConnection()) {
             return getStudentById(conn, studentId); // Use the helper with the new connection
         }
     }
@@ -204,6 +211,8 @@ public class StudentDAO {
     /**
      * Find a student by ID (returns Optional) using an existing connection.
      * Use this when called from another DAO that already has a connection open.
+     * This method *only* retrieves the basic student details.
+     * Related entities (Parent, Courses) are NOT loaded here.
      *
      * @param conn the active database connection
      * @param studentId the student ID
@@ -211,9 +220,9 @@ public class StudentDAO {
      */
     public Optional<Student> findById(Connection conn, String studentId) {
         try {
-            // getStudentById will now handle the checks for injected DAOs
+            // getStudentById will now return only basic student data
             return Optional.ofNullable(getStudentById(conn, studentId));
-        } catch (SQLException | IllegalStateException e) { // Catch IllegalStateException too
+        } catch (SQLException e) {
             System.err.println("Error finding student by ID using existing connection: " + e.getMessage());
             e.printStackTrace();
             return Optional.empty();
@@ -222,39 +231,42 @@ public class StudentDAO {
 
     /**
      * Find a student by ID (returns Optional). Manages its own connection.
+     * This method *only* retrieves the basic student details.
+     * Related entities (Parent, Courses) are NOT loaded here.
      *
      * @param studentId the student ID
      * @return Optional containing the Student if found, empty Optional otherwise
      */
     public Optional<Student> findById(String studentId) {
-        try (Connection conn = DatabaseConnection.getConnection()) { // Get and close connection here
-            // getStudentById will now handle the checks for injected DAOs
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            // getStudentById will now return only basic student data
             return Optional.ofNullable(getStudentById(conn, studentId));
-        } catch (SQLException | IllegalStateException e) { // Catch IllegalStateException too
+        } catch (SQLException e) {
             System.err.println("Error finding student by ID: " + e.getMessage());
             e.printStackTrace();
             return Optional.empty();
         }
     }
 
-
     /**
      * Get all students from the database. Manages its own connection.
+     * This method *only* retrieves basic student details.
+     * Related entities (Parent, Courses) are NOT loaded here.
      *
-     * @return List of all students
-     * @throws SQLException if a database access error occurs, or ParentDAO/CourseDAO not set
+     * @return List of all students with basic details
+     * @throws SQLException if a database access error occurs
      */
     public List<Student> getAllStudents() throws SQLException {
         List<Student> students = new ArrayList<>();
         String sql = "SELECT id, name, gender, contact_number, birthday, email FROM students";
 
-        try (Connection conn = DatabaseConnection.getConnection(); // Get connection here
+        try (Connection conn = DatabaseConnection.getConnection();
              Statement statement = conn.createStatement();
              ResultSet resultSet = statement.executeQuery(sql)) {
 
             while (resultSet.next()) {
-                // Pass the connection down to extract method for related lookups
-                students.add(extractStudentFromResultSet(conn, resultSet));
+                // Extract basic student data ONLY
+                students.add(extractStudentFromResultSet(resultSet));
             }
         }
 
@@ -263,16 +275,18 @@ public class StudentDAO {
 
     /**
      * Search students by name or email. Manages its own connection.
+     * This method *only* retrieves basic student details.
+     * Related entities (Parent, Courses) are NOT loaded here.
      *
      * @param searchTerm the search term
-     * @return List of matching students
-     * @throws SQLException if a database access error occurs, or ParentDAO/CourseDAO not set
+     * @return List of matching students with basic details
+     * @throws SQLException if a database access error occurs
      */
     public List<Student> searchStudents(String searchTerm) throws SQLException {
         List<Student> students = new ArrayList<>();
         String sql = "SELECT id, name, gender, contact_number, birthday, email FROM students WHERE name LIKE ? OR email LIKE ?";
 
-        try (Connection conn = DatabaseConnection.getConnection(); // Get connection here
+        try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement statement = conn.prepareStatement(sql)) {
             String searchPattern = "%" + searchTerm + "%";
             statement.setString(1, searchPattern);
@@ -280,8 +294,8 @@ public class StudentDAO {
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to extract method for related lookups
-                    students.add(extractStudentFromResultSet(conn, resultSet));
+                    // Extract basic student data ONLY
+                    students.add(extractStudentFromResultSet(resultSet));
                 }
             }
         }
@@ -423,19 +437,21 @@ public class StudentDAO {
         }
     }
 
+    // --- Methods for Explicitly Loading Related Entities ---
 
     /**
-     * Get parent of a student using an existing connection.
+     * Get the parent of a student using an existing connection.
+     * This method requires the ParentDAO dependency to be set.
      *
      * @param conn the active database connection
      * @param studentId the student ID
-     * @return Parent of the student or null if not found
+     * @return Parent of the student or null if not found or no parent linked
      * @throws SQLException if a database access error occurs
      * @throws IllegalStateException if ParentDAO dependency has not been set
      */
-    private Parent getParentByStudentId(Connection conn, String studentId) throws SQLException {
+    private Parent getParentForStudent(Connection conn, String studentId) throws SQLException {
         if (this.parentDAO == null) {
-            throw new IllegalStateException("ParentDAO dependency has not been set on StudentDAO.");
+            throw new IllegalStateException("ParentDAO dependency has not been set on StudentDAO. Cannot load parent.");
         }
         String sql = "SELECT parent_id FROM parent_student WHERE student_id = ? LIMIT 1";
 
@@ -445,8 +461,10 @@ public class StudentDAO {
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
                     String parentId = resultSet.getString("parent_id");
-                    // Call the injected ParentDAO, passing the connection
-                    return this.parentDAO.getById(conn, parentId); // Use injected DAO
+                    // Call the injected ParentDAO to get the parent, passing the connection
+                    // IMPORTANT: Call a method in ParentDAO that *doesn't* eagerly load children
+                    // Assuming ParentDAO has a getById(Connection conn, String id) that returns Parent without children
+                    return this.parentDAO.getById(conn, parentId);
                 }
             }
         }
@@ -454,34 +472,71 @@ public class StudentDAO {
     }
 
     /**
+     * Get the parent for a given student ID. Manages its own connection.
+     * Requires the ParentDAO dependency to be set.
+     *
+     * @param studentId the student ID
+     * @return Optional containing the Parent if found and linked, empty Optional otherwise.
+     * @throws IllegalStateException if ParentDAO dependency has not been set.
+     */
+    public Optional<Parent> getParentForStudent(String studentId) {
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            return Optional.ofNullable(getParentForStudent(conn, studentId));
+        } catch (SQLException | IllegalStateException e) {
+            System.err.println("Error getting parent for student " + studentId + ": " + e.getMessage());
+            e.printStackTrace();
+            return Optional.empty();
+        }
+    }
+
+
+    /**
      * Get courses for a student using an existing connection.
+     * This method requires the CourseDAO dependency to be set.
      *
      * @param conn the active database connection
      * @param studentId the student ID
-     * @return List of courses the student is enrolled in
+     * @return List of courses the student is enrolled in. Returns empty list if none or on error.
      * @throws SQLException if a database access error occurs
      * @throws IllegalStateException if CourseDAO dependency has not been set
      */
-    private List<Course> getCoursesByStudentId(Connection conn, String studentId) throws SQLException {
+    private List<Course> getCoursesForStudent(Connection conn, String studentId) throws SQLException {
         if (this.courseDAO == null) {
-            throw new IllegalStateException("CourseDAO dependency has not been set on StudentDAO.");
+            throw new IllegalStateException("CourseDAO dependency has not been set on StudentDAO. Cannot load courses.");
         }
-        // Call the injected CourseDAO, passing the connection
-        // This requires CourseDAO to have a getCoursesByStudentId(Connection conn, String studentId) method
-        return this.courseDAO.getCoursesByStudentId(conn, studentId); // Use injected DAO
+        // Assuming CourseDAO has a method like getCoursesByStudentId(Connection conn, String studentId)
+        // that retrieves courses without necessarily loading all related entities of the course.
+        return this.courseDAO.getCoursesByStudentId(conn, studentId);
+    }
+
+    /**
+     * Get courses for a given student ID. Manages its own connection.
+     * Requires the CourseDAO dependency to be set.
+     *
+     * @param studentId the student ID
+     * @return List of courses the student is enrolled in. Returns empty list if none or on error.
+     * @throws IllegalStateException if CourseDAO dependency has not been set.
+     */
+    public List<Course> getCoursesForStudent(String studentId) {
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            return getCoursesForStudent(conn, studentId);
+        } catch (SQLException | IllegalStateException e) {
+            System.err.println("Error getting courses for student " + studentId + ": " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
     }
 
     /**
      * Helper method to extract a Student object from a ResultSet
-     * Accepts the active connection to allow loading related entities without closing resources.
+     * This method *only* extracts the basic student data from the current row.
+     * It does NOT load related entities (Parent, Courses).
      *
-     * @param conn the active database connection
      * @param resultSet ResultSet containing student data
-     * @return the Student object
+     * @return the Student object with basic details
      * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if ParentDAO or CourseDAO dependency has not been set
      */
-    private Student extractStudentFromResultSet(Connection conn, ResultSet resultSet) throws SQLException {
+    private Student extractStudentFromResultSet(ResultSet resultSet) throws SQLException {
         String id = resultSet.getString("id");
         String name = resultSet.getString("name");
         String gender = resultSet.getString("gender");
@@ -497,21 +552,9 @@ public class StudentDAO {
         student.setBirthday(birthday);
         student.setEmail(email);
 
-        try {
-            // Get parent information - Use injected ParentDAO, Pass the connection
-            // getParentByStudentId will check if parentDAO is set
-            Parent parent = getParentByStudentId(conn, id);
-            student.setParent(parent);
-
-            // Get course information - Use injected CourseDAO, Pass the connection
-            // getCoursesByStudentId will check if courseDAO is set
-            List<Course> courses = getCoursesByStudentId(conn, id);
-            student.setCurrentCourses(courses);
-        } catch (SQLException | IllegalStateException e) { // Catch IllegalStateException too
-            System.err.println("Error loading related data for student " + id + " using existing connection: " + e.getMessage());
-            e.printStackTrace();
-            // Continue and return the student even if related data failed to load
-        }
+        // Related entities are NOT loaded here.
+        student.setParent(null); // Ensure parent is null initially
+        student.setCurrentCourses(new ArrayList<>()); // Ensure courses list is empty initially
 
         return student;
     }
@@ -536,6 +579,7 @@ public class StudentDAO {
 
     // -- Public wrapper methods for external calls that need to manage their own connection --
     // These methods delegate to internal helpers that accept a Connection
+    // Note: These will now return Students with basic data only.
 
     /**
      * Save a new student. Manages its own connection.
@@ -544,6 +588,7 @@ public class StudentDAO {
      */
     public boolean save(Student student) {
         try {
+            // insertStudent now handles linking parent/courses if present in the student object
             return insertStudent(student);
         } catch (SQLException e) {
             System.err.println("Error saving student: " + e.getMessage());
@@ -559,6 +604,7 @@ public class StudentDAO {
      */
     public boolean update(Student student) {
         try {
+            // updateStudent now handles updating parent/course links based on the student object
             return updateStudent(student);
         } catch (SQLException e) {
             System.err.println("Error updating student: " + e.getMessage());
@@ -584,13 +630,15 @@ public class StudentDAO {
 
     /**
      * Get all students. Manages its own connection.
+     * Returns students with basic data only.
+     *
      * @return List of all students
-     * @throws IllegalStateException if ParentDAO or CourseDAO dependency has not been set (propagated from helpers)
+     * @throws IllegalStateException if CourseDAO dependency is needed for related loading (but not for basic find all)
      */
     public List<Student> findAll() {
         try {
-            return getAllStudents();
-        } catch (SQLException | IllegalStateException e) { // Catch IllegalStateException too
+            return getAllStudents(); // This returns students with basic data only
+        } catch (SQLException e) { // Catch only SQLException as basic retrieval doesn't need injected DAOs directly
             System.err.println("Error finding all students: " + e.getMessage());
             e.printStackTrace();
             return new ArrayList<>();
@@ -599,57 +647,60 @@ public class StudentDAO {
 
     /**
      * Search students. Manages its own connection.
+     * Returns students with basic data only.
+     *
      * @param searchTerm the search term
      * @return List of matching students
-     * @throws IllegalStateException if ParentDAO or CourseDAO dependency has not been set (propagated from helpers)
+     * @throws IllegalStateException if CourseDAO dependency is needed for related loading (but not for basic search)
      */
     public List<Student> search(String searchTerm) {
         try {
-            return searchStudents(searchTerm);
-        } catch (SQLException | IllegalStateException e) { // Catch IllegalStateException too
+            return searchStudents(searchTerm); // This returns students with basic data only
+        } catch (SQLException e) { // Catch only SQLException as basic retrieval doesn't need injected DAOs directly
             System.err.println("Error searching students: " + e.getMessage());
             e.printStackTrace();
             return new ArrayList<>();
         }
     }
+
     /**
      * Find all students associated with a specific session ID.
+     * Manages its own connection.
+     * Returns students with basic data only.
      *
-     * @param conn The active database connection.
      * @param sessionId The ID of the session.
-     * @return A list of students associated with the session.
+     * @return A list of students associated with the session (basic data only).
      * @throws SQLException if a database access error occurs.
-     * @throws IllegalStateException if ParentDAO or CourseDAO dependency has not been set.
      */
-    public List<Student> findBySessionId(Connection conn, String sessionId) throws SQLException {
+    public List<Student> findBySessionId(String sessionId) throws SQLException {
         List<Student> students = new ArrayList<>();
-        // TODO: Replace with your actual SQL query that joins students with sessions
-        // This is a placeholder query assuming a linking table like 'session_student'
         String sql = "SELECT s.id, s.name, s.gender, s.contact_number, s.birthday, s.email " +
                 "FROM students s " +
                 "JOIN session_student ss ON s.id = ss.student_id " + // Assuming a linking table
                 "WHERE ss.session_id = ?";
 
-        try (PreparedStatement statement = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement statement = conn.prepareStatement(sql)) {
+
             statement.setString(1, sessionId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Use the existing helper to extract student data and related entities
-                    students.add(extractStudentFromResultSet(conn, resultSet));
+                    // Use the basic helper to extract student data (NO related entities loaded here)
+                    students.add(extractStudentFromResultSet(resultSet));
                 }
             }
         } catch (SQLException e) {
             System.err.println("Error finding students by session ID: " + e.getMessage());
             e.printStackTrace();
-            throw e; // Re-throw to be handled by the caller (ExamsController)
-        } catch (IllegalStateException e) {
-            System.err.println("Dependency not set while finding students by session ID: " + e.getMessage());
-            e.printStackTrace();
-            throw e; // Re-throw to be handled by the caller
+            throw e; // Re-throw to be handled by the caller (e.g., AttendanceDAO/Controller)
         }
 
         return students;
     }
+
+    // Note: findBySessionId(Connection conn, String sessionId) is removed
+    // as public methods should primarily manage their own connections for simplicity.
+    // Internal helper methods that need an existing connection remain private.
 
 }

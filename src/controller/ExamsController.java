@@ -199,7 +199,7 @@ public class ExamsController {
 
                 // Load students for this specific session using the StudentDAO with the connection
                 // Assuming StudentDAO has a findBySessionId method that accepts a Connection
-                List<Student> studentsForSession = studentDAO.findBySessionId(conn, detailedSession.getId());
+                List<Student> studentsForSession = studentDAO.findBySessionId(detailedSession.getId());
                 detailedSession.setStudents(studentsForSession);
 
 

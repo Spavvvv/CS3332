@@ -10,16 +10,14 @@ import javafx.beans.property.StringProperty;
  */
 public class Classroom {
     private final IntegerProperty id;
-    private final IntegerProperty stt;
     private final StringProperty ma;
     private final StringProperty ten;
     private final IntegerProperty tang;
     private final IntegerProperty sucChua;
     private final StringProperty trangThai;
 
-    public Classroom(int id, int stt, String ma, String ten, int tang, int sucChua, String trangThai) {
+    public Classroom(int id, String ma, String ten, int tang, int sucChua, String trangThai) {
         this.id = new SimpleIntegerProperty(id);
-        this.stt = new SimpleIntegerProperty(stt);
         this.ma = new SimpleStringProperty(ma);
         this.ten = new SimpleStringProperty(ten);
         this.tang = new SimpleIntegerProperty(tang);
@@ -29,7 +27,6 @@ public class Classroom {
 
     // Getters
     public int getId() { return id.get(); }
-    public int getStt() { return stt.get(); }
     public String getMa() { return ma.get(); }
     public String getTen() { return ten.get(); }
     public int getTang() { return tang.get(); }
@@ -38,7 +35,6 @@ public class Classroom {
 
     // Property getters for JavaFX binding
     public IntegerProperty idProperty() { return id; }
-    public IntegerProperty sttProperty() { return stt; }
     public StringProperty maProperty() { return ma; }
     public StringProperty tenProperty() { return ten; }
     public IntegerProperty tangProperty() { return tang; }
@@ -47,7 +43,6 @@ public class Classroom {
 
     // Setters
     public void setId(int id) { this.id.set(id); }
-    public void setStt(int stt) { this.stt.set(stt); }
     public void setMa(String ma) { this.ma.set(ma); }
     public void setTen(String ten) { this.ten.set(ten); }
     public void setTang(int tang) { this.tang.set(tang); }

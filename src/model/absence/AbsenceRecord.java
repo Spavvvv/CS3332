@@ -1,29 +1,26 @@
-// Model Class: AbsenceRecord.java
 package src.model.absence;
 
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
-import javafx.scene.image.ImageView;
 
 /**
- * Model class representing an absence record
+ * Model class representing an absence record (without student image)
  */
 public class AbsenceRecord {
     private final String id;
-    private final ImageView image;
     private final String name;
     private final String className;
     private final String date;
-    private final String attendance;
-    private final String note;
+    private final String attendance; // Renamed from status in previous discussions to match attendance column?
+    private final String note; // Using 'note' here to match model field name, but data comes from 'notes' column
     private final BooleanProperty called = new SimpleBooleanProperty();
     private final BooleanProperty approved = new SimpleBooleanProperty();
 
-    public AbsenceRecord(String id, ImageView image, String name, String className,
+    public AbsenceRecord(String id, String name, String className,
                          String date, String attendance, String note,
                          boolean called, boolean approved) {
         this.id = id;
-        this.image = image;
+        // Removed image field
         this.name = name;
         this.className = className;
         this.date = date;
@@ -36,7 +33,7 @@ public class AbsenceRecord {
     // Getters and Setters
     public String getId() { return id; }
 
-    public ImageView getImage() { return image; }
+    // Removed getImage() method
 
     public String getName() { return name; }
 

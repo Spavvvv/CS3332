@@ -87,7 +87,7 @@ public class DaoManager {
         // Check the dependencies required by each DAO and set them here.
 
         // Setters in StudentDAO (Example dependencies)
-        // studentDAO.setParentDAO(parentDAO); // If StudentDAO needs ParentDAO
+        studentDAO.setParentDAO(parentDAO); // If StudentDAO needs ParentDAO
         studentDAO.setCourseDAO(courseDAO); // If StudentDAO needs CourseDAO (e.g., to list courses student is in)
         // studentDAO.setAttendanceDAO(attendanceDAO); // If StudentDAO needs AttendanceDAO
         // studentDAO.setAbsenceRecordDAO(absenceRecordDAO); // If StudentDAO needs AbsenceRecordDAO
@@ -126,7 +126,7 @@ public class DaoManager {
 
 
         // Setters in AttendanceDAO
-        // attendanceDAO.setStudentDAO(studentDAO);
+        attendanceDAO.setStudentDAO(studentDAO);
         attendanceDAO.setClassSessionDAO(classSessionDAO);
         // attendanceDAO.setCourseDAO(courseDAO);
         // attendanceDAO.setParentDAO(parentDAO);

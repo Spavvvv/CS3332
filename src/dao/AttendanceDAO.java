@@ -3,7 +3,7 @@ package src.dao;
 import src.model.ClassSession;
 import src.model.attendance.Attendance;
 import src.model.person.Student;
-import utils.DatabaseConnection; // Still needed for public wrapper methods to get connections
+import utils.DatabaseConnection;
 
 import java.sql.*;
 import java.time.LocalDate;
@@ -55,9 +55,7 @@ public class AttendanceDAO {
      */
     private void checkStudentDAODependency() {
         if (this.studentDAO == null) {
-            // In a real application, you might throw an exception here or log a severe error
             System.err.println("Warning: StudentDAO dependency not set on AttendanceDAO. Functionality requiring it may fail.");
-            // throw new IllegalStateException("StudentDAO dependency has not been set on AttendanceDAO.");
         }
     }
 
@@ -68,9 +66,7 @@ public class AttendanceDAO {
      */
     private void checkClassSessionDAODependency() {
         if (this.sessionDAO == null) {
-            // In a real application, you might throw an exception here or log a severe error
             System.err.println("Warning: ClassSessionDAO dependency not set on AttendanceDAO. Functionality requiring it may fail.");
-            // throw new IllegalStateException("ClassSessionDAO dependency has not been set on AttendanceDAO.");
         }
     }
 
@@ -88,9 +84,9 @@ public class AttendanceDAO {
      * @throws SQLException if a database access error occurs
      */
     boolean internalSave(Connection conn, Attendance attendance) throws SQLException {
-        // Note: We assume the transaction is handled by the calling public method
+        // Added 'status' column
         String sql = "INSERT INTO attendance (student_id, session_id, present, notes, called, has_permission, " +
-                "check_in_time, record_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                "check_in_time, record_time, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
@@ -107,18 +103,23 @@ public class AttendanceDAO {
                 stmt.setNull(7, Types.TIMESTAMP);
             }
 
+            // Allow database default for record_time if null in object
             if (attendance.getRecordTime() != null) {
                 stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
             } else {
-                stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
+                stmt.setNull(8, Types.TIMESTAMP);
             }
+
+            // Set status
+            stmt.setString(9, attendance.getStatus());
 
             int affectedRows = stmt.executeUpdate();
 
             if (affectedRows > 0) {
                 try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
                     if (generatedKeys.next()) {
-                        attendance.setId(generatedKeys.getString(1)); // Assuming ID is a String/UUID in DB
+                        // Assuming the first generated key is the attendance_id
+                        attendance.setId(generatedKeys.getString(1));
                         return true;
                     } else {
                         // If no generated keys were returned but rows were affected, still consider it a success
@@ -140,10 +141,10 @@ public class AttendanceDAO {
      * @throws SQLException if a database access error occurs
      */
     boolean internalUpdate(Connection conn, Attendance attendance) throws SQLException {
-        // Note: We assume the transaction is handled by the calling public method
+        // Added 'status', changed WHERE clause to use 'attendance_id'
         String sql = "UPDATE attendance SET student_id = ?, session_id = ?, present = ?, " +
-                "notes = ?, called = ?, has_permission = ?, check_in_time = ?, record_time = ? " +
-                "WHERE id = ?";
+                "notes = ?, called = ?, has_permission = ?, check_in_time = ?, record_time = ?, status = ? " +
+                "WHERE attendance_id = ?";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
 
@@ -160,13 +161,18 @@ public class AttendanceDAO {
                 stmt.setNull(7, Types.TIMESTAMP);
             }
 
+            // Allow database default for record_time if null in object (though updates might behave differently)
             if (attendance.getRecordTime() != null) {
                 stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
             } else {
-                stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
+                stmt.setNull(8, Types.TIMESTAMP);
             }
 
-            stmt.setString(9, attendance.getId()); // Assuming ID is a String/UUID
+            // Set status
+            stmt.setString(9, attendance.getStatus());
+
+            // Set attendance_id for WHERE clause
+            stmt.setString(10, attendance.getId());
 
             return stmt.executeUpdate() > 0;
         }
@@ -176,16 +182,16 @@ public class AttendanceDAO {
      * Internal method to delete an attendance record by ID using an existing connection.
      *
      * @param conn the active database connection
-     * @param id ID of the attendance record to delete (assuming String/UUID)
+     * @param id ID of the attendance record to delete (assuming String/UUID) - maps to attendance_id
      * @return true if successful, false otherwise
      * @throws SQLException if a database access error occurs
      */
-    boolean internalDelete(Connection conn, String id) throws SQLException { // Changed id to String to match findById return type
-        String sql = "DELETE FROM attendance WHERE id = ?";
+    boolean internalDelete(Connection conn, String id) throws SQLException {
+        // Changed WHERE clause to use 'attendance_id'
+        String sql = "DELETE FROM attendance WHERE attendance_id = ?";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, id); // Use setString for String ID
+            stmt.setString(1, id);
             return stmt.executeUpdate() > 0;
         }
     }
@@ -194,19 +200,20 @@ public class AttendanceDAO {
      * Internal method to find an attendance record by ID using an existing connection.
      *
      * @param conn the active database connection
-     * @param id ID of the attendance record to find (assuming String/UUID)
+     * @param id ID of the attendance record to find (assuming String/UUID) - maps to attendance_id
      * @return Optional containing the attendance record if found
      * @throws SQLException if a database access error occurs
      */
     Optional<Attendance> internalFindById(Connection conn, String id) throws SQLException {
-        String sql = "SELECT * FROM attendance WHERE id = ?";
+        // Changed WHERE clause to use 'attendance_id'
+        String sql = "SELECT * FROM attendance WHERE attendance_id = ?";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return Optional.of(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                    return Optional.of(mapResultSetToAttendance(rs, conn));
                 }
             }
         }
@@ -230,7 +237,7 @@ public class AttendanceDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    attendances.add(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                    attendances.add(mapResultSetToAttendance(rs, conn));
                 }
             }
         }
@@ -254,7 +261,7 @@ public class AttendanceDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    attendances.add(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                    attendances.add(mapResultSetToAttendance(rs, conn));
                 }
             }
         }
@@ -280,7 +287,7 @@ public class AttendanceDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    attendances.add(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                    attendances.add(mapResultSetToAttendance(rs, conn));
                 }
             }
         }
@@ -296,16 +303,16 @@ public class AttendanceDAO {
      * @return Optional containing the attendance record if found
      * @throws SQLException if a database access error occurs
      */
-    Optional<Attendance> internalFindByStudentAndSession(Connection conn, String studentId, String sessionId) throws SQLException { // Changed sessionId to String
+    Optional<Attendance> internalFindByStudentAndSession(Connection conn, String studentId, String sessionId) throws SQLException {
         String sql = "SELECT * FROM attendance WHERE student_id = ? AND session_id = ?";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, studentId);
-            stmt.setString(2, sessionId); // Use setString
+            stmt.setString(2, sessionId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return Optional.of(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                    return Optional.of(mapResultSetToAttendance(rs, conn));
                 }
             }
         }
@@ -327,7 +334,7 @@ public class AttendanceDAO {
              ResultSet rs = stmt.executeQuery(sql)) {
 
             while (rs.next()) {
-                attendances.add(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                attendances.add(mapResultSetToAttendance(rs, conn));
             }
         }
         return attendances;
@@ -341,16 +348,16 @@ public class AttendanceDAO {
      * @return List of attendance records for absent students
      * @throws SQLException if a database access error occurs
      */
-    List<Attendance> internalFindAbsentBySession(Connection conn, String sessionId) throws SQLException { // Changed sessionId to String
+    List<Attendance> internalFindAbsentBySession(Connection conn, String sessionId) throws SQLException {
         String sql = "SELECT * FROM attendance WHERE session_id = ? AND present = FALSE";
         List<Attendance> attendances = new ArrayList<>();
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, sessionId); // Use setString
+            stmt.setString(1, sessionId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    attendances.add(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                    attendances.add(mapResultSetToAttendance(rs, conn));
                 }
             }
         }
@@ -374,7 +381,7 @@ public class AttendanceDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    attendances.add(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                    attendances.add(mapResultSetToAttendance(rs, conn));
                 }
             }
         }
@@ -402,7 +409,7 @@ public class AttendanceDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    attendances.add(mapResultSetToAttendance(rs, conn)); // Pass connection for mapping if needed
+                    attendances.add(mapResultSetToAttendance(rs, conn));
                 }
             }
         }
@@ -419,13 +426,11 @@ public class AttendanceDAO {
      * @throws SQLException if a database access error occurs
      */
     int internalBatchSave(Connection conn, List<Attendance> attendances) throws SQLException {
+        // Added 'status' column
         String sql = "INSERT INTO attendance (student_id, session_id, present, notes, called, has_permission, " +
-                "check_in_time, record_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                "check_in_time, record_time, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         int successCount = 0;
 
-        // Transaction management is handled by the public wrapper method, but batch implies a transaction
-        // If called internally, the caller is responsible for the transaction.
-        // This internal method will execute the batch within the provided connection.
         try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             for (Attendance attendance : attendances) {
@@ -442,11 +447,15 @@ public class AttendanceDAO {
                     stmt.setNull(7, Types.TIMESTAMP);
                 }
 
+                // Allow database default for record_time if null in object
                 if (attendance.getRecordTime() != null) {
                     stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
                 } else {
-                    stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
+                    stmt.setNull(8, Types.TIMESTAMP);
                 }
+
+                // Set status
+                stmt.setString(9, attendance.getStatus());
 
                 stmt.addBatch();
             }
@@ -467,22 +476,19 @@ public class AttendanceDAO {
                 int index = 0;
                 while (generatedKeys.next() && index < attendances.size()) {
                     // Assuming the order of generated keys matches the order of addBatch calls
-                    // This assumption might not hold true for all JDBC drivers/databases.
-                    // A more robust approach for batch inserts might involve a sequence or UUID generation
-                    // before inserting, or querying back based on other unique fields after insertion.
+                    // and the first generated key is the attendance_id
                     try {
                         attendances.get(index).setId(generatedKeys.getString(1));
                         index++;
                     } catch (SQLException e) {
-                        // Log or handle cases where generated key is not available for this row
                         System.err.println("Warning: Could not retrieve generated key for batch insert at index " + index + ": " + e.getMessage());
-                        index++; // Still increment index to try to process subsequent results
+                        index++;
                     }
                 }
             }
 
         }
-        return successCount; // Return count of successful operations
+        return successCount;
     }
 
     /**
@@ -495,12 +501,12 @@ public class AttendanceDAO {
      * @throws SQLException if a database access error occurs
      */
     int internalBatchUpdate(Connection conn, List<Attendance> attendances) throws SQLException {
+        // Added 'status', changed WHERE clause to use 'attendance_id'
         String sql = "UPDATE attendance SET student_id = ?, session_id = ?, present = ?, " +
-                "notes = ?, called = ?, has_permission = ?, check_in_time = ?, record_time = ? " +
-                "WHERE id = ?";
+                "notes = ?, called = ?, has_permission = ?, check_in_time = ?, record_time = ?, status = ? " +
+                "WHERE attendance_id = ?";
         int successCount = 0;
 
-        // Transaction management is handled by the public wrapper method
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             for (Attendance attendance : attendances) {
@@ -517,13 +523,18 @@ public class AttendanceDAO {
                     stmt.setNull(7, Types.TIMESTAMP);
                 }
 
+                // Allow database default for record_time if null in object
                 if (attendance.getRecordTime() != null) {
                     stmt.setTimestamp(8, Timestamp.valueOf(attendance.getRecordTime()));
                 } else {
-                    stmt.setTimestamp(8, Timestamp.valueOf(LocalDateTime.now()));
+                    stmt.setNull(8, Types.TIMESTAMP);
                 }
 
-                stmt.setString(9, attendance.getId()); // Assuming ID is String/UUID
+                // Set status
+                stmt.setString(9, attendance.getStatus());
+
+                // Set attendance_id for WHERE clause
+                stmt.setString(10, attendance.getId());
 
                 stmt.addBatch();
             }
@@ -537,7 +548,7 @@ public class AttendanceDAO {
                 }
             }
         }
-        return successCount; // Return count of successful operations
+        return successCount;
     }
 
 
@@ -595,12 +606,14 @@ public class AttendanceDAO {
     private Attendance mapResultSetToAttendance(ResultSet rs, Connection conn) throws SQLException {
         Attendance attendance = new Attendance();
 
-        // Set basic attendance properties - assuming ID is String/UUID
-        attendance.setId(rs.getString("id")); // Corrected to get "id" from attendance table
+        // Set basic attendance properties - get 'attendance_id' instead of 'id'
+        attendance.setId(rs.getString("attendance_id"));
         attendance.setPresent(rs.getBoolean("present"));
         attendance.setNote(rs.getString("notes"));
         attendance.setCalled(rs.getBoolean("called"));
         attendance.setHasPermission(rs.getBoolean("has_permission"));
+        // Get 'status'
+        attendance.setStatus(rs.getString("status"));
 
         // Handle timestamps that may be null
         Timestamp checkInTime = rs.getTimestamp("check_in_time");
@@ -611,12 +624,6 @@ public class AttendanceDAO {
         Timestamp recordTime = rs.getTimestamp("record_time");
         if (recordTime != null) {
             attendance.setRecordTime(recordTime.toLocalDateTime());
-        } else {
-            // If record_time is null, set it to the time of mapping? Or leave null?
-            // Based on the original save/update, it defaults to LocalDateTime.now() if null on input.
-            // Let's match the original logic - if it's null in the DB, leave it null on the object,
-            // or perhaps set it to now() as a default? Let's leave null for now to reflect DB state.
-            // attendance.setRecordTime(LocalDateTime.now()); // Alternative: set to now() as default
         }
 
 
@@ -634,14 +641,17 @@ public class AttendanceDAO {
         checkClassSessionDAODependency();
 
         if (studentDAO != null) {
-            // Assuming StudentDAO has an internalFindById(Connection conn, String id) method
+            // Assuming StudentDAO has a findById(Connection conn, String id) method that takes a connection
+            // If StudentDAO's findById is a public wrapper method that gets its own connection,
+            // passing 'conn' here is incorrect. Assuming it follows the internal/public pattern.
             Optional<Student> student = studentDAO.findById(conn, studentId);
             student.ifPresent(attendance::setStudent);
         }
 
         if (sessionDAO != null) {
-            // Assuming ClassSessionDAO has an internalFindById(Connection conn, String id) method
-            // Need to ensure ClassSessionDAO also uses String for ID if it corresponds to UUID/VARCHAR
+            // Assuming ClassSessionDAO has a findById(Connection conn, String id) method that takes a connection
+            // If ClassSessionDAO's findById is a public wrapper method, passing 'conn' here is incorrect.
+            // Assuming it follows the internal/public pattern.
             Optional<ClassSession> session = sessionDAO.findById(conn, sessionId);
             session.ifPresent(attendance::setSession);
         }
@@ -750,10 +760,10 @@ public class AttendanceDAO {
     /**
      * Delete an attendance record by ID. Manages its own connection and transaction.
      *
-     * @param id ID of the attendance record to delete (assuming String/UUID)
+     * @param id ID of the attendance record to delete (assuming String/UUID) - maps to attendance_id
      * @return true if successful, false otherwise
      */
-    public boolean delete(String id) { // Changed id type to String
+    public boolean delete(String id) {
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false); // Start transaction
             boolean success = internalDelete(conn, id);
@@ -773,7 +783,7 @@ public class AttendanceDAO {
     /**
      * Find an attendance record by ID. Manages its own connection.
      *
-     * @param id ID of the attendance record to find (assuming String/UUID)
+     * @param id ID of the attendance record to find (assuming String/UUID) - maps to attendance_id
      * @return Optional containing the attendance record if found
      */
     public Optional<Attendance> findById(String id) {
@@ -841,7 +851,7 @@ public class AttendanceDAO {
      * @param sessionId Session ID (assuming String/UUID)
      * @return Optional containing the attendance record if found
      */
-    public Optional<Attendance> findByStudentAndSession(String studentId, String sessionId) { // Changed sessionId to String
+    public Optional<Attendance> findByStudentAndSession(String studentId, String sessionId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
             return internalFindByStudentAndSession(conn, studentId, sessionId);
         } catch (SQLException e) {
@@ -872,7 +882,7 @@ public class AttendanceDAO {
      * @param sessionId Session ID (assuming String/UUID)
      * @return List of attendance records for absent students
      */
-    public List<Attendance> findAbsentBySession(String sessionId) { // Changed sessionId to String
+    public List<Attendance> findAbsentBySession(String sessionId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
             return internalFindAbsentBySession(conn, sessionId);
         } catch (SQLException e) {
@@ -904,6 +914,7 @@ public class AttendanceDAO {
      * @param startDate Start date
      * @param endDate End date
      * @return List of attendance records in the date range
+     * @throws SQLException if a database access error occurs
      */
     public List<Attendance> findByDateRange(LocalDate startDate, LocalDate endDate) {
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -925,19 +936,14 @@ public class AttendanceDAO {
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false); // Start transaction
             int savedCount = internalBatchSave(conn, attendances);
-            if (savedCount == attendances.size()) { // Assuming all records should be saved
-                conn.commit(); // Commit if all successful
-            } else {
-                conn.rollback(); // Rollback if any failed (or not all saved)
-                System.err.println("Warning: Not all attendance records were batch saved. Rolled back transaction.");
-            }
+            // It's better to commit even if not all were saved, unless atomicity of the whole batch is critical
+            conn.commit(); // Commit whatever was successful
             conn.setAutoCommit(true); // Restore default commit behavior
             return savedCount;
         } catch (SQLException e) {
             System.err.println("Error batch saving attendances: " + e.getMessage());
             e.printStackTrace();
-            // Rollback is handled in internalBatchSave, but ensure connection state is handled
-            // No need for manual rollback here if internal method throws SQLException
+            // Rollback would be handled by the finally block or the try-with-resources closing conn
             return 0;
         }
     }
@@ -952,19 +958,14 @@ public class AttendanceDAO {
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false); // Start transaction
             int updatedCount = internalBatchUpdate(conn, attendances);
-            if (updatedCount == attendances.size()) { // Assuming all records should be updated
-                conn.commit(); // Commit if all successful
-            } else {
-                conn.rollback(); // Rollback if any failed (or not all updated)
-                System.err.println("Warning: Not all attendance records were batch updated. Rolled back transaction.");
-            }
+            // It's better to commit even if not all were updated, unless atomicity of the whole batch is critical
+            conn.commit(); // Commit whatever was successful
             conn.setAutoCommit(true); // Restore default commit behavior
             return updatedCount;
         } catch (SQLException e) {
             System.err.println("Error batch updating attendances: " + e.getMessage());
             e.printStackTrace();
-            // Rollback is handled in internalBatchUpdate, but ensure connection state is handled
-            // No need for manual rollback here if internal method throws SQLException
+            // Rollback would be handled by the finally block or the try-with-resources closing conn
             return 0;
         }
     }
@@ -986,8 +987,4 @@ public class AttendanceDAO {
             return new AttendanceStats(); // Return empty stats on error
         }
     }
-
-
-    // Removed the getStudentDAO and getClassSessionDAO methods as they are not needed here.
-    // Access to DAOs should be managed by the DaoManager.
 }

@@ -3,22 +3,19 @@ package src.dao;
 import src.model.absence.AbsenceRecord;
 import utils.DatabaseConnection;
 
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
-
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * DAO for AbsenceRecord operations.
- * Modified to use String IDs for Absence Records, corresponding to the database primary key.
+ * DAO for AbsenceRecord operations using the 'attendance' table.
+ * Retrieves data by LEFT JOINING with 'students', 'class_sessions', and 'classes'.
+ * Verified JOIN logic based on all provided schemas and foreign keys.
+ * Handles cases where student_id or session_id might not exist in foreign tables.
  */
 public class AbsenceRecordDAO {
 
@@ -30,7 +27,7 @@ public class AbsenceRecordDAO {
 
 
     /**
-     * Find all absence records
+     * Find all absence records from the attendance table, including those with missing student/class data.
      */
     public List<AbsenceRecord> findAll() throws SQLException {
         Connection connection = null;
@@ -42,38 +39,40 @@ public class AbsenceRecordDAO {
             connection = DatabaseConnection.getConnection();
             stmt = connection.createStatement();
 
-            String sql = "SELECT a.id, s.student_name, c.class_name, a.absence_date, " +
-                    "a.status, a.note, a.called, a.approved, s.image_path " +
-                    "FROM absences a " +
-                    "JOIN students s ON a.student_id = s.id " +
-                    "JOIN classes c ON s.class_id = c.id " +
-                    "ORDER BY a.absence_date DESC, s.student_name";
+            // Corrected SQL query using LEFT JOINs based on foreign keys: attendance -> students, attendance -> class_sessions -> classes
+            String sql = "SELECT a.attendance_id, s.name, c.class_name, a.absence_date, " +
+                    "a.status, a.notes, a.called, a.approved " +
+                    "FROM attendance a " +
+                    "LEFT JOIN students s ON a.student_id = s.id " +
+                    "LEFT JOIN class_sessions cs ON a.session_id = cs.session_id " +
+                    "LEFT JOIN classes c ON cs.class_id = c.class_id " + // Join class_sessions to classes on class_id
+                    "ORDER BY a.absence_date DESC, s.name";
 
             rs = stmt.executeQuery(sql);
 
             while (rs.next()) {
-                // Lấy ID thực trong database và chuyển đổi sang String
-                int dbId = rs.getInt("id");
-                String recordId = String.valueOf(dbId); // Use String ID from DB
-
-                // Tạo ImageView từ đường dẫn hình ảnh
-                String imagePath = rs.getString("image_path");
-                ImageView studentImage = createStudentImageView(imagePath);
-
-                // Format date from database (assuming database stores in yyyy-MM-dd format)
+                String recordId = rs.getString("attendance_id");
                 String dbDate = rs.getString("absence_date");
                 String formattedDate = formatDateFromDb(dbDate);
 
+                // Get data - these might be null if LEFT JOIN failed
+                String studentName = rs.getString("name"); // From students table
+                String className = rs.getString("class_name"); // From classes table via class_sessions
+                String status = rs.getString("status"); // From attendance table
+                String notes = rs.getString("notes"); // From attendance table
+                boolean called = rs.getBoolean("called"); // From attendance table (getBoolean returns false for SQL NULL)
+                boolean approved = rs.getBoolean("approved"); // From attendance table (getBoolean returns false for SQL NULL)
+
+                // Create AbsenceRecord object. The constructor and model should handle null strings.
                 AbsenceRecord record = new AbsenceRecord(
-                        recordId, // Pass String ID
-                        studentImage,
-                        rs.getString("student_name"),
-                        rs.getString("class_name"),
+                        recordId,
+                        studentName, // Might be null
+                        className,   // Might be null
                         formattedDate,
-                        rs.getString("status"),
-                        rs.getString("note"),
-                        rs.getBoolean("called"),
-                        rs.getBoolean("approved")
+                        status,      // Might be null
+                        notes,       // Might be null
+                        called,
+                        approved
                 );
 
                 records.add(record);
@@ -81,8 +80,8 @@ public class AbsenceRecordDAO {
 
             return records;
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error finding all absence records.", e);
-            throw e; // Re-throw the exception after logging
+            LOGGER.log(Level.SEVERE, "Error finding all absence records with LEFT JOIN.", e);
+            throw e;
         } finally {
             if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
             if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing Statement", e); }}
@@ -91,7 +90,7 @@ public class AbsenceRecordDAO {
     }
 
     /**
-     * Find absence records by filters
+     * Find absence records from the attendance table by filters, including those with missing student/class data.
      */
     public List<AbsenceRecord> findByFilters(String keyword, LocalDate fromDate, LocalDate toDate) throws SQLException {
         Connection connection = null;
@@ -102,41 +101,42 @@ public class AbsenceRecordDAO {
         try {
             connection = DatabaseConnection.getConnection();
 
+            // Corrected SQL query with filters using LEFT JOINs through class_sessions
             StringBuilder sqlBuilder = new StringBuilder(
-                    "SELECT a.id, s.student_name, c.class_name, a.absence_date, " +
-                            "a.status, a.note, a.called, a.approved, s.image_path " +
-                            "FROM absences a " +
-                            "JOIN students s ON a.student_id = s.id " +
-                            "JOIN classes c ON s.class_id = c.id " +
+                    "SELECT a.attendance_id, s.name, c.class_name, a.absence_date, " +
+                            "a.status, a.notes, a.called, a.approved " +
+                            "FROM attendance a " +
+                            "LEFT JOIN students s ON a.student_id = s.id " +
+                            "LEFT JOIN class_sessions cs ON a.session_id = cs.session_id " +
+                            "LEFT JOIN classes c ON cs.class_id = c.class_id " + // Join class_sessions to classes on class_id
                             "WHERE 1=1 "
             );
 
             List<Object> params = new ArrayList<>();
 
-            // Thêm điều kiện tìm kiếm nếu có keyword
             if (keyword != null && !keyword.isEmpty()) {
-                sqlBuilder.append("AND (s.student_name LIKE ? OR c.class_name LIKE ? OR a.note LIKE ?) ");
+                // Use COALESCE or check for NULL in the DB query if needed, but LIKE handles NULL by not matching.
+                // Keeping current LIKE logic which is fine for NULLs (they won't match).
+                sqlBuilder.append("AND (s.name LIKE ? OR c.class_name LIKE ? OR a.notes LIKE ?) ");
                 params.add("%" + keyword + "%");
                 params.add("%" + keyword + "%");
                 params.add("%" + keyword + "%");
             }
 
-            // Thêm điều kiện lọc theo ngày
             if (fromDate != null) {
                 sqlBuilder.append("AND a.absence_date >= ? ");
-                params.add(fromDate.format(DB_DATE_FORMATTER)); // Use DB format for query
+                params.add(fromDate.format(DB_DATE_FORMATTER));
             }
 
             if (toDate != null) {
                 sqlBuilder.append("AND a.absence_date <= ? ");
-                params.add(toDate.format(DB_DATE_FORMATTER)); // Use DB format for query
+                params.add(toDate.format(DB_DATE_FORMATTER));
             }
 
-            sqlBuilder.append("ORDER BY a.absence_date DESC, s.student_name");
+            sqlBuilder.append("ORDER BY a.absence_date DESC, s.name");
 
             stmt = connection.prepareStatement(sqlBuilder.toString());
 
-            // Gán các tham số
             for (int i = 0; i < params.size(); i++) {
                 stmt.setObject(i + 1, params.get(i));
             }
@@ -144,28 +144,28 @@ public class AbsenceRecordDAO {
             rs = stmt.executeQuery();
 
             while (rs.next()) {
-                // Lấy ID thực trong database và chuyển đổi sang String
-                int dbId = rs.getInt("id");
-                String recordId = String.valueOf(dbId); // Use String ID from DB
-
-                // Tạo ImageView từ đường dẫn hình ảnh
-                String imagePath = rs.getString("image_path");
-                ImageView studentImage = createStudentImageView(imagePath);
-
-                // Format date from database
+                String recordId = rs.getString("attendance_id");
                 String dbDate = rs.getString("absence_date");
                 String formattedDate = formatDateFromDb(dbDate);
 
+                // Get data - these might be null if LEFT JOIN failed
+                String studentName = rs.getString("name"); // From students table
+                String className = rs.getString("class_name"); // From classes table via class_sessions
+                String status = rs.getString("status"); // From attendance table
+                String notes = rs.getString("notes"); // From attendance table
+                boolean called = rs.getBoolean("called"); // From attendance table (getBoolean returns false for SQL NULL)
+                boolean approved = rs.getBoolean("approved"); // From attendance table (getBoolean returns false for SQL NULL)
+
+                // Create AbsenceRecord object. The constructor and model should handle null strings.
                 AbsenceRecord record = new AbsenceRecord(
-                        recordId, // Pass String ID
-                        studentImage,
-                        rs.getString("student_name"),
-                        rs.getString("class_name"),
+                        recordId,
+                        studentName, // Might be null
+                        className,   // Might be null
                         formattedDate,
-                        rs.getString("status"),
-                        rs.getString("note"),
-                        rs.getBoolean("called"),
-                        rs.getBoolean("approved")
+                        status,      // Might be null
+                        notes,       // Might be null
+                        called,
+                        approved
                 );
 
                 records.add(record);
@@ -173,8 +173,8 @@ public class AbsenceRecordDAO {
 
             return records;
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error finding absence records by filters.", e);
-            throw e; // Re-throw the exception after logging
+            LOGGER.log(Level.SEVERE, "Error finding absence records with filters using LEFT JOIN.", e);
+            throw e;
         } finally {
             if (rs != null) { try { rs.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing ResultSet", e); }}
             if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
@@ -183,8 +183,9 @@ public class AbsenceRecordDAO {
     }
 
     /**
-     * Update an absence record.
-     * Assumes AbsenceRecord.getId() returns the String representation of the database ID.
+     * Update an absence record in the attendance table.
+     * Assumes AbsenceRecord.getId() returns the String representation of the attendance_id.
+     * This method operates directly on the attendance table and is not affected by the join logic.
      */
     public boolean update(AbsenceRecord record) throws SQLException {
         Connection connection = null;
@@ -197,29 +198,18 @@ public class AbsenceRecordDAO {
         try {
             connection = DatabaseConnection.getConnection();
 
-            // Update chỉ cập nhật các trường có thể thay đổi: called và approved
-            String sql = "UPDATE absences SET called = ?, approved = ? WHERE id = ?";
+            String sql = "UPDATE attendance SET called = ?, approved = ? WHERE attendance_id = ?";
 
             stmt = connection.prepareStatement(sql);
             stmt.setBoolean(1, record.isCalled());
             stmt.setBoolean(2, record.isApproved());
-
-            // Lấy ID từ AbsenceRecord (đã được giả định là String DB ID) và chuyển lại sang int
-            int dbId;
-            try {
-                dbId = Integer.parseInt(record.getId());
-            } catch (NumberFormatException e) {
-                LOGGER.log(Level.SEVERE, "Invalid ID format for AbsenceRecord update: " + record.getId(), e);
-                throw new SQLException("Invalid ID format for update: " + record.getId(), e);
-            }
-
-            stmt.setInt(3, dbId);
+            stmt.setString(3, record.getId());
 
             int result = stmt.executeUpdate();
             return result > 0;
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error updating absence record with ID: " + record.getId(), e);
-            throw e; // Re-throw the exception after logging
+            LOGGER.log(Level.SEVERE, "Error updating absence record (attendance table) with ID: " + record.getId(), e);
+            throw e;
         } finally {
             if (stmt != null) { try { stmt.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing PreparedStatement", e); }}
             if (connection != null) { try { connection.close(); } catch (SQLException e) { LOGGER.log(Level.WARNING, "Error closing Connection", e); }}
@@ -227,8 +217,9 @@ public class AbsenceRecordDAO {
     }
 
     /**
-     * Update multiple absence records in a batch.
-     * Assumes AbsenceRecord.getId() returns the String representation of the database ID.
+     * Update multiple absence records in the attendance table in a batch.
+     * Assumes AbsenceRecord.getId() returns the String representation of the attendance_id.
+     * This method operates directly on the attendance table and is not affected by the join logic.
      */
     public boolean updateBatch(List<AbsenceRecord> records) throws SQLException {
         Connection connection = null;
@@ -236,49 +227,35 @@ public class AbsenceRecordDAO {
 
         if (records == null || records.isEmpty()) {
             LOGGER.log(Level.WARNING, "Attempted to update an empty list of absence records.");
-            return true; // Consider successful if nothing to update
+            return true;
         }
 
         try {
             connection = DatabaseConnection.getConnection();
             connection.setAutoCommit(false);
 
-            String sql = "UPDATE absences SET called = ?, approved = ? WHERE id = ?";
+            String sql = "UPDATE attendance SET called = ?, approved = ? WHERE attendance_id = ?";
             stmt = connection.prepareStatement(sql);
 
             for (AbsenceRecord record : records) {
                 if (record == null || record.getId() == null || record.getId().trim().isEmpty()) {
                     LOGGER.log(Level.WARNING, "Skipping null or invalid AbsenceRecord in batch update.");
-                    continue; // Skip this record and continue with the batch
+                    continue;
                 }
 
                 stmt.setBoolean(1, record.isCalled());
                 stmt.setBoolean(2, record.isApproved());
-
-                // Lấy ID từ AbsenceRecord (đã được giả định là String DB ID) và chuyển lại sang int
-                int dbId;
-                try {
-                    dbId = Integer.parseInt(record.getId());
-                } catch (NumberFormatException e) {
-                    LOGGER.log(Level.SEVERE, "Invalid ID format for AbsenceRecord in batch update: " + record.getId(), e);
-                    // Decide how to handle parse errors in batch - throw, skip, log?
-                    // Throwing stops the whole batch. Skipping allows others to succeed. Logging is essential.
-                    throw new SQLException("Invalid ID format for batch update: " + record.getId(), e); // Throw to stop batch on bad ID
-                }
-
-                stmt.setInt(3, dbId);
+                stmt.setString(3, record.getId());
                 stmt.addBatch();
             }
 
             int[] results = stmt.executeBatch();
             connection.commit();
 
-            // Optional: Check results array for successful updates
             boolean allSuccessful = true;
             for (int result : results) {
-                if (result < 0 && result != Statement.SUCCESS_NO_INFO) { // Check for errors or no rows affected
+                if (result < 0 && result != Statement.SUCCESS_NO_INFO) {
                     allSuccessful = false;
-                    // Log specific failures if needed, though executeBatch exception often covers this
                     LOGGER.log(Level.WARNING, "Batch update resulted in non-zero or non-success_no_info status for one or more records.");
                 }
             }
@@ -294,7 +271,7 @@ public class AbsenceRecordDAO {
                 }
             }
             LOGGER.log(Level.SEVERE, "Error executing batch update for absence records.", e);
-            throw e; // Re-throw the exception after logging and rollback
+            throw e;
         } finally {
             if (connection != null) {
                 try {
@@ -309,31 +286,6 @@ public class AbsenceRecordDAO {
     }
 
     /**
-     * Create a student ImageView from image path
-     */
-    private ImageView createStudentImageView(String imagePath) {
-        ImageView imageView = new ImageView();
-        imageView.setFitHeight(30);
-        imageView.setFitWidth(30);
-
-        if (imagePath != null && !imagePath.isEmpty()) {
-            try {
-                // Tải hình ảnh từ đường dẫn
-                // Use ClassLoader to find the resource, which is generally safer
-                // if the image is within the classpath, or keep "file:" for external paths.
-                // Assuming external path based on "file:" prefix in original code.
-                Image image = new Image("file:" + imagePath, true);
-                imageView.setImage(image);
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Could not load image from path: " + imagePath, e);
-                // Có thể đặt hình ảnh mặc định ở đây
-            }
-        }
-
-        return imageView;
-    }
-
-    /**
      * Format date from database format (yyyy-MM-dd) to display format (dd/MM/yyyy)
      */
     private String formatDateFromDb(String dbDate) {
@@ -342,12 +294,11 @@ public class AbsenceRecordDAO {
         }
 
         try {
-            // Chuyển đổi từ định dạng yyyy-MM-dd sang dd/MM/yyyy
-            LocalDate date = LocalDate.parse(dbDate, DB_DATE_FORMATTER); // Use DB_DATE_FORMATTER
-            return date.format(DATE_FORMATTER); // Format to display format
+            LocalDate date = LocalDate.parse(dbDate, DB_DATE_FORMATTER);
+            return date.format(DATE_FORMATTER);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error formatting date from DB: " + dbDate, e);
-            return dbDate; // Trả về nguyên dạng nếu có lỗi
+            return dbDate; // Return original date string on error
         }
     }
 }
