@@ -84,8 +84,7 @@ public class TeacherDAO {
             personStatement.setString(4, teacher.getContactNumber());
             personStatement.setString(5, teacher.getBirthday());
             personStatement.setString(6, teacher.getEmail());
-            personStatement.setString(7, teacher.getRole()); // Ensure role is set to 'Teacher' in the model or here
-
+            personStatement.setString(7, teacher.getRole().toString());
             int personRowsInserted = personStatement.executeUpdate();
 
             if (personRowsInserted > 0) {

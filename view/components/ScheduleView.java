@@ -1,3 +1,4 @@
+
 package view.components;
 
 import javafx.collections.FXCollections;
@@ -12,6 +13,7 @@ import src.model.ClassSession;
 import src.controller.ScheduleController;
 import view.BaseScreenView;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -54,6 +56,16 @@ public class ScheduleView extends BaseScreenView {
         root.setSpacing(10);
         root.setPadding(new Insets(20));
 
+        // Initialize date pickers to the current week starting Monday
+        LocalDate today = LocalDate.now();
+        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - DayOfWeek.MONDAY.getValue());
+        LocalDate endOfWeek = startOfWeek.plusDays(6);
+
+        fromDatePicker = new DatePicker(startOfWeek);
+        toDatePicker = new DatePicker(endOfWeek);
+        fromDatePicker.setStyle("-fx-pref-width: 150px;");
+        toDatePicker.setStyle("-fx-pref-width: 150px;");
+
         // Tạo control panel phía trên
         HBox controlPanel = createControlPanel();
 
@@ -70,6 +82,7 @@ public class ScheduleView extends BaseScreenView {
 
         // Teacher filter
         Label teacherLabel = new Label("Nhân sự:");
+        teacherLabel.setTextFill(Color.BLACK);
         teacherComboBox = new ComboBox<>();
         teacherComboBox.getItems().add("Chọn");
         teacherComboBox.setValue("Chọn");
@@ -86,12 +99,10 @@ public class ScheduleView extends BaseScreenView {
         prevWeekButton.setStyle("-fx-background-color: #007bff; -fx-text-fill: white;");
 
         Label fromLabel = new Label("Từ:");
-        fromDatePicker = new DatePicker(LocalDate.now());
-        fromDatePicker.setStyle("-fx-pref-width: 150px;");
+        fromLabel.setTextFill(Color.BLACK);
 
         Label toLabel = new Label("Đến:");
-        toDatePicker = new DatePicker(LocalDate.now().plusDays(6));
-        toDatePicker.setStyle("-fx-pref-width: 150px;");
+        toLabel.setTextFill(Color.BLACK);
 
         nextWeekButton = new Button();
         nextWeekButton.setGraphic(new Label("▶"));
@@ -149,8 +160,8 @@ public class ScheduleView extends BaseScreenView {
             grid.add(dayLabel, i + 1, 0);
         }
 
-        // Date row
-        Label dateLabel = new Label("");
+        // Date row placeholder - populated later in populateSchedule
+        Label dateLabel = new Label(""); // This label is just a placeholder
         dateLabel.setStyle("-fx-padding: 10;");
         grid.add(dateLabel, 0, 1);
 
@@ -162,6 +173,7 @@ public class ScheduleView extends BaseScreenView {
      */
     private void navigateToPreviousWeek() {
         LocalDate fromDate = fromDatePicker.getValue();
+        // Assuming fromDate is always the start of the week (Monday)
         LocalDate newFromDate = fromDate.minusDays(7);
         LocalDate newToDate = newFromDate.plusDays(6);
 
@@ -176,6 +188,7 @@ public class ScheduleView extends BaseScreenView {
      */
     private void navigateToNextWeek() {
         LocalDate fromDate = fromDatePicker.getValue();
+        // Assuming fromDate is always the start of the week (Monday)
         LocalDate newFromDate = fromDate.plusDays(7);
         LocalDate newToDate = newFromDate.plusDays(6);
 
@@ -192,7 +205,7 @@ public class ScheduleView extends BaseScreenView {
         // Xóa tất cả các ô lịch trình (giữ lại tiêu đề)
         clearScheduleGrid();
 
-        // Lấy ngày bắt đầu của tuần hiện tại
+        // Lấy ngày bắt đầu của tuần hiện tại (đã được thiết lập để luôn là Thứ 2)
         LocalDate startDate = fromDatePicker.getValue();
         List<LocalDate> weekDates = new ArrayList<>();
         for (int i = 0; i < 7; i++) {
@@ -203,9 +216,12 @@ public class ScheduleView extends BaseScreenView {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM");
         for (int i = 0; i < 7; i++) {
             Label dateLabel = new Label(weekDates.get(i).format(formatter));
-            dateLabel.setStyle("-fx-padding: 10;");
+            dateLabel.setStyle("-fx-padding: 10; -fx-text-fill: black;"); // Set text color to black
             dateLabel.setAlignment(Pos.CENTER);
             dateLabel.setPrefWidth(150);
+            // Add to grid cell for the correct day (i + 1 column)
+            // Check if cell exists before adding or remove previous date label if needed
+            // For simplicity, we clear the relevant row cells before adding new ones in clearScheduleGrid
             scheduleGrid.add(dateLabel, i + 1, 1);
         }
 
@@ -216,13 +232,14 @@ public class ScheduleView extends BaseScreenView {
         }
 
         List<String> sortedTimeSlots = new ArrayList<>(timeSlots);
+        // Sort time slots - assumes timeSlot is in a sortable format like "HH:mm - HH:mm"
         Collections.sort(sortedTimeSlots);
 
         // Tạo các hàng khoảng thời gian
         int rowIndex = 2;
         for (String timeSlot : sortedTimeSlots) {
             Label timeLabel = new Label(timeSlot);
-            timeLabel.setStyle("-fx-padding: 10;");
+            timeLabel.setStyle("-fx-padding: 10; -fx-text-fill: black;"); // Set text color to black
             timeLabel.setAlignment(Pos.CENTER);
             scheduleGrid.add(timeLabel, 0, rowIndex);
 
@@ -230,12 +247,14 @@ public class ScheduleView extends BaseScreenView {
             for (int day = 0; day < 7; day++) {
                 ScrollPane scrollPane = new ScrollPane();
                 scrollPane.setFitToWidth(true);
+                // Preserve the background color setting
                 scrollPane.setStyle("-fx-background-color: transparent;");
 
                 VBox dayContainer = new VBox(5);
                 dayContainer.setPadding(new Insets(5));
                 scrollPane.setContent(dayContainer);
 
+                // Add to the correct cell based on day index and row index
                 scheduleGrid.add(scrollPane, day + 1, rowIndex);
 
                 LocalDate currentDate = weekDates.get(day);
@@ -258,8 +277,9 @@ public class ScheduleView extends BaseScreenView {
         // Nếu không tìm thấy khoảng thời gian nào, thêm một hàng trống
         if (timeSlots.isEmpty()) {
             Label emptyLabel = new Label("Không có lịch học");
-            emptyLabel.setStyle("-fx-padding: 10; -fx-alignment: center;");
+            emptyLabel.setStyle("-fx-padding: 10; -fx-alignment: center; -fx-text-fill: black;"); // Also set text color for empty message
             emptyLabel.setMaxWidth(Double.MAX_VALUE);
+            // Add empty label spanning across columns 0 to 7 (8 columns total) in row 2
             scheduleGrid.add(emptyLabel, 0, 2, 8, 1);
         }
     }
@@ -309,6 +329,16 @@ public class ScheduleView extends BaseScreenView {
                 toRemove.add(node);
             }
         }
+
+        // Also remove the previous date labels in row 1 (columns 1 to 7)
+        for (Node node : scheduleGrid.getChildren()) {
+            Integer rowIndex = GridPane.getRowIndex(node);
+            Integer colIndex = GridPane.getColumnIndex(node);
+            if (rowIndex != null && rowIndex == 1 && colIndex != null && colIndex > 0) {
+                toRemove.add(node);
+            }
+        }
+
 
         // Xóa các node đã xác định
         scheduleGrid.getChildren().removeAll(toRemove);
@@ -420,8 +450,13 @@ public class ScheduleView extends BaseScreenView {
             @SuppressWarnings("unchecked")
             Map<String, LocalDate> dateRange = (Map<String, LocalDate>) data;
             if (dateRange.containsKey("fromDate") && dateRange.containsKey("toDate")) {
-                fromDatePicker.setValue(dateRange.get("fromDate"));
-                toDatePicker.setValue(dateRange.get("toDate"));
+                LocalDate from = dateRange.get("fromDate");
+                // Ensure the range starts on a Monday when navigating
+                LocalDate startOfWeek = from.minusDays(from.getDayOfWeek().getValue() - DayOfWeek.MONDAY.getValue());
+                LocalDate endOfWeek = startOfWeek.plusDays(6);
+
+                fromDatePicker.setValue(startOfWeek);
+                toDatePicker.setValue(endOfWeek);
                 refreshView();
             }
         }
@@ -440,8 +475,8 @@ public class ScheduleView extends BaseScreenView {
             case "NAVIGATE_TO_DATE":
                 if (params instanceof LocalDate) {
                     LocalDate targetDate = (LocalDate) params;
-                    // Set the date range to include the target date (start of week)
-                    LocalDate startOfWeek = targetDate.minusDays(targetDate.getDayOfWeek().getValue() - 1);
+                    // Set the date range to include the target date (start of week - Monday)
+                    LocalDate startOfWeek = targetDate.minusDays(targetDate.getDayOfWeek().getValue() - DayOfWeek.MONDAY.getValue());
                     LocalDate endOfWeek = startOfWeek.plusDays(6);
 
                     fromDatePicker.setValue(startOfWeek);
@@ -464,3 +499,4 @@ public class ScheduleView extends BaseScreenView {
         }
     }
 }
+

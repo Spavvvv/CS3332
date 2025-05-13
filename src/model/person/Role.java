@@ -1,6 +1,6 @@
 package src.model.person;
 
-public enum UserRole {
+public enum Role {
     ADMIN,
     STUDENT,
     TEACHER,

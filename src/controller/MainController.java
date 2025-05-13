@@ -14,6 +14,7 @@ import src.model.person.Teacher;
 import src.model.person.Parent;
 import javafx.scene.control.Alert;
 import view.components.ClassList.ClassListScreenView;
+import view.components.StudentList.StudentListScreenView;
 
 /**
  Controller chính của ứng dụng, quản lý logic nghiệp vụ
@@ -74,6 +75,7 @@ public class MainController {
         navigationController.registerView("exams", new ExamsView());
         navigationController.registerView("details-view", new DetailsView());
         navigationController.registerView("ClassListView", new ClassListScreenView());
+        navigationController.registerView("StudentListView", new StudentListScreenView());
         navigationController.registerView("learning-reports", new ReportView());
         navigationController.registerView("teaching-statistics", new TeachingStatisticsView());
         navigationController.registerView("monthly-teaching", new MonthlyTeachingStatisticsView());
@@ -355,33 +357,8 @@ public class MainController {
      Thiết lập quyền truy cập dựa trên loại người dùng
      */
     private void setupAccessPermissions() {
-// Thiết lập quyền truy cập cho các chức năng dựa vào loại người dùng
         if (currentUser == null) return;
-// Tùy thuộc vào UI của bạn, có thể cần thêm phương thức hoặc sửa lại
-// Ví dụ:
-/*
-if (currentUser instanceof Admin) {
-ui.showAdminFeatures(true);
-ui.showTeacherFeatures(true);
-ui.showStudentFeatures(true);
-ui.showParentFeatures(true);
-} else if (currentUser instanceof Teacher) {
-ui.showAdminFeatures(false);
-ui.showTeacherFeatures(true);
-ui.showStudentFeatures(false);
-ui.showParentFeatures(false);
-} else if (currentUser instanceof Student) {
-ui.showAdminFeatures(false);
-ui.showTeacherFeatures(false);
-ui.showStudentFeatures(true);
-ui.showParentFeatures(false);
-} else if (currentUser instanceof Parent) {
-ui.showAdminFeatures(false);
-ui.showTeacherFeatures(false);
-ui.showStudentFeatures(false);
-ui.showParentFeatures(true);
-}
-*/
+
     }
     /**
      Lấy thông tin của một ClassSession từ cơ sở dữ liệu
