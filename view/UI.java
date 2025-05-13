@@ -348,15 +348,13 @@ public class UI {
         sidebar.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-width: 0 1 0 0;");
 
         // Menu items
-        Button chatButton = createSidebarButton("Nhắn tin", "message", "chat");
 
         HBox trainingHeader = createMenuHeaderWithToggle("Đào tạo", "training");
         trainingSubmenu = createSubmenu();
         trainingSubmenu.getChildren().addAll(
                 createSubmenuButton("Lịch học", "schedule"),
                 createSubmenuButton("Điểm danh", "attendance"),
-                createSubmenuButton("Kỳ thi", "exams"),
-                createSubmenuButton("Chứng chỉ", "certificates")
+                createSubmenuButton("Kỳ thi", "exams")
         );
         trainingSubmenu.setVisible(false);
         trainingSubmenu.setManaged(false);
@@ -391,7 +389,6 @@ public class UI {
         manageSubmenu.setManaged(false);
 
         sidebar.getChildren().addAll(
-                chatButton,
                 trainingHeader, trainingSubmenu,
                 studentHeader, studentSubmenu,
                 reportHeader, reportSubmenu,
