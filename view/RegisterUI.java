@@ -1,5 +1,15 @@
 package view;
 
+import java.io.*;
+import java.sql.Connection;
+import java.time.LocalDate;
+import java.time.Year;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Random;
+import java.util.Scanner;
+import java.util.prefs.Preferences;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -12,187 +22,65 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
+
 import src.controller.MainController;
 import src.controller.NavigationController;
-import java.io.*;
-import java.time.LocalDate;
-import java.time.Year;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.Random;
-import java.util.Scanner;
-import java.util.prefs.Preferences;
-
+import src.dao.RegisterDAO;
+import utils.DatabaseConnection;
 public class RegisterUI {
     private Stage primaryStage;
     private StackPane root;
     private VBox registerCard;
     private TextField usernameField;
+    private TextField passwordField;
+    private TextField dobTextField;
     private TextField emailField;
     private TextField fullNameField;
     private TextField phoneField;
-    private DatePicker dobPicker; // DatePicker cho ngày sinh
-    private TextField dobTextField; // TextField thêm cho nhập tay ngày sinh
-    private PasswordField passwordField;
+    private DatePicker dobPicker; //
     private PasswordField confirmPasswordField;
-    private ComboBox<String> roleComboBox;
+    private ComboBox roleComboBox;
     private CheckBox termsCheckBox;
     private NavigationController navigationController;
     private MainController mainController;
+    private ComboBox genderComboBox;
     private String currentTheme = "light"; // Mặc định là theme sáng
-
-    // File path for storing user accounts
-    private String ACCOUNTS_FILE;
-    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
 
     // Định dạng ngày tháng
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-
     public RegisterUI(Stage primaryStage) {
         this.primaryStage = primaryStage;
         loadThemePreference(); // Tải theme đã lưu
         setupStage();
     }
-
     // Tải theme từ preferences
     private void loadThemePreference() {
         Preferences prefs = Preferences.userNodeForPackage(LoginUI.class);
         currentTheme = prefs.get("theme", "light");
     }
-
-    // Create accounts file if it doesn't exist
-    private void createAccountsFileIfNotExists(String username) {
-        ACCOUNTS_FILE = username + ".txt";
-        File file = new File(FILE_PATH, ACCOUNTS_FILE);
-        if (!file.exists()) {
-            try {
-                // Tạo thư mục nếu chưa tồn tại
-                File directory = new File(FILE_PATH);
-                if (!directory.exists()) {
-                    directory.mkdirs();
-                }
-                file.createNewFile();
-                System.out.println("Created new accounts file: " + ACCOUNTS_FILE);
-            } catch (IOException e) {
-                System.err.println("Error creating accounts file: " + e.getMessage());
-            }
-        }
-    }
-
-    // Check if username already exists in the file
-    private boolean isUsernameTaken(String username) {
-        ACCOUNTS_FILE = username + ".txt";
-        File file = new File(FILE_PATH, ACCOUNTS_FILE);
-        return file.exists();
-    }
-
-    // Check if email already exists in the file
-    private boolean isEmailTaken(String email) {
-        File directory = new File(FILE_PATH);
-        if (!directory.exists() || !directory.isDirectory()) {
-            return false;
-        }
-
-        File[] files = directory.listFiles();
-        if (files == null) {
-            return false;
-        }
-
-        for (File file : files) {
-            if (file.isFile() && file.getName().endsWith(".txt")) {
-                try (Scanner scanner = new Scanner(file)) {
-                    while (scanner.hasNextLine()) {
-                        String line = scanner.nextLine();
-                        String[] parts = line.split(",");
-                        if (parts.length >= 4 && parts[3].trim().equalsIgnoreCase(email.trim())) {
-                            return true;
-                        }
-                    }
-                } catch (FileNotFoundException e) {
-                    System.err.println("Error checking email: " + e.getMessage());
-                }
-            }
-        }
-        return false;
-    }
-
-    // Kiểm tra xem ID đã tồn tại trong hệ thống chưa
-    private boolean isIDTaken(String id) {
-        File directory = new File(FILE_PATH);
-        if (!directory.exists() || !directory.isDirectory()) {
-            return false;
-        }
-
-        File[] files = directory.listFiles();
-        if (files == null) {
-            return false;
-        }
-
-        for (File file : files) {
-            if (file.isFile() && file.getName().endsWith(".txt")) {
-                try (Scanner scanner = new Scanner(file)) {
-                    while (scanner.hasNextLine()) {
-                        String line = scanner.nextLine();
-                        String[] parts = line.split(",");
-                        if (parts.length >= 9 && parts[8].trim().equals(id.trim())) {
-                            return true;
-                        }
-                    }
-                } catch (FileNotFoundException e) {
-                    System.err.println("Error checking ID: " + e.getMessage());
-                }
-            }
-        }
-        return false;
-    }
-
     // Tạo ID ngẫu nhiên 6 chữ số dựa trên vai trò
     private String generateUniqueID(String role) {
         // Xác định số đầu tiên dựa trên vai trò
         String firstDigit;
         if (role.equals("Giáo viên")) {
             firstDigit = "1";
-        } else if (role.equals("Học viên")) {
-            firstDigit = "2";
-        } else { // Phụ huynh
-            firstDigit = "3";
+        } else { // Admin
+            firstDigit = "0";
         }
-
         // Tạo 5 chữ số còn lại ngẫu nhiên
         StringBuilder randomDigits = new StringBuilder();
         Random random = new Random();
         for (int i = 0; i < 5; i++) {
             randomDigits.append(random.nextInt(10));
         }
-
         return firstDigit + randomDigits.toString();
     }
-
-    // Save a new account to the file
-    private void saveAccount(String username, String password, String fullName, String email, String phone, String role, LocalDate dob, int age, String userId) {
-        ACCOUNTS_FILE = username + ".txt";
-        File file = new File(FILE_PATH, ACCOUNTS_FILE);
-
-        try (FileWriter writer = new FileWriter(file, true)) {
-            // Format: username,password,fullName,email,phone,role,dob,age,userId
-            String dobString = dob != null ? dob.format(DATE_FORMATTER) : "";
-            String accountInfo = String.format("%s,%s,%s,%s,%s,%s,%s,%d,%s%n",
-                    username.trim(), password, fullName.trim(), email.trim(), phone.trim(), role.trim(), dobString, age, userId);
-            writer.write(accountInfo);
-            System.out.println("Account saved: " + username + " with ID: " + userId);
-        } catch (IOException e) {
-            System.err.println("Error saving account: " + e.getMessage());
-        }
-    }
-
     private void setupStage() {
         root = new StackPane();
         applyTheme(root, currentTheme); // Áp dụng theme
-
         registerCard = createRegisterCard();
         registerCard.setEffect(new javafx.scene.effect.DropShadow(10, Color.gray(0.4)));
         applyCardStyle(currentTheme, registerCard); // Áp dụng style cho card theo theme
-
         root.getChildren().add(registerCard);
         Scene scene = new Scene(root, 800, 700);
         primaryStage.setScene(scene);
@@ -376,11 +264,22 @@ public class RegisterUI {
         Label roleLabel = new Label("Vai trò:");
         roleLabel.setStyle("-fx-text-fill: #555;");
         roleComboBox = new ComboBox<>();
-        roleComboBox.getItems().addAll("Học viên", "Giáo viên", "Phụ huynh");
-        roleComboBox.setValue("Học viên");
+        roleComboBox.getItems().addAll("Admin", "Giáo viên");
+        roleComboBox.setValue("Giáo viên");
+        roleComboBox.setEditable(false);
         roleComboBox.setPrefHeight(35);
         roleComboBox.setMaxWidth(Double.MAX_VALUE);
         roleComboBox.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ddd; -fx-text-fill: #555;");
+
+        // Giới tính
+        Label genderLabel = new Label("Giới tính:");
+        genderLabel.setStyle("-fx-text-fill: #555;");
+        genderComboBox = new ComboBox<>();
+        genderComboBox.getItems().addAll("Nam", "Nữ"); // Các tùy chọn giới tính
+        genderComboBox.setPromptText("Chọn giới tính"); // Placeholder
+        genderComboBox.setPrefHeight(35);
+        genderComboBox.setMaxWidth(Double.MAX_VALUE);
+        genderComboBox.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ddd; -fx-text-fill: #555;");
 
         // Mật khẩu
         Label passLabel = new Label("Mật khẩu:");
@@ -445,40 +344,48 @@ public class RegisterUI {
         registerBtn.setOnMouseExited(e -> registerBtn.setStyle("-fx-background-color: #0091EA; -fx-text-fill: white; -fx-font-weight: bold;"));
 
         // Thêm các thành phần vào form (2 cột)
-        // Cột 1
+        // Cột 0
         form.add(nameLabel, 0, 0);
         form.add(fullNameField, 0, 1);
         form.add(userLabel, 0, 2);
         form.add(usernameField, 0, 3);
         form.add(emailLabel, 0, 4);
         form.add(emailField, 0, 5);
-        form.add(dobLabel, 0, 6); // Date of birth label
-        form.add(dobInputBox, 0, 7); // Date of birth input
+        form.add(dobLabel, 0, 6);
+        form.add(dobInputBox, 0, 7);
 
-        // Cột 2
+        // Cột 1 - ĐÃ SỬA VỊ TRÍ HÀNG CHO CÁC THÀNH PHẦN PHÍA DƯỚI GENDER
         form.add(phoneLabel, 1, 0);
         form.add(phoneField, 1, 1);
         form.add(roleLabel, 1, 2);
         form.add(roleComboBox, 1, 3);
-        form.add(passLabel, 1, 4);
-        form.add(passwordField, 1, 5);
-        form.add(confirmPassLabel, 1, 6);
-        form.add(confirmPasswordField, 1, 7);
 
-        // Row span toàn bộ chiều rộng form
-        // Không thêm themeBox vào trang đăng ký, chỉ đọc theme từ Login
-        form.add(termsCheckBox, 0, 8, 2, 1);
-        form.add(termsLink, 0, 9, 2, 1);
-        form.add(registerBtn, 0, 10, 2, 1);
+        // Vị trí mới cho Giới tính
+        form.add(genderLabel, 1, 4); // Hàng 4, cột 1
+        form.add(genderComboBox, 1, 5); // Hàng 5, cột 1
 
-        // Cài đặt chiều rộng cột
+        // Vị trí mới cho Mật khẩu (đẩy xuống 2 hàng so với code cũ)
+        form.add(passLabel, 1, 6); // Hàng 6, cột 1
+        form.add(passwordField, 1, 7); // Hàng 7, cột 1
+
+        // Vị trí mới cho Xác nhận mật khẩu (đẩy xuống 2 hàng so với code cũ)
+        form.add(confirmPassLabel, 1, 8); // Hàng 8, cột 1
+        form.add(confirmPasswordField, 1, 9); // Hàng 9, cột 1
+
+        // Row span toàn bộ chiều rộng form (điều chỉnh số hàng bắt đầu)
+        form.add(termsCheckBox, 0, 10, 2, 1); // Bắt đầu từ hàng 10
+        form.add(termsLink, 0, 11, 2, 1);   // Bắt đầu từ hàng 11
+        form.add(registerBtn, 0, 12, 2, 1);  // Bắt đầu từ hàng 12
+
+
+        // Cài đặt chiều rộng cột (giữ nguyên)
         ColumnConstraints column1 = new ColumnConstraints();
         column1.setPercentWidth(50);
         ColumnConstraints column2 = new ColumnConstraints();
         column2.setPercentWidth(50);
         form.getColumnConstraints().addAll(column1, column2);
 
-        // Đã có tài khoản
+        // Đã có tài khoản (giữ nguyên)
         HBox loginBox = new HBox();
         loginBox.setAlignment(Pos.CENTER);
         loginBox.setSpacing(5);
@@ -494,6 +401,15 @@ public class RegisterUI {
         return card;
     }
 
+
+    private boolean isUsernameTaken(String username) {
+        RegisterDAO registerDAO = new RegisterDAO(); // Sử dụng DAO
+        return registerDAO.isUsernameExists(username);
+    }
+    private boolean isEmailTaken(String email) {
+        RegisterDAO registerDAO = new RegisterDAO(); // Sử dụng DAO
+        return registerDAO.isEmailExists(email);
+    }
     // Kiểm tra và xác thực đầu vào ngày tháng
     private void validateDateInput() {
         String dateText = dobTextField.getText().trim();
@@ -513,11 +429,9 @@ public class RegisterUI {
             showTooltip(dobTextField, "Định dạng ngày không hợp lệ (DD/MM/YYYY)");
         }
     }
-
     private void applyTheme(javafx.scene.Parent parent, String theme) {
         String backgroundColor = "#f5f5f5"; // Default light background
         String textColor = "#333"; // Default text color
-
         switch (theme) {
             case "dark":
                 backgroundColor = "#2d2d2d";
@@ -544,10 +458,8 @@ public class RegisterUI {
                 textColor = "#8b0000";
                 break;
         }
-
         parent.setStyle("-fx-background-color: " + backgroundColor + "; -fx-text-fill: " + textColor + ";");
     }
-
     private void applyCardStyle(String theme, VBox card) {
         String cardColor = "white";
         String textColor = "#555"; // Màu chữ mặc định
@@ -573,7 +485,6 @@ public class RegisterUI {
                 break;
         }
         card.setStyle("-fx-background-color: " + cardColor + "; -fx-background-radius: 10;");
-
         // Áp dụng màu chữ cho các label trong card
         for (javafx.scene.Node node : card.getChildren()) {
             if (node instanceof Label) {
@@ -614,21 +525,17 @@ public class RegisterUI {
             }
         }
     }
-
     private void styleTextField(TextField textField) {
         textField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ddd; -fx-text-fill: #555;");
     }
-
     private void showTooltip(Control control, String message) {
         Tooltip tooltip = new Tooltip(message);
         tooltip.setStyle("-fx-background-color: #f5f5f5; -fx-text-fill: #d32f2f; -fx-font-weight: bold;");
         Tooltip.install(control, tooltip);
-
         // Show the tooltip immediately
         tooltip.show(control,
                 control.localToScreen(control.getBoundsInLocal()).getMinX(),
                 control.localToScreen(control.getBoundsInLocal()).getMaxY());
-
         // Hide after 3 seconds
         new Thread(() -> {
             try {
@@ -639,185 +546,154 @@ public class RegisterUI {
             }
         }).start();
     }
-
     private void handleRegister() {
-        // Kiểm tra thông tin đăng ký
-        if (fullNameField.getText().isEmpty() ||
-                usernameField.getText().isEmpty() ||
-                emailField.getText().isEmpty() ||
-                phoneField.getText().isEmpty() ||
-                passwordField.getText().isEmpty() ||
-                confirmPasswordField.getText().isEmpty() ||
-                dobTextField.getText().isEmpty()) {
-
-            showAlert("Lỗi đăng ký", "Vui lòng điền đầy đủ thông tin đăng ký");
-            return;
+        // Lấy dữ liệu từ form
+        String username = usernameField.getText().trim();
+        String password = passwordField.getText();
+        String confirmPassword = confirmPasswordField.getText();
+        String fullName = fullNameField.getText().trim();
+        String email = emailField.getText().trim();
+        String phone = phoneField.getText().trim();
+        String role = roleComboBox.getValue().toString();
+        String selectedGender = genderComboBox.getValue().toString();
+        if (selectedGender == null || selectedGender.trim().isEmpty()) {
+            selectedGender = null; // Đặt là null nếu không chọn hoặc chọn rỗng
         }
-
-        // Kiểm tra mật khẩu
-        if (passwordField.getText().length() < 8) {
-            showAlert("Lỗi đăng ký", "Mật khẩu phải có ít nhất 8 ký tự");
-            return;
-        }
-
-        // Kiểm tra mật khẩu khớp nhau
-        if (!passwordField.getText().equals(confirmPasswordField.getText())) {
-            showAlert("Lỗi đăng ký", "Mật khẩu và xác nhận mật khẩu không khớp");
-            return;
-        }
-
-        // Kiểm tra đồng ý điều khoản
-        if (!termsCheckBox.isSelected()) {
-            showAlert("Lỗi đăng ký", "Bạn phải đồng ý với điều khoản sử dụng");
-            return;
-        }
-
-        // Kiểm tra định dạng email
-        if (!isValidEmail(emailField.getText())) {
-            showAlert("Lỗi đăng ký", "Email không hợp lệ");
-            return;
-        }
-
-        // Kiểm tra định dạng số điện thoại
-        if (!isValidPhone(phoneField.getText())) {
-            showAlert("Lỗi đăng ký", "Số điện thoại không hợp lệ");
-            return;
-        }
-
-        // Kiểm tra và phân tích ngày sinh
-        LocalDate dob = null;
+        LocalDate dob;
         try {
             dob = LocalDate.parse(dobTextField.getText(), DATE_FORMATTER);
-
-            if (dob.isAfter(LocalDate.now())) {
-                showAlert("Lỗi đăng ký", "Ngày sinh không hợp lệ");
-                return;
-            }
         } catch (DateTimeParseException e) {
-            showAlert("Lỗi đăng ký", "Định dạng ngày sinh không hợp lệ (DD/MM/YYYY)");
+            showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Ngày sinh không hợp lệ (định dạng DD/MM/YYYY).");
             return;
         }
-
-        // Tính tuổi dựa trên năm hiện tại (2025)
+        // Kiểm tra nếu thiếu dữ liệu
+        if (username.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()
+                || fullName.isEmpty() || email.isEmpty() || phone.isEmpty() || role == null || selectedGender == null) {
+            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Vui lòng điền đầy đủ thông tin.");
+            return;
+        }
+        // Kiểm tra nếu mật khẩu không khớp
+        if (!password.equals(confirmPassword)) {
+            showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Mật khẩu xác nhận không khớp.");
+            return;
+        }
+        if (!termsCheckBox.isSelected()) {
+            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Bạn phải đồng ý điều khoản sử dụng.");
+            return;
+        }
+        // Kiểm tra tuổi
         int birthYear = dob.getYear();
         int currentYear = Year.now().getValue();
         int age = currentYear - birthYear;
-
-        String username = usernameField.getText();
-        // Kiểm tra tên đăng nhập đã tồn tại
-        if (isUsernameTaken(username)) {
-            showAlert("Lỗi đăng ký", "Tên đăng nhập đã tồn tại trong hệ thống");
-            usernameField.requestFocus();
-            return;
+        // Sinh ID độc nhất dựa trên vai trò
+        String userId = generateUniqueID(role);
+        // Sử dụng DAO để kiểm tra và lưu dữ liệu
+        RegisterDAO registerDAO = new RegisterDAO();
+        try {
+            // Kiểm tra trùng lặp username
+            if (registerDAO.isUsernameExists(username)) {
+                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Tên đăng nhập đã tồn tại.");
+                return;
+            }
+            // Kiểm tra trùng lặp email
+            if (registerDAO.isEmailExists(email)) {
+                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Email đã được sử dụng.");
+                return;
+            }
+            // Ghi vào cơ sở dữ liệu thông qua DAO
+            boolean isRegistered = registerDAO.registerUser(username, password, role, fullName, email, phone, dob, age,selectedGender, userId);
+            if (isRegistered) {
+                showAlert(Alert.AlertType.INFORMATION, "Đăng ký thành công", "Tài khoản đã được tạo thành công!");
+                clearRegisterFields(); // Xóa sạch form sau khi thành công
+            } else {
+                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Đăng ký thất bại. Vui lòng thử lại.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert(Alert.AlertType.ERROR, "Lỗi hệ thống", "Có lỗi xảy ra trong quá trình kết nối với cơ sở dữ liệu.");
         }
+    }
+    private void clearRegisterFields() {
+        usernameField.clear();
+        passwordField.clear();
+        confirmPasswordField.clear();
+        fullNameField.clear();
+        emailField.clear();
+        phoneField.clear();
+        dobTextField.clear();
+        roleComboBox.getSelectionModel().clearSelection();
+        termsCheckBox.setSelected(false);
+    }
 
-        // Kiểm tra email đã tồn tại
-        if (isEmailTaken(emailField.getText())) {
-            showAlert("Lỗi đăng ký", "Email đã được sử dụng trong hệ thống");
-            emailField.requestFocus();
-            return;
+
+    public static boolean isValidEmail(String email) {
+        if (email == null || email.isEmpty()) {
+            return false;
         }
-
-        // Lấy vai trò người dùng
-        String role = roleComboBox.getValue();
-
-        // Tạo ID độc nhất cho người dùng dựa trên vai trò
-        String userId;
-        do {
-            userId = generateUniqueID(role);
-        } while (isIDTaken(userId));
-
-        // Sau khi đã kiểm tra hết, thì mới tạo file
-        createAccountsFileIfNotExists(username);
-
-        // Lưu tài khoản mới vào file (bao gồm ngày sinh, tuổi và ID)
-        saveAccount(
-                username,
-                passwordField.getText(),
-                fullNameField.getText(),
-                emailField.getText(),
-                phoneField.getText(),
-                role,
-                dob,
-                age,
-                userId
-        );
-
-        // Hiển thị thông báo đăng ký thành công kèm theo ID
-        showSuccessDialog(userId);
+        return email.matches("[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
     }
 
-    private boolean isValidEmail(String email) {
-        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
-        return email.matches(emailRegex);
+    public static boolean isValidPhone(String phone) {
+        if (phone == null || phone.isEmpty()) {
+            return false;
+        }
+        return phone.matches("[0-9]+");
     }
 
-    private boolean isValidPhone(String phone) {
-        //Chỉ cần là number thì valid
-        String phoneRegex = "^[0-9]+$";
-        return phone.matches(phoneRegex);
-    }
+
+
+
 
     private void showSuccessDialog(String userId) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Đăng ký thành công");
         alert.setHeaderText(null);
         alert.setContentText("Chúc mừng! Bạn đã đăng ký tài khoản thành công.\nID của bạn là: " + userId + "\nVui lòng đăng nhập để sử dụng hệ thống.");
-
         // Thêm nút đến trang đăng nhập
         ButtonType loginButton = new ButtonType("Đến trang đăng nhập");
         alert.getButtonTypes().setAll(loginButton);
-
         alert.showAndWait().ifPresent(response -> {
             if (response == loginButton) {
                 returnToLogin();
             }
         });
     }
-
     private void showTermsDialog() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Điều khoản sử dụng");
         alert.setHeaderText("Điều khoản và điều kiện sử dụng hệ thống");
-
         String terms = "1. Bạn phải cung cấp thông tin chính xác khi đăng ký.\n\n" +
                 "2. Bạn chịu trách nhiệm bảo mật tài khoản của mình.\n\n" +
                 "3. Bạn không được sử dụng hệ thống cho các mục đích bất hợp pháp.\n\n" +
                 "4. Chúng tôi có quyền từ chối dịch vụ nếu bạn vi phạm điều khoản.\n\n" +
                 "5. Thông tin cá nhân của bạn sẽ được bảo mật theo chính sách riêng tư.\n\n" +
                 "6. Chúng tôi có thể thay đổi điều khoản này mà không cần thông báo trước.";
-
         TextArea textArea = new TextArea(terms);
         textArea.setEditable(false);
         textArea.setWrapText(true);
         textArea.setPrefHeight(300);
         textArea.setPrefWidth(400);
-
         alert.getDialogPane().setContent(textArea);
         alert.showAndWait();
     }
-
     private void returnToLogin() {
         primaryStage.close();
         Stage loginStage = new Stage();
         LoginUI loginUI = new LoginUI(loginStage);
         loginUI.setControllers(mainController, navigationController);
     }
-
     public void setControllers(MainController mainController, NavigationController navigationController) {
         this.mainController = mainController;
         this.navigationController = navigationController;
     }
-
     public static void show(Stage primaryStage) {
         new RegisterUI(primaryStage);
     }
-
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.WARNING);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+    private void showAlert(Alert.AlertType alertType, String title, String message) {
+        Alert alert = new Alert(alertType);          // Dynamically set the Alert type
+        alert.setTitle(title);                       // Set the title of the Alert
+        alert.setHeaderText(null);                   // Keep the header empty
+        alert.setContentText(message);               // Set the body content of the alert
+        alert.showAndWait();                         // Wait until user responds
     }
 }

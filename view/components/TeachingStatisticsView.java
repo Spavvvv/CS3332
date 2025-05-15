@@ -1,3 +1,4 @@
+
 package view.components;
 
 import src.controller.TeachingStatisticsController;
@@ -28,12 +29,12 @@ public class TeachingStatisticsView extends BaseScreenView {
     private HBox actionButtonsBar;
     private TableView<TeacherStatisticsModel> statisticsTable;
 
-    // Filter components
-    private ToggleGroup periodToggleGroup;
-    private ToggleButton dayToggle;
-    private ToggleButton monthToggle;
-    private ToggleButton quarterToggle;
-    private ToggleButton yearToggle;
+    // Filter components (changed ToggleButton to Button)
+    // private ToggleGroup periodToggleGroup; // Removed ToggleGroup
+    private Button dayButton;
+    private Button monthButton;
+    private Button quarterButton;
+    private Button yearButton;
     private DatePicker fromDatePicker;
     private DatePicker toDatePicker;
     private ComboBox<String> statusComboBox;
@@ -66,41 +67,27 @@ public class TeachingStatisticsView extends BaseScreenView {
     }
 
     private void createFilterBar() {
-        // Period type selection
+        // Period type selection (using Buttons instead of ToggleButtons)
         HBox periodTypeBox = new HBox(5);
         periodTypeBox.setAlignment(Pos.CENTER_LEFT);
 
         Label periodLabel = new Label("Chu kỳ:");
         periodLabel.setTextFill(Color.BLACK);
 
-        periodToggleGroup = new ToggleGroup();
+        // Create standard Buttons
+        dayButton = createPeriodButton("Ngày", "day");
+        monthButton = createPeriodButton("Tháng", "month");
+        quarterButton = createPeriodButton("Quý", "quarter");
+        yearButton = createPeriodButton("Năm", "year");
 
-        dayToggle = createToggleButton("Ngày", "day");
-        monthToggle = createToggleButton("Tháng", "month");
-        quarterToggle = createToggleButton("Quý", "quarter");
-        yearToggle = createToggleButton("Năm", "year");
+        // Add action handlers to buttons
+        dayButton.setOnAction(e -> handlePeriodButtonClick("day"));
+        monthButton.setOnAction(e -> handlePeriodButtonClick("month"));
+        quarterButton.setOnAction(e -> handlePeriodButtonClick("quarter"));
+        yearButton.setOnAction(e -> handlePeriodButtonClick("year"));
 
-        // Add toggle action
-        periodToggleGroup.selectedToggleProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue != null) {
-                String periodType = (String) newValue.getUserData();
-                controller.updatePeriodType(periodType);
-                System.out.println("Selected period type: " + periodType);
-                if(periodType.equals("month")) {
-                    navigationController.navigateTo("monthly-teaching");
-                }
-                else if(periodType.equals("quarter")) {
-                    navigationController.navigateTo("quarterly-teaching");
-                }
-                else if(periodType.equals("year")) {
-                    navigationController.navigateTo("yearly-teaching");
-                }
-                else {
-                }
-            }
-        });
 
-        periodTypeBox.getChildren().addAll(periodLabel, dayToggle, monthToggle, quarterToggle, yearToggle);
+        periodTypeBox.getChildren().addAll(periodLabel, dayButton, monthButton, quarterButton, yearButton);
 
         // Date range selection
         HBox dateRangeBox = new HBox(10);
@@ -170,6 +157,9 @@ public class TeachingStatisticsView extends BaseScreenView {
         filterBar.setPrefWidth(Double.MAX_VALUE);
 
         root.getChildren().add(filterBar);
+
+        // No initial button state update needed as they are not toggle buttons
+        // updateToggleButtonsState(); // Removed
     }
 
     private void createStatisticsTable() {
@@ -205,50 +195,53 @@ public class TeachingStatisticsView extends BaseScreenView {
         LocalDate endDate = controller.getFilter().getToDate();
 
         // Limit to 14 days for UI simplicity if range is too large
-        if (startDate.plusDays(14).isBefore(endDate)) {
+        if (startDate != null && endDate != null && startDate.plusDays(14).isBefore(endDate)) {
             endDate = startDate.plusDays(14);
         }
 
-        LocalDate currentDate = startDate;
-        while (!currentDate.isAfter(endDate)) {
-            final LocalDate dateForColumn = currentDate; // For lambda capture
+        if (startDate != null && endDate != null) {
+            LocalDate currentDate = startDate;
+            while (!currentDate.isAfter(endDate)) {
+                final LocalDate dateForColumn = currentDate; // For lambda capture
 
-            // Create date column with black header text
-            TableColumn<TeacherStatisticsModel, String> dateColumn = new TableColumn<>();
-            dateColumn.setPrefWidth(100);
+                // Create date column with black header text
+                TableColumn<TeacherStatisticsModel, String> dateColumn = new TableColumn<>();
+                dateColumn.setPrefWidth(100);
 
-            String formattedDate = dateFormatter.format(currentDate);
-            Label dateHeaderLabel = new Label(formattedDate);
-            dateHeaderLabel.setTextFill(Color.BLACK);
-            dateHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
-            dateColumn.setGraphic(dateHeaderLabel);
+                String formattedDate = dateFormatter.format(currentDate);
+                Label dateHeaderLabel = new Label(formattedDate);
+                dateHeaderLabel.setTextFill(Color.BLACK);
+                dateHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
+                dateColumn.setGraphic(dateHeaderLabel);
 
-            // Each date has two sub-columns: Buổi and Giờ with black header text
-            TableColumn<TeacherStatisticsModel, Integer> sessionColumn = new TableColumn<>();
-            sessionColumn.setCellValueFactory(cellData ->
-                    cellData.getValue().getDailyStatistic(dateForColumn).sessionsProperty().asObject());
-            sessionColumn.setPrefWidth(50);
+                // Each date has two sub-columns: Buổi and Giờ with black header text
+                TableColumn<TeacherStatisticsModel, Integer> sessionColumn = new TableColumn<>();
+                sessionColumn.setCellValueFactory(cellData ->
+                        cellData.getValue().getDailyStatistic(dateForColumn).sessionsProperty().asObject());
+                sessionColumn.setPrefWidth(50);
 
-            Label sessionHeaderLabel = new Label("Buổi");
-            sessionHeaderLabel.setTextFill(Color.BLACK);
-            sessionHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
-            sessionColumn.setGraphic(sessionHeaderLabel);
+                Label sessionHeaderLabel = new Label("Buổi");
+                sessionHeaderLabel.setTextFill(Color.BLACK);
+                sessionHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
+                sessionColumn.setGraphic(sessionHeaderLabel);
 
-            TableColumn<TeacherStatisticsModel, Double> hoursColumn = new TableColumn<>();
-            hoursColumn.setCellValueFactory(cellData ->
-                    cellData.getValue().getDailyStatistic(dateForColumn).hoursProperty().asObject());
-            hoursColumn.setPrefWidth(50);
+                TableColumn<TeacherStatisticsModel, Double> hoursColumn = new TableColumn<>();
+                hoursColumn.setCellValueFactory(cellData ->
+                        cellData.getValue().getDailyStatistic(dateForColumn).hoursProperty().asObject());
+                hoursColumn.setPrefWidth(50);
 
-            Label hoursHeaderLabel = new Label("Giờ");
-            hoursHeaderLabel.setTextFill(Color.BLACK);
-            hoursHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
-            hoursColumn.setGraphic(hoursHeaderLabel);
+                Label hoursHeaderLabel = new Label("Giờ");
+                hoursHeaderLabel.setTextFill(Color.BLACK);
+                hoursHeaderLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
+                hoursColumn.setGraphic(hoursHeaderLabel);
 
-            dateColumn.getColumns().addAll(sessionColumn, hoursColumn);
-            statisticsTable.getColumns().add(dateColumn);
+                dateColumn.getColumns().addAll(sessionColumn, hoursColumn);
+                statisticsTable.getColumns().add(dateColumn);
 
-            currentDate = currentDate.plusDays(1);
+                currentDate = currentDate.plusDays(1);
+            }
         }
+
 
         root.getChildren().add(statisticsTable);
     }
@@ -264,14 +257,14 @@ public class TeachingStatisticsView extends BaseScreenView {
         }
     }
 
-    private ToggleButton createToggleButton(String text, String periodType) {
-        ToggleButton toggleButton = new ToggleButton(text);
-        toggleButton.setToggleGroup(periodToggleGroup);
-        toggleButton.setSelected(controller.getFilter().getPeriodType().equals(periodType));
-        toggleButton.setPrefHeight(30);
-        toggleButton.setPrefWidth(80);
-        toggleButton.setUserData(periodType); // Store the period type in the button's userData
-        return toggleButton;
+    // New method to create standard period buttons
+    private Button createPeriodButton(String text, String periodType) {
+        Button button = new Button(text);
+        button.setPrefHeight(30);
+        button.setPrefWidth(80);
+        button.setUserData(periodType); // Store the period type in the button's userData
+        button.setTextFill(Color.BLACK); // Set default text color
+        return button;
     }
 
     private Button createActionButton(String text, String iconStyle) {
@@ -325,15 +318,7 @@ public class TeachingStatisticsView extends BaseScreenView {
         }
     }
 
-    private void updateToggleButtonsState() {
-        if (controller != null && periodToggleGroup != null) {
-            String periodType = controller.getFilter().getPeriodType();
-            dayToggle.setSelected(periodType.equals("day"));
-            monthToggle.setSelected(periodType.equals("month"));
-            quarterToggle.setSelected(periodType.equals("quarter"));
-            yearToggle.setSelected(periodType.equals("year"));
-        }
-    }
+    // Removed updateToggleButtonsState method
 
     private void handleSearch() {
         LocalDate fromDate = fromDatePicker.getValue();
@@ -358,6 +343,25 @@ public class TeachingStatisticsView extends BaseScreenView {
 
         refreshView();
     }
+
+    // New method to handle clicks on the period buttons
+    private void handlePeriodButtonClick(String periodType) {
+        controller.updatePeriodType(periodType);
+        System.out.println("Selected period type: " + periodType);
+
+        // Navigate or refresh based on period type
+        if (periodType.equals("month")) {
+            navigationController.navigateTo("monthly-teaching");
+        } else if (periodType.equals("quarter")) {
+            navigationController.navigateTo("quarterly-teaching");
+        } else if (periodType.equals("year")) {
+            navigationController.navigateTo("yearly-teaching");
+        } else {
+            // Assuming "day" is the default or requires refreshing the current view
+            refreshView();
+        }
+    }
+
 
     private void handleExportExcel() {
         boolean success = controller.exportToExcel();
@@ -390,16 +394,17 @@ public class TeachingStatisticsView extends BaseScreenView {
     public void onActivate() {
         super.onActivate();
 
-        // Update toggle button state every time the view is activated
-        updateToggleButtonsState();
+        // No initial button state update needed for standard buttons
+        // updateToggleButtonsState(); // Removed
 
-        // Set up event handlers
+        // Set up event handlers for action buttons
         if (searchButton != null) {
             searchButton.setOnAction(e -> handleSearch());
             exportExcelButton.setOnAction(e -> handleExportExcel());
             exportPdfButton.setOnAction(e -> handleExportPdf());
             printButton.setOnAction(e -> handlePrint());
         }
+        // Period button handlers are set in createFilterBar
     }
 
     @Override
@@ -408,3 +413,4 @@ public class TeachingStatisticsView extends BaseScreenView {
         return true;
     }
 }
+

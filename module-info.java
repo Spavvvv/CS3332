@@ -19,5 +19,8 @@ module CS3323 {
     opens src.model.dashboard to javafx.fxml;
     opens src.model.absence to javafx.base;
     opens src.model.classroom to javafx.base;
-
+    opens src.model.teaching to javafx.base;
+    opens src.model.teaching.monthly to javafx.base;
+    opens src.model.teaching.quarterly to javafx.base;
+    opens src.model.teaching.yearly to javafx.base;
 }

@@ -18,23 +18,8 @@ public class RolePermissions {
         rolePermissionsMap.put(Role.TEACHER, EnumSet.of(
                 Permission.VIEW_ALL_CLASSES,
                 Permission.VIEW_STUDENTS_IN_CLASS,
-                Permission.ADD_STUDENT,
-                Permission.CREATE_CLASS
-
+                Permission.ADD_STUDENT
                 // Thêm các quyền khác cho Teacher nếu cần (ví dụ: EDIT_OWN_CLASS)
-        ));
-
-        // Định nghĩa quyền cho Student
-        rolePermissionsMap.put(Role.STUDENT, EnumSet.of(
-                Permission.VIEW_ALL_CLASSES
-
-                // Student có thể chỉ xem các lớp họ đang tham gia, cần logic chi tiết hơn
-        ));
-
-        // Định nghĩa quyền cho Parent
-        rolePermissionsMap.put(Role.PARENT, EnumSet.of(
-                Permission.VIEW_ALL_CLASSES
-                // Parent có thể chỉ xem các lớp con họ đang tham gia, cần logic chi tiết hơn
         ));
     }
 

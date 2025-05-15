@@ -15,18 +15,13 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import src.controller.MainController;
 import src.controller.NavigationController;
-import src.model.person.Admin;
-import src.model.person.Parent;
-import src.model.person.Student;
-import src.model.person.Teacher;
 import src.model.person.Person;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.time.LocalDate;
+import src.dao.AccountDAO;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Optional;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.event.EventHandler;
 import java.util.Scanner;
 import java.util.prefs.Preferences;
 
@@ -41,7 +36,6 @@ public class LoginUI {
     private String currentTheme = "light"; // Mặc định là theme sáng
     private NavigationController navigationController;
     private MainController mainController;
-    private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
@@ -163,7 +157,6 @@ public class LoginUI {
         usernameField.setPromptText("Nhập tên đăng nhập");
         usernameField.setPrefHeight(40);
         usernameField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ddd; -fx-text-fill: #555;");
-
         // Ô password
         Label passLabel = new Label("Mật khẩu:");
         passLabel.setStyle("-fx-text-fill: #555;");
@@ -180,6 +173,13 @@ public class LoginUI {
         // Ghi nhớ đăng nhập
         rememberMeCheck = new CheckBox("Ghi nhớ đăng nhập");
         rememberMeCheck.setStyle("-fx-text-fill: #555;");
+        EventHandler<KeyEvent> enterKeyHandler = event -> {
+            if (event.getCode() == KeyCode.ENTER) {
+                handleLogin();
+            }
+        };
+        usernameField.setOnKeyPressed(enterKeyHandler);
+        passwordField.setOnKeyPressed(enterKeyHandler);
 
         // Nút đăng nhập
         Button loginBtn = new Button("ĐĂNG NHẬP");
@@ -438,66 +438,40 @@ public class LoginUI {
      */
     private void handleLogin() {
         String username = usernameField.getText().trim();
-        String password = passwordField.getText();
+        String password = passwordField.getText().trim();
         boolean rememberMe = rememberMeCheck.isSelected();
 
-        // Lưu thông tin đăng nhập nếu được chọn
-        saveCredentials(username, rememberMe);
-
-        // Kiểm tra đầu vào
+        // Kiểm tra nếu username hoặc password rỗng
         if (username.isEmpty() || password.isEmpty()) {
             showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu");
             return;
         }
 
-        // Đường dẫn đến file tài khoản
-        String filePath = FILE_PATH + "\\" + username + ".txt";
-        File file = new File(filePath);
+        try {
+            // Sử dụng DAO để xác thực
+            AccountDAO accountDAO = new AccountDAO();
+            Optional<Person> userOptional = accountDAO.authenticate(username, password);
 
-        if (!file.exists()) {
-            showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Tên đăng nhập không tồn tại");
-            return;
-        }
+            if (userOptional.isPresent()) {
+                // Đăng nhập thành công
+                Person user = userOptional.get();
+                System.out.println("Đăng nhập thành công với vai trò: " + user.getRole());
 
-        try (Scanner scanner = new Scanner(file)) {
-            if (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                String[] parts = line.split(",");
+                // Lưu thông tin đăng nhập nếu cần
+                saveCredentials(username, rememberMe);
 
-                // Kiểm tra định dạng dữ liệu và xác thực mật khẩu
-                if (parts.length >= 9 && parts[0].equals(username) && parts[1].equals(password)) {
-                    // Đăng nhập thành công
-                    System.out.println("Đăng nhập thành công!");
-
-                    // Phân tích dữ liệu người dùng từ file
-                    String userId = parts[8].trim(); // ID độc nhất
-                    String fullName = parts[2].trim(); // Họ tên
-                    String email = parts[3].trim(); // Email
-                    String phone = parts[4].trim(); // Số điện thoại
-                    String role = parts[5].trim(); // Vai trò
-                    String dobString = parts[6].trim(); // Ngày sinh
-
-                    // Lấy giới tính nếu có, mặc định là "Nam" nếu không có thông tin
-                    String gender = parts.length > 7 ? parts[7].trim() : "Nam";
-
-                    // Tạo đối tượng người dùng dựa trên vai trò
-                    Person user = createPersonObject(role, userId, fullName, gender, phone, dobString, email);
-
-                    // Tạo và hiển thị giao diện chính
-                    launchMainUI(user, fullName);
-                    return;
-                }
+                // Gọi giao diện chính
+                launchMainUI(user, user.getName());
+            } else {
+                // Đăng nhập thất bại
+                showAlert(Alert.AlertType.ERROR, "Lỗi đăng nhập", "Tên đăng nhập hoặc mật khẩu không đúng");
             }
-            showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Mật khẩu không đúng");
-        } catch (FileNotFoundException e) {
-            showAlert(Alert.AlertType.WARNING, "Lỗi đăng nhập", "Không tìm thấy file tài khoản");
-        } catch (DateTimeParseException e) {
-            showAlert(Alert.AlertType.ERROR, "Lỗi dữ liệu", "Định dạng ngày tháng trong file tài khoản không hợp lệ");
         } catch (Exception e) {
-            showAlert(Alert.AlertType.ERROR, "Lỗi hệ thống", "Lỗi xảy ra khi đăng nhập: " + e.getMessage());
+            showAlert(Alert.AlertType.ERROR, "Lỗi hệ thống", "Đã xảy ra lỗi: " + e.getMessage());
             e.printStackTrace();
         }
     }
+
 
     /**
      * Khởi chạy giao diện chính sau khi đăng nhập thành công
@@ -553,50 +527,7 @@ public class LoginUI {
         }
     }
 
-    /**
-     * Tạo đối tượng người dùng dựa trên vai trò
-     * @param roleString Vai trò người dùng
-     * @param userId ID người dùng
-     * @param fullName Tên đầy đủ
-     * @param gender Giới tính
-     * @param phone Số điện thoại
-     * @param dobString Ngày sinh (dạng chuỗi)
-     * @param email Email
-     * @return Đối tượng Person phù hợp với vai trò
-     */
-    private Person createPersonObject(String roleString, String userId, String fullName, String gender,
-                                      String phone, String dobString, String email) {
-        // Xác định vai trò
-        switch (roleString.toLowerCase()) {
-            case "admin":
-                // Tạo đối tượng Admin
-                String accessLevel = "1"; // Cấp độ truy cập mặc định
-                return new Admin(userId, fullName, gender, phone, dobString, email, accessLevel);
 
-            case "giáo viên":
-                // Tạo đối tượng Teacher
-                String teacherId = userId; // Sử dụng userId làm teacherId
-                String position = "Giáo viên"; // Vị trí mặc định
-                return new Teacher(userId, fullName, gender, phone, dobString, email, teacherId, position);
-
-            case "học viên":
-                // Tạo đối tượng Student với Parent rỗng
-                return new Student(userId, fullName, gender, phone, dobString, email, null);
-
-            case "phụ huynh":
-                // Tạo đối tượng Parent
-                String relationship = ""; // Mặc định mối quan hệ rỗng
-                return new Parent(userId, fullName, gender, phone, dobString, email, relationship);
-
-            default:
-                // Nếu không xác định được vai trò, ném ngoại lệ
-                throw new IllegalArgumentException("Vai trò không xác định: " + roleString);
-        }
-    }
-
-    /**
-     * Chuyển đến màn hình đăng ký
-     */
     private void gotoRegister() {
         primaryStage.close();
         Stage registerStage = new Stage();

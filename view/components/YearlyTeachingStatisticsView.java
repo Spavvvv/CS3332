@@ -112,13 +112,13 @@ public class YearlyTeachingStatisticsView extends BaseScreenView {
         typeLabel.setPrefWidth(50);
 
         // Keep toggles but handle navigation in their actions
-        ToggleButton dayToggle = createToggleButton("Ngày", false, "daily-teaching"); // Added viewId
+        ToggleButton dayToggle = createToggleButton("Ngày", false, "teaching-statistics"); // Added viewId
         ToggleButton monthToggle = createToggleButton("Tháng", false, "monthly-teaching"); // Added viewId
         ToggleButton quarterToggle = createToggleButton("Quý", false, "quarterly-teaching"); // Added viewId
         ToggleButton yearToggle = createToggleButton("Năm", true, "yearly-teaching"); // Added viewId
 
         // Set toggle handlers to navigate
-        dayToggle.setOnAction(e -> { if (dayToggle.isSelected()) navigateToView("daily-teaching"); });
+        dayToggle.setOnAction(e -> { if (dayToggle.isSelected()) navigateToView("teaching-statistics"); });
         monthToggle.setOnAction(e -> { if (monthToggle.isSelected()) navigateToView("monthly-teaching"); });
         quarterToggle.setOnAction(e -> { if (quarterToggle.isSelected()) navigateToView("quarterly-teaching"); });
         yearToggle.setOnAction(e -> { if (yearToggle.isSelected()) navigateToView("yearly-teaching"); }); // Navigating to self keeps you here
