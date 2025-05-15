@@ -84,6 +84,7 @@ public class MainController {
         navigationController.registerView("classrooms", new RoomView());
         navigationController.registerView("holidays", new HolidaysView());
         navigationController.registerView("students", new StudentListScreenView());
+        navigationController.registerView("classroom-attendance-view", new ClassroomAttendanceView());
     }
     /**
      Thiết lập MainController cho tất cả các view đã đăng ký

@@ -16,9 +16,10 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import src.model.system.course.Course;
 import src.dao.CourseDAO; // Đảm bảo import này tồn tại và đúng
+
 import java.time.LocalDate;
 import java.time.LocalTime;
-// import java.time.format.DateTimeFormatter; // Không được sử dụng, có thể bỏ
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -291,6 +292,8 @@ public class CreateClassScreenView {
             }
         }
     }
+
+
 
     private boolean validateInputs() {
         StringBuilder errorMessage = new StringBuilder();

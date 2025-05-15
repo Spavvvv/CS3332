@@ -527,7 +527,6 @@ public class LoginUI {
         }
     }
 
-
     private void gotoRegister() {
         primaryStage.close();
         Stage registerStage = new Stage();

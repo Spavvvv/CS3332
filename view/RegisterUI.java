@@ -45,7 +45,6 @@ public class RegisterUI {
     private MainController mainController;
     private ComboBox genderComboBox;
     private String currentTheme = "light"; // Mặc định là theme sáng
-
     // Định dạng ngày tháng
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     public RegisterUI(Stage primaryStage) {
