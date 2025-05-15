@@ -858,6 +858,7 @@ public class AttendanceScreenView extends BaseScreenView {
                 presentCount++;
             } else if (attendance.hasPermission()) {
                 absentExcusedCount++;
+                //System.out.println(attendance.hasPermission());
             } else {
                 absentUnexcusedCount++;
             }

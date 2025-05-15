@@ -96,7 +96,7 @@ public class ClassListScreenView extends BaseScreenView {
     }
     @Override
     public void initializeView() {
-// Clear root
+        // Clear root
         root.getChildren().clear();
         // Setting up the root container
         root.setSpacing(0);

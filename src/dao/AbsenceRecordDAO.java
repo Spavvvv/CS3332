@@ -177,7 +177,9 @@ public class AbsenceRecordDAO {
             }
         }
 
-        boolean isPresent = "Có mặt".equalsIgnoreCase(record.getStatus()) || "Đi trễ".equalsIgnoreCase(record.getStatus());
+        boolean isPresent = "Có mặt".equalsIgnoreCase(record.getStatus());
+
+        boolean hasPermission = "Có phép".equalsIgnoreCase(record.getStatus());
 
         if (existingAttendanceId != null) { // Update existing record
             String updateSql = "UPDATE attendance SET status = ?, notes = ?, called = ?, has_permission = ?, present = ?, absence_date = ?, record_time = CURRENT_TIMESTAMP " +
@@ -216,7 +218,7 @@ public class AbsenceRecordDAO {
                 insertStmt.setString(5, record.getNote());
                 insertStmt.setBoolean(6, isPresent);
                 insertStmt.setBoolean(7, record.isCalled());
-                insertStmt.setBoolean(8, record.isApproved()); // Maps to has_permission
+                insertStmt.setBoolean(8, hasPermission); // Maps to has_permission
                 insertStmt.setDate(9, Date.valueOf(record.getAbsenceDate()));
                 if (isPresent) {
                     insertStmt.setTimestamp(10, Timestamp.valueOf(java.time.LocalDateTime.now()));

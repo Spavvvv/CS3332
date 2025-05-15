@@ -551,13 +551,13 @@ public class StudentDAO {
         return students;
     }
   
-     * Finds all students belonging to a specific class ID.
-     * Manages its own connection.
-     * Returns students with basic data only (including their class_id).
-     *
-     * @param classId The ID of the class.
-     * @return A list of students belonging to the class. Returns an empty list if no students are found or on error.
-     */
+     //* Finds all students belonging to a specific class ID.
+     //* Manages its own connection.
+     //* Returns students with basic data only (including their class_id).
+     //*
+     //* @param classId The ID of the class.
+     //* @return A list of students belonging to the class. Returns an empty list if no students are found or on error.
+     //*/
     public List<Student> findByClassId(String classId) {
         List<Student> students = new ArrayList<>();
         // Ensure your 'students' table has a 'class_id' column or similar foreign key to the 'classes' table.
@@ -584,6 +584,131 @@ public class StudentDAO {
             // Depending on desired behavior, you might throw e or just return empty list
         }
         return students;
+    }
+
+    public boolean createStudentAndUserTransaction(Student student, String address) throws SQLException {
+        Connection conn = null;
+        String generatedUserId = null;
+
+        // SQL đã được cập nhật: Loại bỏ cột 'email'
+        String userInsertSql = "INSERT INTO users (id, name, gender, contact_number, birthday, address, active) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        // SQL đã được cập nhật: Loại bỏ cột 'email'
+        String studentInsertSql = "INSERT INTO students (id, user_id, name, gender, contact_number, birthday, address, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+        try {
+            conn = DatabaseConnection.getConnection();
+            conn.setAutoCommit(false); // Bắt đầu transaction
+
+            // Thông tin email từ đối tượng Student không còn được sử dụng trực tiếp trong INSERT nữa
+            // String receivedEmail = student.getEmail();
+            // System.out.println("DEBUG [StudentDAO - Start Transaction]: Đối tượng Student có email (nếu có): [" + receivedEmail + "]");
+            // if (receivedEmail == null || receivedEmail.trim().isEmpty()) {
+            //     System.out.println("INFO [StudentDAO]: Email trong đối tượng Student là null hoặc rỗng. Sẽ không chèn email.");
+            // }
+
+            // 1. Thêm vào bảng 'users'
+            generatedUserId = UUID.randomUUID().toString(); // Tạo ID duy nhất cho user
+            try (PreparedStatement userStmt = conn.prepareStatement(userInsertSql)) {
+                userStmt.setString(1, generatedUserId);
+                userStmt.setString(2, student.getName());
+                userStmt.setString(3, student.getGender());
+                userStmt.setString(4, student.getContactNumber());
+                userStmt.setString(5, student.getBirthday());
+                // Cột email đã được loại bỏ, điều chỉnh chỉ số cho các cột còn lại:
+                // userStmt.setString(6, student.getEmail()); // Dòng này đã bị loại bỏ
+
+                if (address != null && !address.trim().isEmpty()) {
+                    userStmt.setString(6, address); // Trước đây là 7
+                } else {
+                    userStmt.setNull(6, Types.VARCHAR); // Trước đây là 7
+                }
+                userStmt.setBoolean(7, true); // Mặc định user active, trước đây là 8
+
+                int userRowsInserted = userStmt.executeUpdate();
+                if (userRowsInserted == 0) {
+                    conn.rollback();
+                    System.err.println("Thất bại khi tạo bản ghi user cho sinh viên: " + student.getName());
+                    return false;
+                }
+            }
+
+            // 2. Thêm vào bảng 'students'
+            if (student.getId() == null || student.getId().trim().isEmpty()) {
+                conn.rollback();
+                System.err.println("Thiếu ID sinh viên. Không thể thêm vào bảng students.");
+                throw new SQLException("ID sinh viên là bắt buộc để thêm bản ghi sinh viên.");
+            }
+            try (PreparedStatement studentStmt = conn.prepareStatement(studentInsertSql)) {
+                studentStmt.setString(1, student.getId()); // ID riêng của sinh viên
+                studentStmt.setString(2, generatedUserId); // Liên kết tới user vừa tạo
+                studentStmt.setString(3, student.getName());
+                studentStmt.setString(4, student.getGender());
+                studentStmt.setString(5, student.getContactNumber());
+                studentStmt.setString(6, student.getBirthday());
+                // Cột email đã được loại bỏ, điều chỉnh chỉ số cho các cột còn lại:
+                // studentStmt.setString(7, student.getEmail()); // Dòng này đã bị loại bỏ
+
+                if (address != null && !address.trim().isEmpty()) { // Giả sử sinh viên cũng có cột địa chỉ
+                    studentStmt.setString(7, address); // Trước đây là 8
+                } else {
+                    studentStmt.setNull(7, Types.VARCHAR); // Trước đây là 8
+                }
+                studentStmt.setString(8, "ACTIVE"); // Trạng thái của sinh viên, trước đây là 9
+
+                int studentRowsInserted = studentStmt.executeUpdate();
+                if (studentRowsInserted == 0) {
+                    conn.rollback();
+                    System.err.println("Thất bại khi tạo bản ghi student cho: " + student.getName());
+                    return false;
+                }
+            }
+
+            // 3. Liên kết với Parent (nếu có thông tin Parent trong đối tượng Student)
+            if (student.getParent() != null && student.getParent().getId() != null && !student.getParent().getId().trim().isEmpty()) {
+                // Giả sử bạn có phương thức linkStudentToParent
+                boolean linked = linkStudentToParent(conn, student.getId(), student.getParent().getId());
+                if (!linked) {
+                    conn.rollback();
+                    System.err.println("Thất bại khi liên kết sinh viên " + student.getId() + " với phụ huynh " + student.getParent().getId());
+                    return false;
+                }
+            }
+
+            // 4. Đăng ký khóa học (nếu có, sử dụng lại logic hiện có)
+            if (student.getCurrentCourses() != null && !student.getCurrentCourses().isEmpty()) {
+                for (Course course : student.getCurrentCourses()) {
+                    // Giả sử bạn có phương thức enrollStudentInCourse
+                    if (!enrollStudentInCourse(conn, student.getId(), course.getCourseId())) {
+                        conn.rollback();
+                        System.err.println("Thất bại khi đăng ký sinh viên " + student.getId() + " vào khóa học " + course.getCourseId());
+                        return false;
+                    }
+                }
+            }
+
+            conn.commit(); // Commit transaction nếu tất cả thành công
+            return true;
+        } catch (SQLException e) {
+            if (conn != null) {
+                try {
+                    conn.rollback(); // Rollback nếu có lỗi SQL
+                } catch (SQLException ex) {
+                    System.err.println("Lỗi trong quá trình rollback database: " + ex.getMessage());
+                }
+            }
+            System.err.println("Giao dịch database thất bại khi tạo student và user: " + e.getMessage());
+            e.printStackTrace();
+            throw e; // Ném lại exception để lớp gọi xử lý
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true); // Reset auto-commit
+                    conn.close();
+                } catch (SQLException e) {
+                    System.err.println("Lỗi khi đóng kết nối database: " + e.getMessage());
+                }
+            }
+        }
     }
 }
 

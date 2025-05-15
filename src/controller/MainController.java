@@ -14,6 +14,7 @@ import src.model.person.Teacher;
 import src.model.person.Parent;
 import javafx.scene.control.Alert;
 import view.components.ClassList.ClassListScreenView;
+import view.components.ClassList.CreateClassScreenView;
 import view.components.StudentList.StudentListScreenView;
 
 /**
@@ -85,6 +86,7 @@ public class MainController {
         navigationController.registerView("holidays", new HolidaysView());
         navigationController.registerView("students", new StudentListScreenView());
         navigationController.registerView("classroom-attendance-view", new ClassroomAttendanceView());
+        //navigationController.registerView("classes", new CreateClassScreenView());
     }
     /**
      Thiết lập MainController cho tất cả các view đã đăng ký

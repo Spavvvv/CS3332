@@ -7,7 +7,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.CheckBoxTableCell;
-import javafx.scene.control.cell.ComboBoxTableCell; // << ADDED
+import javafx.scene.control.cell.ComboBoxTableCell;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.*;
@@ -15,7 +15,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.StringConverter;
-import javafx.util.converter.DefaultStringConverter; // << ADDED
+import javafx.util.converter.DefaultStringConverter;
 import src.controller.AbsenceCallController;
 import src.model.ClassSession;
 import src.model.absence.AbsenceRecord;
@@ -48,9 +48,8 @@ public class AbsenceCallView extends BaseScreenView {
 
     private AbsenceCallController controller;
 
-    // << ADDED: ObservableList for status choices
     private final ObservableList<String> statusOptions =
-            FXCollections.observableArrayList("Chưa điểm danh", "Có mặt", "Vắng", "Có Phép");
+            FXCollections.observableArrayList("Chưa điểm danh", "Có mặt", "Vắng", "Có phép");
 
     public AbsenceCallView() {
         super("Gọi điện xác nhận", "absence-call-view");
@@ -187,53 +186,59 @@ public class AbsenceCallView extends BaseScreenView {
         tv.setEditable(true); // Ensure table is editable
         VBox.setVgrow(tv, Priority.ALWAYS);
         tv.setStyle("-fx-border-color: " + BORDER_COLOR + "; -fx-border-radius: 5;");
+        tv.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY); // Uncomment if you want columns to fill width
 
         TableColumn<AbsenceRecord, Integer> idCol = new TableColumn<>("STT");
         idCol.setCellValueFactory(new PropertyValueFactory<>("displayId"));
         idCol.setPrefWidth(50);
         idCol.setSortable(false);
-        idCol.setEditable(false); // Typically IDs are not editable
+        idCol.setEditable(false);
 
         TableColumn<AbsenceRecord, String> nameCol = new TableColumn<>("Họ và tên");
         nameCol.setCellValueFactory(new PropertyValueFactory<>("studentName"));
         nameCol.setPrefWidth(200);
-        nameCol.setEditable(false); // Student name might not be editable here
+        nameCol.setEditable(false);
 
         TableColumn<AbsenceRecord, String> classCol = new TableColumn<>("Lớp học");
         classCol.setCellValueFactory(new PropertyValueFactory<>("className"));
         classCol.setPrefWidth(150);
-        classCol.setEditable(false); // Class name might not be editable here
+        classCol.setEditable(false);
 
         TableColumn<AbsenceRecord, String> dateCol = new TableColumn<>("Ngày nghỉ");
         dateCol.setCellValueFactory(cellData -> cellData.getValue().absenceDateFormattedProperty());
         dateCol.setPrefWidth(100);
-        dateCol.setEditable(false); // Date might not be editable here
+        dateCol.setEditable(false);
 
-        // << MODIFIED: Status column to be editable with ComboBox
         TableColumn<AbsenceRecord, String> statusCol = new TableColumn<>("Tình trạng");
-        // This assumes AbsenceRecord has a statusProperty() returning StringProperty
         statusCol.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
         statusCol.setCellFactory(ComboBoxTableCell.forTableColumn(new DefaultStringConverter(), statusOptions));
         statusCol.setOnEditCommit(event -> {
             AbsenceRecord record = event.getRowValue();
             record.setStatus(event.getNewValue());
-            // Additional logic: if status is "Có mặt" or "Xin phép", "approved" might change.
-            // This logic could be in the controller or model.
-            // For example:
-            if ("Xin phép".equals(event.getNewValue())) {
-                record.setApproved(true); // Automatically set approved if "Xin phép"
-            } else if ("Có mặt".equals(event.getNewValue())) {
-                // If student is present, perhaps they are not "absent" and "approved" is irrelevant or false.
-                // The exact logic depends on your application's rules.
-                // record.setApproved(false); // Example
+            // Automatically update 'approved' based on 'status'
+            if ("Có phép".equalsIgnoreCase(event.getNewValue())) {
+                record.setApproved(true);
+            } else if (!"Vắng".equalsIgnoreCase(event.getNewValue()) && !"Chưa điểm danh".equalsIgnoreCase(event.getNewValue())) {
+                // If status is "Có mặt" or other non-absence status (excluding "Vắng" explicitly),
+                // then it shouldn't be marked as 'approved for absence'.
+                // However, an explicit 'approved' checkbox might still be desired in some UIs.
+                // For now, let's assume "Có phép" is the primary way to set 'approved' to true.
+                // If status is not "Có phép" and not "Vắng", set approved to false.
+                // This logic might need refinement based on how `approved` is truly used.
+                // If `approved` is ONLY for "Vắng có phép", then this is okay.
+                // If `approved` could be true even if status is "Có mặt" (which is unlikely), this needs change.
+                if (!"Vắng".equalsIgnoreCase(event.getNewValue())) {
+                    record.setApproved(false);
+                }
             }
+
 
             if (controller != null) {
                 controller.setDataChanged(true);
             }
-            tableView.refresh(); // Refresh to show any consequential changes (e.g., to approved status)
+            tableView.refresh();
         });
-        statusCol.setPrefWidth(120); // Increased width slightly for dropdown
+        statusCol.setPrefWidth(120);
         statusCol.setEditable(true);
 
 
@@ -251,7 +256,7 @@ public class AbsenceCallView extends BaseScreenView {
         TableColumn<AbsenceRecord, Boolean> calledCol = new TableColumn<>("Đã gọi");
         calledCol.setCellValueFactory(new PropertyValueFactory<>("called"));
         calledCol.setCellFactory(CheckBoxTableCell.forTableColumn(calledCol));
-        calledCol.setOnEditCommit(event -> { // Added OnEditCommit for CheckBox
+        calledCol.setOnEditCommit(event -> {
             AbsenceRecord record = event.getRowValue();
             record.setCalled(event.getNewValue());
             if (controller != null) controller.setDataChanged(true);
@@ -259,18 +264,20 @@ public class AbsenceCallView extends BaseScreenView {
         calledCol.setPrefWidth(100);
         calledCol.setEditable(true);
 
-        TableColumn<AbsenceRecord, Boolean> approvedCol = new TableColumn<>("Có phép");
-        approvedCol.setCellValueFactory(new PropertyValueFactory<>("approved"));
-        approvedCol.setCellFactory(CheckBoxTableCell.forTableColumn(approvedCol));
-        approvedCol.setOnEditCommit(event -> { // Added OnEditCommit for CheckBox
-            AbsenceRecord record = event.getRowValue();
-            record.setApproved(event.getNewValue());
-            if (controller != null) controller.setDataChanged(true);
-        });
-        approvedCol.setPrefWidth(100);
-        approvedCol.setEditable(true);
+        // --- CỘT "CÓ PHÉP" (APPROVEDCOL) ĐÃ BỊ XÓA ---
+        // TableColumn<AbsenceRecord, Boolean> approvedCol = new TableColumn<>("Có phép");
+        // approvedCol.setCellValueFactory(new PropertyValueFactory<>("approved"));
+        // approvedCol.setCellFactory(CheckBoxTableCell.forTableColumn(approvedCol));
+        // approvedCol.setOnEditCommit(event -> {
+        //     AbsenceRecord record = event.getRowValue();
+        //     record.setApproved(event.getNewValue());
+        //     if (controller != null) controller.setDataChanged(true);
+        // });
+        // approvedCol.setPrefWidth(100);
+        // approvedCol.setEditable(true);
 
-        tv.getColumns().addAll(idCol, nameCol, classCol, dateCol, statusCol, noteCol, calledCol, approvedCol);
+        // Thêm các cột vào TableView, không bao gồm approvedCol
+        tv.getColumns().addAll(idCol, nameCol, classCol, dateCol, statusCol, noteCol, calledCol);
         return tv;
     }
 
@@ -294,7 +301,9 @@ public class AbsenceCallView extends BaseScreenView {
                 updateCurrentSessionDayLabel();
             });
             fromDatePicker.setOnAction(e -> {
+                // Chỉ cập nhật label, không tự động lọc khi chỉ thay đổi ngày
                 updateCurrentSessionDayLabel();
+                // Nếu bạn muốn lọc ngay khi ngày thay đổi, hãy gọi controller.applyFilters() ở đây
             });
         } else {
             LOGGER.severe("AbsenceCallView: Controller is null during setupEventHandlers. Data-related actions will not be wired.");
@@ -305,7 +314,9 @@ public class AbsenceCallView extends BaseScreenView {
     }
 
     public void setSessionItems(ObservableList<ClassSession> sessions) {
-        sessionSelector.setItems(sessions);
+        if (sessionSelector != null) {
+            sessionSelector.setItems(sessions);
+        }
         updateCurrentSessionDayLabel();
     }
 
@@ -318,11 +329,11 @@ public class AbsenceCallView extends BaseScreenView {
     }
 
     public ClassSession getSelectedSession() {
-        return sessionSelector.getSelectionModel().getSelectedItem();
+        return sessionSelector != null ? sessionSelector.getSelectionModel().getSelectedItem() : null;
     }
 
     public LocalDate getFromDate() {
-        return fromDatePicker.getValue();
+        return fromDatePicker != null ? fromDatePicker.getValue() : null;
     }
 
     private void updateCurrentSessionDayLabel() {
@@ -334,8 +345,11 @@ public class AbsenceCallView extends BaseScreenView {
 
         if (selectedSession != null && selectedSession.getDate() != null) {
             dateToDisplay = selectedSession.getDate();
-            context = "";
+            context = ""; // Context rỗng khi có buổi học được chọn
         }
+        // Trường hợp không có session được chọn nhưng fromDatePicker có giá trị
+        // thì không hiển thị ngày từ fromDatePicker ở đây nữa,
+        // vì label này dành cho ngày của "buổi học hiện tại".
 
         if (dateToDisplay != null) {
             String dayOfWeek = dateToDisplay.getDayOfWeek().getDisplayName(TextStyle.FULL, new Locale("vi", "VN"));
@@ -348,6 +362,7 @@ public class AbsenceCallView extends BaseScreenView {
 
     private void styleButton(Button button, String backgroundColor) { styleButton(button, backgroundColor, "10 20"); }
     private void styleButton(Button button, String backgroundColor, String padding) {
+        if (button == null) return;
         button.setStyle(
                 "-fx-background-color: " + backgroundColor + ";" +
                         "-fx-text-fill: white;" +

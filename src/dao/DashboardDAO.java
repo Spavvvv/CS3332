@@ -181,7 +181,7 @@ public class DashboardDAO {
      */
     public double getAttendanceRate() {
         String query = "SELECT " +
-                "(SELECT COUNT(*) FROM attendance WHERE status = 'Present') AS present_count, " + // Assuming 'Present' status
+                "(SELECT COUNT(*) FROM attendance WHERE status = 'Có mặt') AS present_count, " + // Assuming 'Present' status
                 "(SELECT COUNT(*) FROM attendance) AS total_count";
 
         try (Connection conn = DatabaseConnection.getConnection();
