@@ -45,10 +45,6 @@ public class RegisterUI {
     private MainController mainController;
     private ComboBox genderComboBox;
     private String currentTheme = "light"; // Mặc định là theme sáng
-
-    // File path for storing user accounts
-    private String ACCOUNTS_FILE;
-    private final static String FILE_PATH = "C:\\Users\\tiend\\IdeaProjects\\CS3332";
     // Định dạng ngày tháng
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     public RegisterUI(Stage primaryStage) {
@@ -61,34 +57,14 @@ public class RegisterUI {
         Preferences prefs = Preferences.userNodeForPackage(LoginUI.class);
         currentTheme = prefs.get("theme", "light");
     }
-    // Create accounts file if it doesn't exist
-    private void createAccountsFileIfNotExists(String username) {
-        ACCOUNTS_FILE = username + ".txt";
-        File file = new File(FILE_PATH, ACCOUNTS_FILE);
-        if (!file.exists()) {
-            try {
-                // Tạo thư mục nếu chưa tồn tại
-                File directory = new File(FILE_PATH);
-                if (!directory.exists()) {
-                    directory.mkdirs();
-                }
-                file.createNewFile();
-                System.out.println("Created new accounts file: " + ACCOUNTS_FILE);
-            } catch (IOException e) {
-                System.err.println("Error creating accounts file: " + e.getMessage());
-            }
-        }
-    }
     // Tạo ID ngẫu nhiên 6 chữ số dựa trên vai trò
     private String generateUniqueID(String role) {
         // Xác định số đầu tiên dựa trên vai trò
         String firstDigit;
         if (role.equals("Giáo viên")) {
             firstDigit = "1";
-        } else if (role.equals("Học viên")) {
-            firstDigit = "2";
-        } else { // Phụ huynh
-            firstDigit = "3";
+        } else { // Admin
+            firstDigit = "0";
         }
         // Tạo 5 chữ số còn lại ngẫu nhiên
         StringBuilder randomDigits = new StringBuilder();
@@ -287,8 +263,9 @@ public class RegisterUI {
         Label roleLabel = new Label("Vai trò:");
         roleLabel.setStyle("-fx-text-fill: #555;");
         roleComboBox = new ComboBox<>();
-        roleComboBox.getItems().addAll("Học viên", "Giáo viên", "Phụ huynh");
-        roleComboBox.setValue("Học viên");
+        roleComboBox.getItems().addAll("Admin", "Giáo viên");
+        roleComboBox.setValue("Giáo viên");
+        roleComboBox.setEditable(false);
         roleComboBox.setPrefHeight(35);
         roleComboBox.setMaxWidth(Double.MAX_VALUE);
         roleComboBox.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ddd; -fx-text-fill: #555;");

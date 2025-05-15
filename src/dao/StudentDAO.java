@@ -1,11 +1,12 @@
 
 package src.dao;
 
+import javafx.scene.control.Alert;
 import src.model.person.Parent;
 import src.model.person.Student;
 import src.model.system.course.Course;
 import utils.DatabaseConnection;
-
+import java.util.UUID;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -549,8 +550,7 @@ public class StudentDAO {
         }
         return students;
     }
-
-    /**
+  
      * Finds all students belonging to a specific class ID.
      * Manages its own connection.
      * Returns students with basic data only (including their class_id).

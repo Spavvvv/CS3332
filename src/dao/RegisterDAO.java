@@ -37,14 +37,11 @@ public class RegisterDAO {
         String roleForDB;
 
         switch (roleFromUI.trim()) {
-            case "Học viên":
-                roleForDB = "STUDENT";
-                break;
             case "Giáo viên":
                 roleForDB = "TEACHER";
                 break;
-            case "Phụ huynh":
-                roleForDB = "PARENT";
+            case "Admin":
+                roleForDB = "ADMIN";
                 break;
             default:
                 System.err.println("Vai trò từ UI không xác định hoặc không chuẩn: " + roleFromUI);
@@ -115,29 +112,6 @@ public class RegisterDAO {
             String roleTableId = UUID.randomUUID().toString(); // Tạo ID riêng cho bảng vai trò
 
             switch (roleForDB) {
-                case "STUDENT":
-                    // Dựa trên cấu trúc bảng students bạn cung cấp
-                    insertRoleSQL = "INSERT INTO students (id, user_id, name, gender, contact_number, birthday, email, address, class_id, status) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                    roleStmt = conn.prepareStatement(insertRoleSQL);
-                    roleStmt.setString(1, roleTableId);      // students.id
-                    roleStmt.setString(2, userIdForUsersTable); // students.user_id (liên kết với users.id)
-                    roleStmt.setString(3, fullName);         // students.name
-                    // Đặt giá trị cho cột 'gender' từ tham số truyền vào
-                    if (gender != null && !gender.trim().isEmpty()) {
-                        roleStmt.setString(4, gender.trim());
-                    } else {
-                        roleStmt.setNull(4, Types.VARCHAR); // Nếu gender rỗng hoặc null, đặt là NULL
-                    }
-                    roleStmt.setString(5, phone);            // students.contact_number
-                    roleStmt.setDate(6, java.sql.Date.valueOf(dob)); // students.birthday
-                    roleStmt.setString(7, email);            // students.email
-                    // Giả sử các cột này có thể NULL hoặc có DEFAULT VALUE
-                    roleStmt.setNull(8, Types.VARCHAR);    // students.address
-                    roleStmt.setNull(9, Types.VARCHAR);    // students.class_id (Không có từ UI)
-                    roleStmt.setNull(10, Types.VARCHAR);   // students.status (Không có từ UI)
-                    System.out.println("Chuẩn bị chèn vào bảng students...");
-                    break;
                 case "TEACHER":
                     // Dựa trên cấu trúc bảng teachers bạn cung cấp
                     insertRoleSQL = "INSERT INTO teachers (id, user_id, name, gender, contact_number, birthday, email, address) " +
@@ -159,26 +133,9 @@ public class RegisterDAO {
                     roleStmt.setNull(8, Types.VARCHAR);    // teachers.address
                     System.out.println("Chuẩn bị chèn vào bảng teachers...");
                     break;
-                case "PARENT":
-                    // Dựa trên cấu trúc bảng parents bạn cung cấp
-                    insertRoleSQL = "INSERT INTO parents (id, user_id, name, gender, contact_number, birthday, email, relationship) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-                    roleStmt = conn.prepareStatement(insertRoleSQL);
-                    roleStmt.setString(1, roleTableId);      // parents.id
-                    roleStmt.setString(2, userIdForUsersTable); // parents.user_id (liên kết với users.id)
-                    roleStmt.setString(3, fullName);         // parents.name
-                    // Đặt giá trị cho cột 'gender' từ tham số truyền vào
-                    if (gender != null && !gender.trim().isEmpty()) {
-                        roleStmt.setString(4, gender.trim());
-                    } else {
-                        roleStmt.setNull(4, Types.VARCHAR); // Nếu gender rỗng hoặc null, đặt là NULL
-                    }
-                    roleStmt.setString(5, phone);            // parents.contact_number
-                    roleStmt.setDate(6, java.sql.Date.valueOf(dob)); // parents.birthday
-                    roleStmt.setString(7, email);            // parents.email
-                    // Giả sử relationship có thể NULL
-                    roleStmt.setNull(8, Types.VARCHAR);    // parents.relationship (Không có từ UI)
-                    System.out.println("Chuẩn bị chèn vào bảng parents...");
+                case "ADMIN":
+                    // Admin không cần lưu vào bảng riêng, chỉ lưu thông tin trong bảng users
+                    System.out.println("Admin được tạo thành công với User ID: " + userIdForUsersTable);
                     break;
                 default:
                     // Trường hợp vai trò không cần chèn vào bảng riêng

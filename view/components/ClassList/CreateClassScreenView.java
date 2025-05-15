@@ -1,3 +1,4 @@
+
 package view.components.ClassList;
 
 import javafx.geometry.Insets;
@@ -14,6 +15,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import src.model.system.course.Course;
+import src.dao.CourseDAO; // Đảm bảo import này tồn tại và đúng
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -24,7 +26,7 @@ import java.util.List;
 public class CreateClassScreenView {
     // Constants
     private static final String PRIMARY_COLOR = "#5c6bc0";
-    private static final String GREEN_COLOR = "#4CAF50";
+    // private static final String GREEN_COLOR = "#4CAF50"; // Không được sử dụng, có thể bỏ
     private static final String BORDER_COLOR = "#e0e0e0";
     private static final String WHITE_COLOR = "#FFFFFF";
     private static final String TEXT_COLOR = "#424242";
@@ -43,14 +45,18 @@ public class CreateClassScreenView {
     private Button saveButton;
     private Button cancelButton;
 
-    // Callback interface for returning the created course
-    public interface CreateClassCallback {
-        void onCourseCreated(Course course);
-    }
-
+    // Thêm biến thành viên cho CourseDAO
+    private CourseDAO courseDAO;
     private CreateClassCallback callback;
 
-    public CreateClassScreenView(CreateClassCallback callback) {
+    // SỬA ĐỔI 1: Interface CreateClassCallback chỉ định nghĩa chữ ký
+    public interface CreateClassCallback {
+        void onCourseCreated(Course course); // Bỏ phần implementation mặc định ở đây
+    }
+
+    // SỬA ĐỔI 2: Constructor nhận CourseDAO
+    public CreateClassScreenView(CourseDAO courseDAO, CreateClassCallback callback) {
+        this.courseDAO = courseDAO; // Lưu trữ CourseDAO được truyền vào
         this.callback = callback;
         initialize();
     }
@@ -92,7 +98,6 @@ public class CreateClassScreenView {
         formGrid.setVgap(15);
         formGrid.setAlignment(Pos.CENTER);
 
-        // Các trường nhập liệu
         Label courseIdLabel = new Label("Mã lớp:");
         courseIdField = new TextField();
         courseIdField.setPromptText("Ví dụ: LH001");
@@ -127,7 +132,6 @@ public class CreateClassScreenView {
         scheduleField.setPrefRowCount(3);
         setFieldStyle(scheduleField);
 
-        // Thêm các trường vào grid
         int row = 0;
         formGrid.add(courseIdLabel, 0, row);
         formGrid.add(courseIdField, 1, row++);
@@ -196,6 +200,7 @@ public class CreateClassScreenView {
                         "-fx-padding: 8 15;" +
                         "-fx-cursor: hand;"
         );
+        cancelButton.setOnAction(e -> stage.close());
 
         saveButton = new Button("Lưu");
         saveButton.setStyle(
@@ -206,62 +211,52 @@ public class CreateClassScreenView {
                         "-fx-cursor: hand;" +
                         "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 2, 0, 0, 1);"
         );
+        // SỬA ĐỔI 3: Logic lưu nằm trong setOnAction của saveButton, gọi createCourse()
+        saveButton.setOnAction(e -> createCourseAndNotify()); // Đổi tên phương thức để rõ ràng hơn
 
         buttonBox.getChildren().addAll(cancelButton, saveButton);
         root.getChildren().add(buttonBox);
-
-        // Event handlers
-        saveButton.setOnAction(e -> createCourse());
-        cancelButton.setOnAction(e -> stage.close());
     }
 
-
-    private void createCourse() {
-        // Validate input fields
+    // SỬA ĐỔI 3 (tiếp theo): Phương thức createCourse() giờ sẽ lưu và gọi callback
+    private void createCourseAndNotify() {
         if (validateInputs()) {
             try {
                 LocalDate startDate = startDatePicker.getValue();
                 LocalDate endDate = endDatePicker.getValue();
-
-                // Parse schedule information from the text area
-                // Format expected: "Thứ 2 - 8:00\nThứ 4 - 8:00"
                 String scheduleText = scheduleField.getText();
-                List<String> daysOfWeek = new ArrayList<>();
+                List<String> daysOfWeek = new ArrayList<>(); // Khởi tạo daysOfWeek là danh sách RỖNG
                 LocalTime startTime = LocalTime.of(8, 0); // Default value
-                LocalTime endTime = LocalTime.of(9, 30);  // Default value
-
+                LocalTime endTime = startTime.plusMinutes(90);  // Default value, ví dụ 90 phút
                 if (!scheduleText.isEmpty()) {
-                    // Parse schedule text to extract days and times
                     String[] scheduleLines = scheduleText.split("\n");
                     for (String line : scheduleLines) {
-                        // Extract day of week from each line
-                        if (line.toLowerCase().contains("thứ")) {
-                            String day = line.split("-")[0].trim();
-                            daysOfWeek.add(day);
-                        }
-
-                        // Try to extract time if available
+                        // BỎ HOÀN TOÀN PHẦN LẤY daysOfWeek TỪ scheduleLine
+                        // if (line.toLowerCase().contains("thứ")) {
+                        //     String day = line.split("-")[0].trim();
+                        //     daysOfWeek.add(day);
+                        // }
+                        // PHẦN XỬ LÝ startTime, endTime VẪN GIỮ NGUYÊN
                         if (line.contains("-") && line.split("-").length > 1) {
-                            String timeStr = line.split("-")[1].trim();
-                            try {
-                                // Assuming format like "8:00"
-                                String[] timeParts = timeStr.split(":");
-                                if (timeParts.length == 2) {
-                                    startTime = LocalTime.of(
-                                            Integer.parseInt(timeParts[0].trim()),
-                                            Integer.parseInt(timeParts[1].trim())
-                                    );
-                                    // Set endTime to be 90 minutes after startTime by default
-                                    endTime = startTime.plusMinutes(90);
+                            // Kiểm tra kỹ để đảm bảo không lỗi nếu dòng chỉ có "Thứ X" mà không có thời gian
+                            String potentialTimeStrPart = line.substring(line.indexOf("-") + 1).trim();
+                            if (!potentialTimeStrPart.isEmpty()) { // Chỉ xử lý nếu có phần thời gian
+                                try {
+                                    String[] timeParts = potentialTimeStrPart.split(":");
+                                    if (timeParts.length == 2) {
+                                        startTime = LocalTime.of(
+                                                Integer.parseInt(timeParts[0].trim()),
+                                                Integer.parseInt(timeParts[1].trim())
+                                        );
+                                        endTime = startTime.plusMinutes(90); // Cập nhật endTime
+                                    }
+                                } catch (Exception ignored) {
+                                    // Giữ giá trị mặc định nếu parse lỗi
                                 }
-                            } catch (Exception e) {
-                                // If parsing fails, keep default values
                             }
                         }
                     }
                 }
-
-                // Create Course object with the updated constructor
                 Course course = new Course(
                         courseIdField.getText(),
                         courseNameField.getText(),
@@ -270,24 +265,30 @@ public class CreateClassScreenView {
                         endDate,
                         startTime,
                         endTime,
-                        daysOfWeek
+                        daysOfWeek // <<<< TRUYỀN daysOfWeek (sẽ LUÔN LÀ DANH SÁCH RỖNG)
                 );
 
-                // Set room ID if provided
                 if (!roomIdField.getText().isEmpty()) {
                     course.setRoomId(roomIdField.getText());
                 }
 
-                // Callback to parent screen
-                if (callback != null) {
-                    callback.onCourseCreated(course);
-                }
+                // Thực hiện lưu course bằng CourseDAO đã được inject
+                boolean success = this.courseDAO.save(course);
 
-                // Close the dialog
-                stage.close();
+                if (success) {
+                    // Nếu lưu thành công, gọi callback để thông báo cho ClassListScreenView
+                    if (callback != null) {
+                        callback.onCourseCreated(course);
+                    }
+                    stage.close(); // Đóng dialog sau khi lưu thành công
+                } else {
+                    showAlert("Không thể lưu lớp học vào cơ sở dữ liệu.");
+                    // Không đóng dialog nếu lưu thất bại, cho phép người dùng sửa hoặc hủy
+                }
 
             } catch (Exception e) {
                 showAlert("Lỗi khi tạo lớp học: " + e.getMessage());
+                e.printStackTrace(); // In stack trace để debug
             }
         }
     }
@@ -300,19 +301,15 @@ public class CreateClassScreenView {
         if (courseIdField.getText().isEmpty()) {
             errorMessage.append("- Mã lớp không được để trống\n");
         }
-
         if (courseNameField.getText().isEmpty()) {
             errorMessage.append("- Tên lớp không được để trống\n");
         }
-
         if (subjectField.getText().isEmpty()) {
             errorMessage.append("- Môn học không được để trống\n");
         }
-
         if (startDatePicker.getValue() == null) {
             errorMessage.append("- Ngày bắt đầu không được để trống\n");
         }
-
         if (endDatePicker.getValue() == null) {
             errorMessage.append("- Ngày kết thúc không được để trống\n");
         } else if (startDatePicker.getValue() != null &&
@@ -320,11 +317,16 @@ public class CreateClassScreenView {
             errorMessage.append("- Ngày kết thúc phải sau ngày bắt đầu\n");
         }
 
+        // Thêm kiểm tra cho lịch học nếu cần, ví dụ: không được để trống
+        // if (scheduleField.getText().trim().isEmpty()) {
+        //     errorMessage.append("- Lịch học không được để trống\n");
+        // }
+
+
         if (errorMessage.length() > 0) {
             showAlert("Vui lòng sửa các lỗi sau:\n" + errorMessage.toString());
             return false;
         }
-
         return true;
     }
 
@@ -340,3 +342,4 @@ public class CreateClassScreenView {
         stage.showAndWait();
     }
 }
+

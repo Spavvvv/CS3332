@@ -1,9 +1,6 @@
 package src.dao;
 
-import src.model.person.Person;
-import src.model.person.Parent;
-import src.model.person.Student;
-import src.model.person.Teacher;
+import src.model.person.*;
 import utils.DatabaseConnection;
 
 import java.sql.*;
@@ -30,7 +27,7 @@ public class AccountDAO {
      *
      * @param username Username for the account
      * @param password Password for the account
-     * @param role Role of the user (TEACHER, STUDENT, PARENT)
+     * @param role Role of the user (TEACHER, ADMIN)
      * @return true if successful, false otherwise
      */
     public boolean save(String username, String password, String role) {
@@ -290,11 +287,8 @@ public class AccountDAO {
         switch (role.toUpperCase()) {
             case "TEACHER":
                 return Optional.of(new Teacher(userId, name, "Không xác định", email, "", "", userId, "Giáo viên"));
-            case "STUDENT":
-                //tao them mac dinh class_id = "1" o thang Student nay, fix sau nhe duong
-                return Optional.of(new Student(userId, name, "Không xác định", email, "", "", null, "1"));
-            case "PARENT":
-                return Optional.of(new Parent(userId, name, "Không xác định", email, "", "", ""));
+            case "ADMIN":
+                return Optional.of(new Admin(userId, name, "Không xác định", email, "", "", null));
             default:
                 return Optional.empty();
         }
@@ -313,13 +307,33 @@ public class AccountDAO {
             case "TEACHER":
                 TeacherDAO teacherDAO = new TeacherDAO();
                 return teacherDAO.findById(userId).map(teacher -> (Person) teacher);
-            case "STUDENT":
-                StudentDAO studentDAO = new StudentDAO();
-                return studentDAO.findById(userId).map(student -> (Person) student);
-            case "PARENT":
-                ParentDAO parentDAO = new ParentDAO();
-                return parentDAO.findById(userId).map(parent -> (Person) parent);
+            case "ADMIN":
+                String sql = "SELECT * FROM users WHERE id = ?";
+                try (Connection conn = dbConnector.getConnection();
+                     PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, userId);
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            String name = rs.getString("name");
+                            String email = rs.getString("email");
+                            String gender = rs.getString("gender");
+                            String contactNumber = rs.getString("contact_number");
+                            String birthday = rs.getString("birthday");
+                            // String address = rs.getString("address"); // Nếu cần
+                            // ---- QUAN TRỌNG: Xác định nguồn gốc của 'accessLevel' ----
+                            // Tương tự như trong createPersonObject, bạn cần quyết định cách lấy accessLevel.
+                            // Ví dụ: lấy từ cột 'access_level' trong bảng 'users' nếu có, hoặc giá trị mặc định.
+                            String accessLevel = "Full"; // << THAY ĐỔI HOẶC CẤU HÌNH GIÁ TRỊ NÀY
+                            return Optional.of(new Admin(userId, name, gender, contactNumber, birthday, email, accessLevel));
+                        }
+                    }
+                } catch (SQLException e) {
+                    System.err.println("Lỗi khi tải dữ liệu Admin từ bảng users: " + e.getMessage());
+                    e.printStackTrace();
+                }
+                return Optional.empty(); // Không tìm thấy Admin hoặc có lỗi
             default:
+                // STUDENT và PARENT không còn được xử lý ở đây cho việc load Person qua account
                 return Optional.empty();
         }
     }

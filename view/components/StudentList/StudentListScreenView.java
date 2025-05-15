@@ -1,7 +1,9 @@
 package view.components.StudentList;
 import javafx.stage.Stage;
 import src.controller.MainController;
+import src.dao.StudentDAO;
 import src.model.person.Person;
+import src.model.person.Student;
 import view.components.StudentList.AddStudentDialog;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -26,6 +28,7 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 
 /**
  * Màn hình Học viên
@@ -43,8 +46,6 @@ public class StudentListScreenView extends BaseScreenView {
     private static final String TEXT_COLOR = "#424242"; // Main text color
 
     // Constants cho đường dẫn file
-    private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
-    private final static String STUDENT_FOLDER = FILE_PATH + "\\Student";
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     // UI Components
@@ -64,97 +65,73 @@ public class StudentListScreenView extends BaseScreenView {
 
     public StudentListScreenView() {
         super("Học viên", "students");
-        initializeData();
         initializeView();
+        initializeData();
     }
 
     private void initializeData() {
-        // Xóa dữ liệu cũ nếu có
+        // Clear old data
         students.clear();
 
-        // Đọc dữ liệu học viên từ thư mục Student
-        File directory = new File(STUDENT_FOLDER);
+        System.out.println("DEBUG: Starting initializeData method");
 
-        if (!directory.exists() || !directory.isDirectory()) {
-            System.err.println("Thư mục Student không tồn tại: " + STUDENT_FOLDER);
-            return;
-        }
+        try {
+            // Instantiate the DAO and fetch data from the database
+            StudentDAO studentDAO = new StudentDAO();
+            System.out.println("DEBUG: Created StudentDAO instance");
 
-        File[] files = directory.listFiles((dir, name) -> name.endsWith(".txt"));
+            List<Student> studentList = studentDAO.getAllStudents(); // Fetch all students from the DB
+            System.out.println("DEBUG: Retrieved student list. Size: " + (studentList != null ? studentList.size() : "null"));
 
-        if (files == null || files.length == 0) {
-            System.err.println("Không tìm thấy file học viên trong thư mục: " + STUDENT_FOLDER);
-            return;
-        }
-
-        int stt = 1;
-        for (File file : files) {
-            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    // Format: username,password,fullName,email,phone,role,dob,age,userId
-                    String[] parts = line.split(",");
-                    if (parts.length >= 9) {
-                        String username = parts[0].trim();
-                        String fullName = parts[2].trim();
-                        String email = parts[3].trim();
-                        String phone = parts[4].trim();
-                        String role = parts[5].trim();
-                        String dob = parts[6].trim();
-                        String userId = parts[8].trim();
-
-                        // Chỉ lấy học viên
-                        if ("Học viên".equals(role)) {
-                            // Tính tuổi
-                            int age = calculateAge(dob);
-
-                            // Xác định lớp học (giả định)
-                            String className = "Lớp " + (char)('A' + (int)(Math.random() * 3)) + (int)(Math.random() * 3 + 10);
-
-                            // Giả định tên phụ huynh
-                            String parent = "Phụ huynh của " + fullName;
-
-                            // Tạo trạng thái - mặc định là "Đang học"
-                            String status = "Đang học";
-
-                            // Tư vấn viên
-                            String counselor = "Tư vấn viên " + (int)(Math.random() * 5 + 1);
-
-                            // Thêm vào danh sách
-                            StudentInfo student = new StudentInfo(
-                                    stt++, fullName, dob, className, phone, parent, status, counselor, email, userId
-                            );
-
-                            students.add(student);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                System.err.println("Lỗi khi đọc file: " + file.getName() + " - " + e.getMessage());
-            }
-        }
-
-        // Đặt một số trạng thái khác nhau để có đủ các loại
-        if (students.size() > 3) {
-            int count = Math.min(students.size() / 3, 3);
-            for (int i = 1; i <= count; i++) {
-                students.get(i).setStatus("Nghỉ học");
-            }
-
-            for (int i = count + 1; i <= count * 2; i++) {
-                if (i < students.size()) {
-                    students.get(i).setStatus("Mới");
+            // Debug: Print student list details
+            if (studentList != null) {
+                for (Student s : studentList) {
+                    System.out.println("DEBUG: Student found - ID: " + s.getId() + ", Name: " + s.getName());
                 }
             }
+
+            // Transform and populate each student into the ObservableList
+            int stt = 1;
+            if (studentList != null && !studentList.isEmpty()) {
+                for (Student student : studentList) {
+                    System.out.println("DEBUG: Processing student: " + student.getName());
+                    StudentInfo studentInfo = new StudentInfo(
+                            stt++,
+                            student.getName(),
+                            student.getBirthday(),
+                            "Chưa có lớp", // Update with logic if className is available
+                            student.getContactNumber(),
+                            "Chưa điền", // Update with logic if parent details are available
+                            "Đang học", // Replace with actual status logic if fetched
+                            student.getEmail(),
+                            student.getId()
+                    );
+                    students.add(studentInfo);
+                    System.out.println("DEBUG: Added student to table: " + student.getName());
+                }
+            } else {
+                System.out.println("DEBUG: Student list is empty or null");
+            }
+        } catch (Exception e) {
+            System.err.println("ERROR: Error retrieving student data: " + e.getMessage());
+            e.printStackTrace();
         }
 
-        // Cập nhật danh sách đã lọc
+        System.out.println("DEBUG: Final students list size: " + students.size());
+
+        // Set the filteredStudents list
         filteredStudents.setAll(students);
-    }
+        System.out.println("DEBUG: Set filteredStudents. Size: " + filteredStudents.size());
 
-    /**
-     * Tính tuổi từ ngày sinh
-     */
+        if (studentsTable != null) {
+            studentsTable.setItems(filteredStudents);
+            System.out.println("DEBUG: Set items to table");
+            studentsTable.refresh();
+            System.out.println("DEBUG: Refreshed table");
+        } else {
+            System.out.println("DEBUG: studentsTable is null");
+        }
+    }
     private int calculateAge(String birthDate) {
         try {
             LocalDate dob = LocalDate.parse(birthDate, DATE_FORMATTER);
@@ -194,7 +171,7 @@ public class StudentListScreenView extends BaseScreenView {
 
         // Create table
         createStudentsTable();
-
+        System.out.println("DEBUG: Created students table");
         // Add components to contentBox in order
         contentBox.getChildren().addAll(
                 titleBar,
@@ -482,10 +459,22 @@ public class StudentListScreenView extends BaseScreenView {
      * Creates the table for students
      */
     private void createStudentsTable() {
+        System.out.println("DEBUG: Starting createStudentsTable method");
+
+        // Initialize the table
         studentsTable = new TableView<>();
         studentsTable.setEditable(false);
-        studentsTable.setItems(filteredStudents);
         studentsTable.setPrefHeight(600);
+
+        // Initialize filteredStudents if null
+        if (filteredStudents == null) {
+            filteredStudents = FXCollections.observableArrayList();
+            System.out.println("DEBUG: Initialized filteredStudents");
+        }
+
+        // Set items to table
+        studentsTable.setItems(filteredStudents);
+        System.out.println("DEBUG: Set items to table. Size: " + filteredStudents.size());
 
         // Styling the table
         studentsTable.setStyle(
@@ -500,12 +489,14 @@ public class StudentListScreenView extends BaseScreenView {
         TableColumn<StudentInfo, Void> selectCol = new TableColumn<>();
         selectCol.setPrefWidth(30);
         selectCol.setCellFactory(col -> {
-            TableCell<StudentInfo, Void> cell = new TableCell<>() {
+            return new TableCell<StudentInfo, Void>() {
                 private final CheckBox checkBox = new CheckBox();
                 {
                     checkBox.setOnAction(event -> {
-                        StudentInfo data = getTableView().getItems().get(getIndex());
-                        data.setSelected(checkBox.isSelected());
+                        if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                            StudentInfo data = getTableView().getItems().get(getIndex());
+                            data.setSelected(checkBox.isSelected());
+                        }
                     });
                 }
 
@@ -515,81 +506,101 @@ public class StudentListScreenView extends BaseScreenView {
                     if (empty) {
                         setGraphic(null);
                     } else {
-                        StudentInfo data = getTableView().getItems().get(getIndex());
-                        checkBox.setSelected(data.isSelected());
-                        setGraphic(checkBox);
+                        if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                            StudentInfo data = getTableView().getItems().get(getIndex());
+                            checkBox.setSelected(data.isSelected());
+                            setGraphic(checkBox);
+                        } else {
+                            setGraphic(null);
+                        }
                     }
                 }
             };
-            return cell;
         });
 
         // STT column
         TableColumn<StudentInfo, Integer> sttCol = new TableColumn<>("STT");
-        sttCol.setCellValueFactory(new PropertyValueFactory<>("stt"));
+        sttCol.setCellValueFactory(cellData ->
+                new javafx.beans.property.ReadOnlyObjectWrapper<>(studentsTable.getItems().indexOf(cellData.getValue()) + 1)
+        );
         sttCol.setPrefWidth(50);
         sttCol.setStyle("-fx-alignment: CENTER;");
-
-        // Ảnh column
-        TableColumn<StudentInfo, Void> imageCol = new TableColumn<>("Ảnh");
-        imageCol.setPrefWidth(60);
-        imageCol.setCellFactory(col -> {
-            TableCell<StudentInfo, Void> cell = new TableCell<>() {
-                @Override
-                protected void updateItem(Void item, boolean empty) {
-                    super.updateItem(item, empty);
-                    if (empty) {
-                        setGraphic(null);
-                    } else {
-                        // Placeholder for avatar (circle)
-                        Region avatar = new Region();
-                        avatar.setPrefSize(40, 40);
-                        avatar.setStyle(
-                                "-fx-background-color: " + LIGHT_GRAY + ";" +
-                                        "-fx-background-radius: 20;" +
-                                        "-fx-border-radius: 20;"
-                        );
-                        setGraphic(avatar);
-                    }
-                }
-            };
-            cell.setAlignment(Pos.CENTER);
-            return cell;
-        });
-
         // Họ và tên column
         TableColumn<StudentInfo, String> nameCol = new TableColumn<>("Họ và tên");
-        nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
+        nameCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                return new SimpleStringProperty(cellData.getValue().getName());
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
         nameCol.setPrefWidth(150);
 
         // Ngày sinh column
         TableColumn<StudentInfo, String> birthDateCol = new TableColumn<>("Ngày sinh");
-        birthDateCol.setCellValueFactory(new PropertyValueFactory<>("birthDate"));
+        birthDateCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                return new SimpleStringProperty(cellData.getValue().getBirthDate());
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
         birthDateCol.setPrefWidth(100);
 
         // Lớp học column
         TableColumn<StudentInfo, String> classCol = new TableColumn<>("Lớp học");
-        classCol.setCellValueFactory(new PropertyValueFactory<>("className"));
+        classCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                return new SimpleStringProperty(cellData.getValue().getClassName());
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
         classCol.setPrefWidth(120);
 
         // Điện thoại column
         TableColumn<StudentInfo, String> phoneCol = new TableColumn<>("Điện thoại");
-        phoneCol.setCellValueFactory(new PropertyValueFactory<>("phone"));
+        phoneCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                return new SimpleStringProperty(cellData.getValue().getPhone());
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
         phoneCol.setPrefWidth(120);
-
         // Phụ huynh column
         TableColumn<StudentInfo, String> parentCol = new TableColumn<>("Phụ huynh");
-        parentCol.setCellValueFactory(new PropertyValueFactory<>("parent"));
+        parentCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                return new SimpleStringProperty(cellData.getValue().getParent());
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
         parentCol.setPrefWidth(150);
 
         // Email column
         TableColumn<StudentInfo, String> emailCol = new TableColumn<>("Email");
-        emailCol.setCellValueFactory(new PropertyValueFactory<>("email"));
+        emailCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                return new SimpleStringProperty(cellData.getValue().getEmail());
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
         emailCol.setPrefWidth(180);
 
         // Trạng thái column
         TableColumn<StudentInfo, String> statusCol = new TableColumn<>("Trạng thái");
-        statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
+        statusCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                if(cellData.getValue().toString() == "Active") {
+                    return new SimpleStringProperty("Đang học");
+                } else return new SimpleStringProperty("Đang bảo lưu");
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
         statusCol.setPrefWidth(120);
         statusCol.setCellFactory(column -> new TableCell<>() {
             @Override
@@ -629,10 +640,6 @@ public class StudentListScreenView extends BaseScreenView {
             }
         });
 
-        // Tư vấn viên column
-        TableColumn<StudentInfo, String> counselorCol = new TableColumn<>("Tư vấn viên");
-        counselorCol.setCellValueFactory(new PropertyValueFactory<>("counselor"));
-        counselorCol.setPrefWidth(150);
 
         // Chi tiết column
         TableColumn<StudentInfo, Void> detailsCol = new TableColumn<>("Chi tiết");
@@ -653,8 +660,10 @@ public class StudentListScreenView extends BaseScreenView {
                     btn.setGraphic(eyeIcon);
 
                     btn.setOnAction(event -> {
-                        StudentInfo data = getTableView().getItems().get(getIndex());
-                        handleViewDetails(data);
+                        if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                            StudentInfo data = getTableView().getItems().get(getIndex());
+                            handleViewDetails(data);
+                        }
                     });
                 }
 
@@ -674,14 +683,28 @@ public class StudentListScreenView extends BaseScreenView {
 
         // Add all columns to the table
         studentsTable.getColumns().addAll(
-                selectCol, sttCol, imageCol, nameCol, birthDateCol, classCol,
-                phoneCol, parentCol, emailCol, statusCol, counselorCol, detailsCol
+                selectCol, sttCol, nameCol, birthDateCol, classCol,
+                phoneCol, parentCol, emailCol, statusCol, detailsCol
         );
 
         // Custom row styling
         studentsTable.setRowFactory(tv -> {
-            TableRow<StudentInfo> row = new TableRow<>();
-            row.setStyle("-fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
+            TableRow<StudentInfo> row = new TableRow<StudentInfo>() {
+                @Override
+                protected void updateItem(StudentInfo item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty) {
+                        setStyle("-fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
+                    } else {
+                        if (getIndex() % 2 == 0) {
+                            setStyle("-fx-background-color: white; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
+                        } else {
+                            setStyle("-fx-background-color: #f8f9fa; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
+                        }
+                    }
+                }
+            };
+
             row.selectedProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal) {
                     row.setStyle("-fx-background-color: #e3f2fd; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
@@ -693,13 +716,12 @@ public class StudentListScreenView extends BaseScreenView {
                     }
                 }
             });
+
             return row;
         });
-    }
 
-    /**
-     * Sets up event handlers for UI components
-     */
+        System.out.println("DEBUG: Finished setting up table");
+    }
     private void setupEventHandlers() {
         // Export button (đổi tên thành Thực hiện button)
         exportExcelButton.setOnAction(e -> showActions());
@@ -707,6 +729,9 @@ public class StudentListScreenView extends BaseScreenView {
         // Search functionality
         searchButton.setOnAction(e -> searchStudents(searchField.getText()));
         searchField.setOnAction(e -> searchStudents(searchField.getText()));
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
+            searchStudents(newValue);
+        });
         addStudentButton.setOnAction(e -> {
             showAddStudentDialog();
         });
@@ -782,10 +807,7 @@ public class StudentListScreenView extends BaseScreenView {
             String lowerKeyword = keyword.toLowerCase();
 
             for (StudentInfo student : students) {
-                if (student.getName().toLowerCase().contains(lowerKeyword) ||
-                        student.getPhone().contains(lowerKeyword) ||
-                        student.getParent().toLowerCase().contains(lowerKeyword) ||
-                        student.getEmail().toLowerCase().contains(lowerKeyword)) {
+                if (student.getName().toLowerCase().contains(lowerKeyword)) { // Chỉ tìm kiếm theo tên
                     filtered.add(student);
                 }
             }
@@ -825,32 +847,233 @@ public class StudentListScreenView extends BaseScreenView {
     /**
      * Handle view details action
      */
+
     private void handleViewDetails(StudentInfo studentInfo) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Thông tin học viên");
-        alert.setHeaderText("Thông tin chi tiết học viên");
+        alert.setTitle("Hồ sơ học viên: " + studentInfo.getName());
+        alert.setHeaderText(null); // Bỏ header mặc định
 
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(20));
+        // Main content VBox
+        VBox mainContent = new VBox(20); // Khoảng cách giữa các phần
+        mainContent.setPadding(new Insets(20));
+        mainContent.setStyle("-fx-background-color: #f8f9fa;"); // Màu nền nhẹ cho dialog
 
-        Label idLabel = new Label("ID: " + studentInfo.getUserId());
-        Label nameLabel = new Label("Họ tên: " + studentInfo.getName());
-        Label dobLabel = new Label("Ngày sinh: " + studentInfo.getBirthDate());
-        Label classLabel = new Label("Lớp học: " + studentInfo.getClassName());
-        Label phoneLabel = new Label("Điện thoại: " + studentInfo.getPhone());
-        Label parentLabel = new Label("Phụ huynh: " + studentInfo.getParent());
-        Label emailLabel = new Label("Email: " + studentInfo.getEmail());
-        Label statusLabel = new Label("Trạng thái: " + studentInfo.getStatus());
-        Label counselorLabel = new Label("Tư vấn viên: " + studentInfo.getCounselor());
-
-        content.getChildren().addAll(
-                idLabel, nameLabel, dobLabel, classLabel, phoneLabel,
-                parentLabel, emailLabel, statusLabel, counselorLabel
+        // --- Phần 1: Thông tin cá nhân ---
+        VBox personalInfoSection = new VBox(10);
+        personalInfoSection.setPadding(new Insets(15));
+        personalInfoSection.setStyle(
+                "-fx-background-color: white;" +
+                        "-fx-border-color: #dee2e6;" +
+                        "-fx-border-width: 1;" +
+                        "-fx-border-radius: 8;" +
+                        "-fx-background-radius: 8;"
         );
 
-        alert.getDialogPane().setContent(content);
+        Label personalTitle = new Label("👤 Thông tin cá nhân");
+        personalTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
+        personalTitle.setTextFill(Color.web("#0056b3")); // Màu tiêu đề
+
+        GridPane personalGrid = new GridPane();
+        personalGrid.setHgap(10); // Khoảng cách ngang
+        personalGrid.setVgap(8);  // Khoảng cách dọc
+
+        personalGrid.add(createDetailLabel("ID:", true), 0, 0);
+        personalGrid.add(createDetailLabel(studentInfo.getUserId(), false), 1, 0);
+
+        personalGrid.add(createDetailLabel("Họ tên:", true), 0, 1);
+        personalGrid.add(createDetailLabel(studentInfo.getName(), false), 1, 1);
+
+        personalGrid.add(createDetailLabel("Ngày sinh:", true), 0, 2);
+        personalGrid.add(createDetailLabel(studentInfo.getBirthDate(), false), 1, 2);
+
+        personalGrid.add(createDetailLabel("Phụ huynh:", true), 0, 3);
+        personalGrid.add(createDetailLabel(studentInfo.getParent(), false), 1, 3);
+
+        personalInfoSection.getChildren().addAll(personalTitle, createVerticalSpacer(10), personalGrid);
+
+        // --- Phần 2: Thông tin liên hệ ---
+        VBox contactInfoSection = new VBox(10);
+        contactInfoSection.setPadding(new Insets(15));
+        contactInfoSection.setStyle(
+                "-fx-background-color: white;" +
+                        "-fx-border-color: #dee2e6;" +
+                        "-fx-border-width: 1;" +
+                        "-fx-border-radius: 8;" +
+                        "-fx-background-radius: 8;"
+        );
+
+        Label contactTitle = new Label("📞 Thông tin liên hệ");
+        contactTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
+        contactTitle.setTextFill(Color.web("#0056b3"));
+
+        GridPane contactGrid = new GridPane();
+        contactGrid.setHgap(10);
+        contactGrid.setVgap(8);
+
+        contactGrid.add(createDetailLabel("Điện thoại:", true), 0, 0);
+        HBox phoneBox = new HBox(5, createDetailLabel(studentInfo.getPhone(), false), createCopyButton(studentInfo.getPhone(), "Sao chép SĐT"));
+        phoneBox.setAlignment(Pos.CENTER_LEFT);
+        contactGrid.add(phoneBox, 1, 0);
+
+        contactGrid.add(createDetailLabel("Email:", true), 0, 1);
+        HBox emailBox = new HBox(5, createDetailLabel(studentInfo.getEmail(), false), createCopyButton(studentInfo.getEmail(), "Sao chép Email"));
+        emailBox.setAlignment(Pos.CENTER_LEFT);
+        contactGrid.add(emailBox, 1, 1);
+
+        contactInfoSection.getChildren().addAll(contactTitle, createVerticalSpacer(10), contactGrid);
+
+        // --- Phần 3: Thông tin học tập ---
+        VBox academicInfoSection = new VBox(10);
+        academicInfoSection.setPadding(new Insets(15));
+        academicInfoSection.setStyle(
+                "-fx-background-color: white;" +
+                        "-fx-border-color: #dee2e6;" +
+                        "-fx-border-width: 1;" +
+                        "-fx-border-radius: 8;" +
+                        "-fx-background-radius: 8;"
+        );
+
+        Label academicTitle = new Label("🎓 Thông tin học tập");
+        academicTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
+        academicTitle.setTextFill(Color.web("#0056b3"));
+
+        GridPane academicGrid = new GridPane();
+        academicGrid.setHgap(10);
+        academicGrid.setVgap(8);
+
+        academicGrid.add(createDetailLabel("Lớp học:", true), 0, 0);
+        academicGrid.add(createDetailLabel(studentInfo.getClassName(), false), 1, 0);
+
+        academicGrid.add(createDetailLabel("Trạng thái:", true), 0, 1);
+        Label statusValueLabel = createDetailLabel(studentInfo.getStatus(), false);
+        // Tùy chỉnh màu sắc cho trạng thái (giống như trong bảng)
+        String statusBgColor;
+        String statusTextColor;
+        switch (studentInfo.getStatus()) {
+            case "Đang học":
+                statusBgColor = GREEN_COLOR + "40"; // Thêm alpha cho màu nền
+                statusTextColor = GREEN_COLOR;
+                break;
+            case "Nghỉ học":
+                statusBgColor = RED_COLOR + "40";
+                statusTextColor = RED_COLOR;
+                break;
+            case "Mới":
+                statusBgColor = YELLOW_COLOR + "40";
+                statusTextColor = "#856404"; // Màu chữ đậm hơn cho nền vàng
+                break;
+            default:
+                statusBgColor = LIGHT_GRAY + "40";
+                statusTextColor = TEXT_COLOR;
+        }
+        statusValueLabel.setStyle(
+                "-fx-background-color: " + statusBgColor + ";" +
+                        "-fx-text-fill: " + statusTextColor + ";" +
+                        "-fx-padding: 3px 8px;" +
+                        "-fx-background-radius: 4px;" +
+                        "-fx-font-weight: bold;"
+        );
+        statusValueLabel.setMaxWidth(Double.MAX_VALUE);
+        HBox statusBox = new HBox(statusValueLabel);
+        statusBox.setAlignment(Pos.CENTER_LEFT);
+        academicGrid.add(statusBox, 1, 1);
+
+        academicInfoSection.getChildren().addAll(academicTitle, createVerticalSpacer(10), academicGrid);
+
+        // Thêm các phần vào nội dung chính
+        mainContent.getChildren().addAll(personalInfoSection, contactInfoSection, academicInfoSection);
+
+        // Thiết lập nội dung cho DialogPane
+        DialogPane dialogPane = alert.getDialogPane();
+        dialogPane.setContent(mainContent);
+        dialogPane.setPrefWidth(550); // Điều chỉnh chiều rộng dialog
+        dialogPane.setPrefHeight(Region.USE_COMPUTED_SIZE); // Tự động tính chiều cao
+
+        // Tùy chỉnh nút (nếu muốn)
+        alert.getButtonTypes().setAll(new ButtonType("Đóng", ButtonBar.ButtonData.OK_DONE));
+
         alert.showAndWait();
     }
+
+// --- Phương thức phụ trợ (Helper Methods) ---
+
+    private Label createDetailLabel(String text, boolean isTitle) {
+        Label label = new Label(text);
+        if (isTitle) {
+            label.setFont(Font.font("System", FontWeight.BOLD, 13));
+            label.setTextFill(Color.web("#495057")); // Màu xám đậm cho tiêu đề thuộc tính
+        } else {
+            label.setFont(Font.font("System", FontWeight.NORMAL, 13));
+            label.setTextFill(Color.web("#212529")); // Màu đen cho giá trị
+            label.setWrapText(true);
+        }
+        return label;
+    }
+
+    private Button createCopyButton(String textToCopy, String buttonText) {
+        Button copyButton = new Button("📋"); // Sử dụng icon copy
+        Tooltip tooltip = new Tooltip(buttonText); // Hiển thị tooltip khi hover
+        copyButton.setTooltip(tooltip);
+        copyButton.setFont(Font.font("System", FontWeight.NORMAL, 12));
+        copyButton.setPadding(new Insets(2, 5, 2, 5));
+        copyButton.setStyle(
+                "-fx-background-color: #e9ecef;" +
+                        "-fx-border-color: #ced4da;" +
+                        "-fx-border-width: 1;" +
+                        "-fx-border-radius: 3;" +
+                        "-fx-background-radius: 3;" +
+                        "-fx-text-fill: #495057;" +
+                        "-fx-cursor: hand;"
+        );
+
+        copyButton.setOnAction(event -> {
+            final javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
+            final javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+            content.putString(textToCopy);
+            clipboard.setContent(content);
+
+            // Phản hồi trực quan
+            String originalText = copyButton.getText();
+            Tooltip originalTooltip = copyButton.getTooltip();
+            copyButton.setText("✓ Đã chép");
+            copyButton.setTooltip(new Tooltip("Đã sao chép!"));
+            copyButton.setStyle( // Thay đổi style khi đã copy
+                    "-fx-background-color: #d4edda;" + // Màu xanh lá nhạt
+                            "-fx-border-color: #c3e6cb;" +
+                            "-fx-border-width: 1;" +
+                            "-fx-border-radius: 3;" +
+                            "-fx-background-radius: 3;" +
+                            "-fx-text-fill: #155724;" + // Màu chữ xanh đậm
+                            "-fx-cursor: default;"
+            );
+
+            // Đặt lại sau một khoảng thời gian
+            javafx.animation.PauseTransition pause = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(2));
+            pause.setOnFinished(e -> {
+                copyButton.setText(originalText);
+                copyButton.setTooltip(originalTooltip);
+                copyButton.setStyle( // Trả về style cũ
+                        "-fx-background-color: #e9ecef;" +
+                                "-fx-border-color: #ced4da;" +
+                                "-fx-border-width: 1;" +
+                                "-fx-border-radius: 3;" +
+                                "-fx-background-radius: 3;" +
+                                "-fx-text-fill: #495057;" +
+                                "-fx-cursor: hand;"
+                );
+            });
+            pause.play();
+        });
+        return copyButton;
+    }
+
+    private Region createVerticalSpacer(double height) {
+        Region spacer = new Region();
+        spacer.setPrefHeight(height);
+        return spacer;
+    }
+
+
 
     @Override
     public void refreshView() {
@@ -890,14 +1113,13 @@ public class StudentListScreenView extends BaseScreenView {
         private final SimpleStringProperty phone;
         private final SimpleStringProperty parent;
         private final SimpleStringProperty status;
-        private final SimpleStringProperty counselor;
         private final SimpleStringProperty email;
         private final SimpleStringProperty userId;
         private final int stt;
         private boolean selected;
 
         public StudentInfo(int stt, String name, String birthDate, String className, String phone,
-                           String parent, String status, String counselor, String email, String userId) {
+                           String parent, String status, String email, String userId) {
             this.stt = stt;
             this.name = new SimpleStringProperty(name);
             this.birthDate = new SimpleStringProperty(birthDate);
@@ -905,7 +1127,6 @@ public class StudentListScreenView extends BaseScreenView {
             this.phone = new SimpleStringProperty(phone);
             this.parent = new SimpleStringProperty(parent);
             this.status = new SimpleStringProperty(status);
-            this.counselor = new SimpleStringProperty(counselor);
             this.email = new SimpleStringProperty(email);
             this.userId = new SimpleStringProperty(userId);
             this.selected = false;
@@ -943,9 +1164,6 @@ public class StudentListScreenView extends BaseScreenView {
             this.status.set(status);
         }
 
-        public String getCounselor() {
-            return counselor.get();
-        }
 
         public String getEmail() {
             return email.get();

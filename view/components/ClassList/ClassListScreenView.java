@@ -1,5 +1,8 @@
 package view.components.ClassList;
 import src.controller.MainController;
+import src.dao.CourseDAO;
+import src.dao.StudentDAO;
+import src.dao.TeacherDAO;
 import src.model.person.Person; // Import lớp Person (đảm bảo đường dẫn đúng với project của bạn)
 import src.model.person.Role; // Import enum Role (đảm bảo đường dẫn đúng)
 import src.model.person.Permission; // Import enum Permission (đảm bảo đường dẫn đúng)
@@ -49,6 +52,7 @@ public class ClassListScreenView extends BaseScreenView {
     private ComboBox<String> pageSizeComboBox;
     private ComboBox<String> filterComboBox;
     private TableView<ClassInfo> classesTable;
+    private CourseDAO courseDAO;
     private MainController mainController; // Để tham chiếu đến MainController
 
     // Data
@@ -56,16 +60,39 @@ public class ClassListScreenView extends BaseScreenView {
     private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     public ClassListScreenView() {
         super("Lớp học", "classes");
-        initializeData();
+
+        // KHỞI TẠO CourseDAO và các dependency của nó
+        StudentDAO studentDAO = new StudentDAO();
+        TeacherDAO teacherDAO = new TeacherDAO();
+
+        this.courseDAO = new CourseDAO();
+        this.courseDAO.setStudentDAO(studentDAO); // Quan trọng: inject dependency
+        this.courseDAO.setTeacherDAO(teacherDAO); // Quan trọng: inject dependency
+        // Nếu CourseDAO không có dependency, new CourseDAO() là đủ.
+
+        initializeData(); // Gọi sau khi courseDAO đã sẵn sàng
         initializeView();
     }
 
 
 
+    // Thay thế phương thức initializeData
     private void initializeData() {
-        // Xóa dữ liệu mẫu
         classes = FXCollections.observableArrayList();
 
+        // Tải dữ liệu từ database qua CourseDAO
+        try {
+            List<Course> coursesFromDb = courseDAO.findAll();
+
+            // Lặp qua danh sách các Course và thêm vào TableView
+            int stt = 1;
+            for (Course course : coursesFromDb) {
+                addCourseToTableView(course, stt++);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            showInfo("Lỗi khi tải danh sách lớp học từ cơ sở dữ liệu: " + e.getMessage());
+        }
     }
     @Override
     public void initializeView() {
@@ -810,30 +837,46 @@ public class ClassListScreenView extends BaseScreenView {
     @SuppressWarnings("unchecked")
     // Thêm phương thức showCreateClassDialog
     private void showCreateClassDialog() {
-        Person currentUser = getCurrentUser();
+        Person currentUser = getCurrentUser(); // Giả sử bạn có phương thức này
         boolean canCreateClass = false;
-        if (currentUser != null) {
+        if (currentUser != null && currentUser.getRole() != null) {
             canCreateClass = RolePermissions.hasPermission(currentUser.getRole(), Permission.CREATE_CLASS);
         }
-
         if (!canCreateClass) {
-            // Mặc dù UI đã ẩn nút, kiểm tra ở đây giúp bảo vệ khỏi việc gọi hàm trái phép
             showInfo("Bạn không có quyền tạo lớp học mới.");
-            return; // Không hiển thị dialog nếu không có quyền
+            return;
         }
-        CreateClassScreenView createClassScreen = new CreateClassScreenView(new CreateClassScreenView.CreateClassCallback() {
-            @Override
-            public void onCourseCreated(Course course) {
-                // Lưu course vào file
-                // Thêm vào danh sách hiển thị
-                addCourseToTableView(course);
+        // Đảm bảo courseDAO đã được khởi tạo và cấu hình đúng
+        // Nếu courseDAO chưa được khởi tạo ở constructor hoặc initializeData,
+        // bạn CẦN phải khởi tạo và cấu hình nó ở đây trước khi truyền đi.
+        // Ví dụ (NẾU CHƯA LÀM Ở CONSTRUCTOR):
 
-                showInfo("Đã tạo lớp học thành công: " + course.getCourseName());
-            }
-        });
+    if (this.courseDAO == null) {
+        StudentDAO studentDAO = new StudentDAO(); // Cần khởi tạo thực tế
+        TeacherDAO teacherDAO = new TeacherDAO(); // Cần khởi tạo thực tế
+        this.courseDAO = new CourseDAO();
+        this.courseDAO.setStudentDAO(studentDAO);
+        this.courseDAO.setTeacherDAO(teacherDAO);
+        return;
+    }
 
+        // Truyền this.courseDAO vào constructor của CreateClassScreenView
+        CreateClassScreenView createClassScreen = new CreateClassScreenView(
+                this.courseDAO, // <<<<<< THAY ĐỔI CHÍNH: TRUYỀN courseDAO VÀO ĐÂY
+                new CreateClassScreenView.CreateClassCallback() {
+                    @Override
+                    public void onCourseCreated(Course successfullySavedCourse) {
+                        // Callback này được gọi SAU KHI CreateClassScreenView đã LƯU thành công course
+                        // Giờ chỉ cần cập nhật UI ở đây
+                        addCourseToTableView(successfullySavedCourse, classes.size() + 1); // Thêm stt nếu cần
+                        showInfo("Đã tạo và lưu lớp học thành công: " + successfullySavedCourse.getCourseName());
+                        // classesTable.refresh(); // Có thể không cần nếu ObservableList tự cập nhật
+                    }
+                }
+        );
         createClassScreen.show();
     }
+
     @Override
     public void refreshView() {
         // Refresh the table data

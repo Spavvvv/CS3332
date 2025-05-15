@@ -15,14 +15,13 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import src.controller.MainController;
 import src.controller.NavigationController;
-import src.model.person.Admin;
-import src.model.person.Parent;
-import src.model.person.Student;
-import src.model.person.Teacher;
 import src.model.person.Person;
 import src.dao.AccountDAO;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.event.EventHandler;
 import java.util.Scanner;
 import java.util.prefs.Preferences;
 
@@ -37,7 +36,6 @@ public class LoginUI {
     private String currentTheme = "light"; // Mặc định là theme sáng
     private NavigationController navigationController;
     private MainController mainController;
-    private final static String FILE_PATH = "D:\\3323\\3323\\UserAccount";
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
@@ -159,7 +157,6 @@ public class LoginUI {
         usernameField.setPromptText("Nhập tên đăng nhập");
         usernameField.setPrefHeight(40);
         usernameField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ddd; -fx-text-fill: #555;");
-
         // Ô password
         Label passLabel = new Label("Mật khẩu:");
         passLabel.setStyle("-fx-text-fill: #555;");
@@ -176,6 +173,13 @@ public class LoginUI {
         // Ghi nhớ đăng nhập
         rememberMeCheck = new CheckBox("Ghi nhớ đăng nhập");
         rememberMeCheck.setStyle("-fx-text-fill: #555;");
+        EventHandler<KeyEvent> enterKeyHandler = event -> {
+            if (event.getCode() == KeyCode.ENTER) {
+                handleLogin();
+            }
+        };
+        usernameField.setOnKeyPressed(enterKeyHandler);
+        passwordField.setOnKeyPressed(enterKeyHandler);
 
         // Nút đăng nhập
         Button loginBtn = new Button("ĐĂNG NHẬP");
@@ -523,51 +527,6 @@ public class LoginUI {
         }
     }
 
-    /**
-     * Tạo đối tượng người dùng dựa trên vai trò
-     * @param roleString Vai trò người dùng
-     * @param userId ID người dùng
-     * @param fullName Tên đầy đủ
-     * @param gender Giới tính
-     * @param phone Số điện thoại
-     * @param dobString Ngày sinh (dạng chuỗi)
-     * @param email Email
-     * @return Đối tượng Person phù hợp với vai trò
-     */
-    private Person createPersonObject(String roleString, String userId, String fullName, String gender,
-                                      String phone, String dobString, String email) {
-        // Xác định vai trò
-        switch (roleString.toLowerCase()) {
-            case "admin":
-                // Tạo đối tượng Admin
-                String accessLevel = "1"; // Cấp độ truy cập mặc định
-                return new Admin(userId, fullName, gender, phone, dobString, email, accessLevel);
-
-            case "giáo viên":
-                // Tạo đối tượng Teacher
-                String teacherId = userId; // Sử dụng userId làm teacherId
-                String position = "Giáo viên"; // Vị trí mặc định
-                return new Teacher(userId, fullName, gender, phone, dobString, email, teacherId, position);
-
-            case "học viên":
-                // Tạo đối tượng Student với Parent rỗng
-                //tao cung them mac dinh o cho nay, may fix sau nhe
-                return new Student(userId, fullName, gender, phone, dobString, email, null, "1");
-
-            case "phụ huynh":
-                // Tạo đối tượng Parent
-                String relationship = ""; // Mặc định mối quan hệ rỗng
-                return new Parent(userId, fullName, gender, phone, dobString, email, relationship);
-
-            default:
-                // Nếu không xác định được vai trò, ném ngoại lệ
-                throw new IllegalArgumentException("Vai trò không xác định: " + roleString);
-        }
-    }
-
-    /**
-     * Chuyển đến màn hình đăng ký
-     */
     private void gotoRegister() {
         primaryStage.close();
         Stage registerStage = new Stage();
