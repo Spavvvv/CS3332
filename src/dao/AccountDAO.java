@@ -291,7 +291,8 @@ public class AccountDAO {
             case "TEACHER":
                 return Optional.of(new Teacher(userId, name, "Không xác định", email, "", "", userId, "Giáo viên"));
             case "STUDENT":
-                return Optional.of(new Student(userId, name, "Không xác định", email, "", "", null));
+                //tao them mac dinh class_id = "1" o thang Student nay, fix sau nhe duong
+                return Optional.of(new Student(userId, name, "Không xác định", email, "", "", null, "1"));
             case "PARENT":
                 return Optional.of(new Parent(userId, name, "Không xác định", email, "", "", ""));
             default:

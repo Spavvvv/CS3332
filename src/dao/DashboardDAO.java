@@ -76,9 +76,9 @@ public class DashboardDAO {
      */
     public List<ClassSession> getTodayClasses() {
         // Adjusted query to select session_id explicitly and match column names used below
-        String query = "SELECT c.session_id, c.course_name, c.teacher_name, c.room, c.class_date, " +
+        String query = "SELECT c.session_id, c.course_name, c.teacher_name, c.room, c.session_date, " +
                 "c.start_time, c.end_time, c.class_id FROM class_sessions c " +
-                "WHERE c.class_date = ?";
+                "WHERE c.session_date = ?";
 
         List<ClassSession> classes = new ArrayList<>();
 
@@ -96,7 +96,7 @@ public class DashboardDAO {
                     String room = rs.getString("room");
 
                     // Check for null dates and times before converting
-                    Date dateDb = rs.getDate("class_date");
+                    Date dateDb = rs.getDate("session_date");
                     LocalDate date = (dateDb != null) ? dateDb.toLocalDate() : null;
 
                     Time startTimeDb = rs.getTime("start_time");

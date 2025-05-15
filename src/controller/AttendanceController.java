@@ -1,3 +1,4 @@
+
 package src.controller;
 
 import src.model.attendance.Attendance;
@@ -9,13 +10,14 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.logging.Level; // Import Level
-import java.util.logging.Logger; // Import Logger
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.UUID; // <<<< IMPORT ADDED HERE
 
 // Import the DaoManager
 import utils.DaoManager;
-// Import the specific DAO classes if you need their types for the instance variables
+// Import the specific DAO classes
 import src.dao.AttendanceDAO;
 import src.dao.ClassSessionDAO;
 import src.dao.StudentDAO;
@@ -23,8 +25,9 @@ import src.dao.StudentDAO;
 /**
  * Controller for managing attendance records and generating absence reports.
  * Handles business logic between views and data access layer.
- * Modified to align with AbsenceRecord model without ImageView and use Attendance table data.
- * Added Logger for error/warning reporting.
+ * batchUpsertAttendance now uses findByStudentAndSession to differentiate
+ * inserts vs updates, and generates UUIDs for new Attendance records
+ * as their attendance_id is VARCHAR(50).
  */
 public class AttendanceController {
 
@@ -147,55 +150,6 @@ public class AttendanceController {
     }
 
     /**
-     * Generate absence records from attendance data.
-     * Filters for absent students and retrieves related student and class information.
-     *
-     * @param attendances List of attendance records
-     * @return List of absence records (without image)
-     * @throws SQLException if database operation fails (delegated to DAOs)
-     */
-    public List<AbsenceRecord> generateAbsenceRecords(List<Attendance> attendances) throws SQLException {
-        List<AbsenceRecord> absenceRecords = new ArrayList<>();
-
-        for (Attendance attendance : attendances) {
-            // Only generate AbsenceRecord for students who were not present
-            if (attendance.isPresent()) {
-                continue;
-            }
-
-            Optional<Student> studentOpt = studentDAO.findById(attendance.getStudentId());
-            Optional<ClassSession> sessionOpt = classSessionDAO.findById(attendance.getSessionId());
-
-            if (studentOpt.isPresent() && sessionOpt.isPresent()) {
-                Student student = studentOpt.get();
-                ClassSession session = sessionOpt.get();
-
-                String absenceStatusString = attendance.hasPermission() ? "Excused" : "Absent";
-
-                String formattedDate = session.getDate() != null ? session.getDate().format(DATE_FORMATTER) : "N/A";
-
-                AbsenceRecord absenceRecord = new AbsenceRecord(
-                        attendance.getId(),
-                        student.getName(),
-                        session.getClassName(),
-                        formattedDate,
-                        absenceStatusString,
-                        attendance.getNote(),
-                        attendance.isCalled(),
-                        attendance.hasPermission()
-                );
-
-                absenceRecords.add(absenceRecord);
-            } else {
-                // Log a warning if student or session data is missing for an attendance record
-                LOGGER.log(Level.WARNING, "Missing student or session data for attendance record ID: " + attendance.getId());
-            }
-        }
-
-        return absenceRecords;
-    }
-
-    /**
      * Get all absent students for a session
      *
      * @param sessionId Session ID
@@ -292,26 +246,123 @@ public class AttendanceController {
     }
 
     /**
-     * Save a batch of attendance records
+     * Save a batch of new attendance records.
+     * Assumes all records in the list are new and have their IDs (e.g., UUIDs) already set.
      *
-     * @param attendances List of attendance records to save
-     * @return Number of records successfully saved
-     * @throws SQLException if database operation fails (delegated to DAO)
+     * @param attendances List of new attendance records to save.
+     * @return Number of records successfully saved.
+     * @throws SQLException if database operation fails (delegated to DAO).
      */
     public int batchSaveAttendance(List<Attendance> attendances) throws SQLException {
+        if (attendances == null || attendances.isEmpty()) {
+            return 0;
+        }
+        // Optional: Add a check here to ensure all attendances have non-null/non-empty IDs
+        // if you want an extra layer of safety before calling the DAO.
+        for (Attendance att : attendances) {
+            if (att.getId() == null || att.getId().trim().isEmpty()) {
+                LOGGER.log(Level.SEVERE, "CRITICAL: Attempting to batchSave an Attendance object without an ID. Student: " + att.getStudentId() + ", Session: " + att.getSessionId());
+                // Depending on desired strictness, you could throw an exception here
+                // or rely on the DAO to handle it (as it seemed to do before).
+                // For now, this log will highlight if it happens.
+            }
+        }
         return attendanceDAO.batchSave(attendances);
     }
 
     /**
-     * Update a batch of attendance records
+     * Update a batch of existing attendance records.
+     * Assumes all records in the list exist in the DB and have their correct IDs.
      *
-     * @param attendances List of attendance records to update
-     * @return Number of records successfully updated
-     * @throws SQLException if database operation fails (delegated to DAO)
+     * @param attendances List of attendance records to update.
+     * @return Number of records successfully updated.
+     * @throws SQLException if database operation fails (delegated to DAO).
      */
     public int batchUpdateAttendance(List<Attendance> attendances) throws SQLException {
+        if (attendances == null || attendances.isEmpty()) {
+            return 0;
+        }
         return attendanceDAO.batchUpdate(attendances);
     }
+
+    /**
+     * Performs a batch upsert (insert or update) of attendance records.
+     * For each provided record, it checks if an attendance entry already exists
+     * for the given student and session using `attendanceDAO.findByStudentAndSession`.
+     * If it exists, the existing record is updated.
+     * If it does not exist, a new record is created with a generated UUID as its `attendance_id`.
+     *
+     * @param recordsToUpsert List of Attendance records (potentially from UI, may or may not have an ID)
+     *                       to be inserted or updated. Each record must have studentId and sessionId.
+     * @return The total number of records successfully inserted or updated.
+     * @throws SQLException if a database error occurs.
+     */
+    public int batchUpsertAttendance(List<Attendance> recordsToUpsert) throws SQLException {
+        if (recordsToUpsert == null || recordsToUpsert.isEmpty()) {
+            LOGGER.log(Level.INFO, "batchUpsertAttendance called with null or empty list.");
+            return 0;
+        }
+
+        List<Attendance> recordsToInsert = new ArrayList<>();
+        List<Attendance> recordsToUpdate = new ArrayList<>();
+
+        for (Attendance uiRecord : recordsToUpsert) {
+            if (uiRecord.getStudentId() == null || uiRecord.getStudentId().trim().isEmpty() ||
+                    uiRecord.getSessionId() == null || uiRecord.getSessionId().trim().isEmpty()) {
+                LOGGER.log(Level.WARNING, "Skipping record in batchUpsertAttendance due to missing studentId or sessionId.");
+                continue; // Skip records that don't have the necessary keys for lookup
+            }
+
+            Optional<Attendance> existingRecordOpt = attendanceDAO.findByStudentAndSession(
+                    uiRecord.getStudentId(), uiRecord.getSessionId());
+
+            if (existingRecordOpt.isPresent()) {
+                // Record EXISTS - this is an UPDATE
+                Attendance dbRecord = existingRecordOpt.get();
+
+                // Update fields of the existing database record (dbRecord) with values from uiRecord
+                dbRecord.setPresent(uiRecord.isPresent());
+                dbRecord.setCalled(uiRecord.isCalled());
+                dbRecord.setHasPermission(uiRecord.hasPermission());
+                dbRecord.setNote(uiRecord.getNote());
+                dbRecord.setStatus(uiRecord.getStatus()); // Assuming Attendance has setStatus
+                // dbRecord.setAbsenceDate(uiRecord.getAbsenceDate()); // If this can change or needs to be set
+                // dbRecord.setCheckInTime(uiRecord.getCheckInTime()); // If this can change
+
+                // Add any other fields from your Attendance model that might be changed from the UI
+                // IMPORTANT: We use dbRecord because it has the correct, existing attendance_id.
+                recordsToUpdate.add(dbRecord);
+                LOGGER.log(Level.FINER, "Record for student {0}, session {1} marked for UPDATE with ID {2}", new Object[]{uiRecord.getStudentId(), uiRecord.getSessionId(), dbRecord.getId()});
+
+            } else {
+                // Record DOES NOT EXIST - this is an INSERT
+                // Generate a new attendance_id (UUID) for this new record because attendance_id is VARCHAR(50)
+                // and must be application-generated.
+                String newId = UUID.randomUUID().toString();
+                uiRecord.setId(newId); // Set the generated ID on the uiRecord
+
+                // uiRecord already contains all the data from the UI (status, notes, etc.)
+                recordsToInsert.add(uiRecord);
+                LOGGER.log(Level.FINER, "Record for student {0}, session {1} marked for INSERT with new ID {2}", new Object[]{uiRecord.getStudentId(), uiRecord.getSessionId(), newId});
+            }
+        }
+
+        int successfulOperations = 0;
+
+        if (!recordsToInsert.isEmpty()) {
+            LOGGER.log(Level.INFO, "Batch inserting {0} new attendance records.", recordsToInsert.size());
+            successfulOperations += batchSaveAttendance(recordsToInsert); // Using existing batchSaveAttendance
+        }
+
+        if (!recordsToUpdate.isEmpty()) {
+            LOGGER.log(Level.INFO, "Batch updating {0} existing attendance records.", recordsToUpdate.size());
+            successfulOperations += batchUpdateAttendance(recordsToUpdate); // Using existing batchUpdateAttendance
+        }
+
+        LOGGER.log(Level.INFO, "Batch upsert completed. Total successful operations: {0}", successfulOperations);
+        return successfulOperations;
+    }
+
 
     /**
      * Get attendance statistics for a student
@@ -356,7 +407,7 @@ public class AttendanceController {
      */
     public List<ClassSession> searchSessions(List<ClassSession> sessions, String keyword) {
         if (sessions == null || keyword == null || keyword.trim().isEmpty()) {
-            return sessions;
+            return sessions; // Return original list if no keyword or sessions
         }
 
         String searchTerm = keyword.toLowerCase().trim();
@@ -387,7 +438,7 @@ public class AttendanceController {
     public int getAbsentCount(String studentId) throws SQLException {
         List<Attendance> attendances = attendanceDAO.findByStudentId(studentId);
         return (int) attendances.stream()
-                .filter(a -> !a.isPresent())
+                .filter(a -> !a.isPresent()) // Assuming isPresent() means attended
                 .count();
     }
 
@@ -399,13 +450,14 @@ public class AttendanceController {
      * @throws SQLException if a database error occurs.
      */
     public void updateAttendanceNote(String id, String newValue) throws SQLException {
-        if (newValue != null) {
-            newValue = newValue.trim();
-        }
         Optional<Attendance> attendanceOpt = attendanceDAO.findById(id);
         if (attendanceOpt.isPresent()) {
             Attendance attendance = attendanceOpt.get();
-            attendance.setNote(newValue);
+            if (newValue != null) {
+                attendance.setNote(newValue.trim());
+            } else {
+                attendance.setNote(null);
+            }
             attendanceDAO.update(attendance);
         }
     }
@@ -418,7 +470,7 @@ public class AttendanceController {
      * @throws SQLException if a database error occurs.
      */
     public void markAttendanceCalled(String id, Boolean newVal) throws SQLException {
-        if (newVal == null) {
+        if (newVal == null) { // Or handle as an error/warning, or decide a default (e.g., false)
             return;
         }
         Optional<Attendance> attendanceOpt = attendanceDAO.findById(id);
@@ -444,3 +496,4 @@ public class AttendanceController {
         return null;
     }
 }
+

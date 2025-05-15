@@ -46,7 +46,7 @@ public class ClassSessionDAO {
      */
     List<ClassSession> internalFindAll(Connection conn) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id FROM class_sessions";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql);
@@ -72,7 +72,7 @@ public class ClassSessionDAO {
      * @throws SQLException if a database access error occurs
      */
     ClassSession internalFindById(Connection conn, String id) throws SQLException {
-        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id FROM class_sessions WHERE session_id = ?";
 
         // Use the passed connection, do NOT close it here
@@ -98,7 +98,7 @@ public class ClassSessionDAO {
      * @throws SQLException if a database access error occurs
      */
     String internalCreate(Connection conn, ClassSession session) throws SQLException {
-        String sql = "INSERT INTO class_sessions (course_name, teacher_name, room, class_date, " +
+        String sql = "INSERT INTO class_sessions (course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -132,7 +132,7 @@ public class ClassSessionDAO {
     boolean internalUpdate(Connection conn, ClassSession session) throws SQLException {
         // Corrected WHERE clause to use session_id instead of id
         String sql = "UPDATE class_sessions SET course_name = ?, teacher_name = ?, room = ?, " +
-                "class_date = ?, start_time = ?, end_time = ?, class_id = ? " +
+                "session_date = ?, start_time = ?, end_time = ?, class_id = ? " +
                 "WHERE session_id = ?"; // Assuming session_id is the primary key column name
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -173,7 +173,7 @@ public class ClassSessionDAO {
     List<ClassSession> internalFindByClassId(Connection conn, String classId) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
         // Assuming class_id in the database is a String/VARCHAR type
-        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id FROM class_sessions WHERE class_id = ?";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -203,9 +203,9 @@ public class ClassSessionDAO {
      */
     List<ClassSession> internalFindByDateRange(Connection conn, LocalDate startDate, LocalDate endDate) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id FROM class_sessions " +
-                "WHERE class_date BETWEEN ? AND ?";
+                "WHERE session_date BETWEEN ? AND ?";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
 
@@ -240,7 +240,7 @@ public class ClassSessionDAO {
         String teacher = rs.getString("teacher_name");
         String room = rs.getString("room");
 
-        Date dateDb = rs.getDate("class_date");
+        Date dateDb = rs.getDate("session_date");
         LocalDate date = null;
         if (dateDb != null) {
             date = dateDb.toLocalDate();
@@ -604,21 +604,21 @@ public class ClassSessionDAO {
         // SQL to find sessions that overlap with the given time range.
         // A session (start_time, end_time) overlaps with range (range_start, range_end) if
         // (start_time < range_end AND end_time > range_start)
-        // Assuming class_date stores the date, and start_time/end_time store the time part within that date.
+        // Assuming session_date stores the date, and start_time/end_time store the time part within that date.
         // Combining date and time for comparison:
-        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id FROM class_sessions " +
-                "WHERE (class_date + start_time) < ? AND (class_date + end_time) > ?"; // This syntax depends on the specific SQL dialect (e.g., PostgreSQL needs specific syntax for adding TIME to DATE, MySQL might use DATETIME or TIMESTAMP columns)
+                "WHERE (session_date + start_time) < ? AND (session_date + end_time) > ?"; // This syntax depends on the specific SQL dialect (e.g., PostgreSQL needs specific syntax for adding TIME to DATE, MySQL might use DATETIME or TIMESTAMP columns)
 
         // A more portable way might be comparing DATE and TIME components separately, or using TIMESTAMP columns.
         // Assuming your database supports adding DATE and TIME for comparison or uses TIMESTAMP columns.
         // If using TIMESTAMP columns for start_time and end_time, the query simplifies.
         // Let's assume the columns 'start_time' and 'end_time' are actually TIMESTAMP types for easier range query.
-        // If they are TIME types and class_date is DATE, you might need vendor-specific functions like `TIMESTAMP(class_date, start_time)`.
+        // If they are TIME types and session_date is DATE, you might need vendor-specific functions like `TIMESTAMP(session_date, start_time)`.
         // Let's use TIMESTAMP comparison assuming the columns support it or adjust the query for your specific DB.
 
         // Let's adjust the SQL query assuming start_time and end_time columns are TIMESTAMP
-        String sqlAdjusted = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+        String sqlAdjusted = "SELECT session_id, course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id FROM class_sessions " +
                 "WHERE start_time < ? AND end_time > ?"; // Assumes start_time and end_time columns are TIMESTAMP
 
@@ -650,7 +650,7 @@ public class ClassSessionDAO {
     List<ClassSession> internalFindByTeacherName(Connection conn, String teacherName) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
         // Assuming teacher_name in the database is a String/VARCHAR type
-        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id FROM class_sessions WHERE teacher_name = ?";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -668,7 +668,7 @@ public class ClassSessionDAO {
 
     /**
      * Finds class sessions for a specific date using an existing connection.
-     * Assumes class_date column exists in class_sessions table.
+     * Assumes session_date column exists in class_sessions table.
      *
      * @param conn the active database connection
      * @param date the date to search for
@@ -677,9 +677,9 @@ public class ClassSessionDAO {
      */
     List<ClassSession> internalFindByDate(Connection conn, LocalDate date) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT session_id, course_name, teacher_name, room, class_date, " +
+        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
                 "start_time, end_time, class_id FROM class_sessions " +
-                "WHERE class_date = ?";
+                "WHERE session_date = ?";
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
 

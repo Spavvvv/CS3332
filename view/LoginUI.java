@@ -551,7 +551,8 @@ public class LoginUI {
 
             case "học viên":
                 // Tạo đối tượng Student với Parent rỗng
-                return new Student(userId, fullName, gender, phone, dobString, email, null);
+                //tao cung them mac dinh o cho nay, may fix sau nhe
+                return new Student(userId, fullName, gender, phone, dobString, email, null, "1");
 
             case "phụ huynh":
                 // Tạo đối tượng Parent
