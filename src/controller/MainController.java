@@ -43,13 +43,12 @@ public class MainController {
     public MainController(LoginUI ui, NavigationController navigationController) {
         this.loginUI = ui;
         this.navigationController = navigationController;
-//initialize();
     }
     public MainController(RegisterUI ui, NavigationController navigationController) {
         this.registerUI = ui;
         this.navigationController = navigationController;
-//initialize();
     }
+
     /**
      Khởi tạo controller và đăng ký các màn hình
      */

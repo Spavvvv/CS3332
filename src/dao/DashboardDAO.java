@@ -158,7 +158,7 @@ public class DashboardDAO {
      * @return The total number of active classes
      */
     public int getTotalClasses() {
-        String query = "SELECT COUNT(*) FROM classes WHERE status = 'active'";
+        String query = "SELECT COUNT(*) FROM classes WHERE status = 'Active'";
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {

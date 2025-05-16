@@ -1,6 +1,6 @@
+
 package view.components;
 
-import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -23,7 +23,7 @@ public class RoomView extends BaseScreenView {
 
     // UI components
     private TextField txtKeyword;
-    private ComboBox<String> cmbStatus;
+    private ComboBox<String> cmbStatusFilter;
     private ComboBox<String> cmbPageSize;
     private TableView<Classroom> tblClassroom;
 
@@ -31,18 +31,22 @@ public class RoomView extends BaseScreenView {
     private ClassroomController controller;
 
     public RoomView() {
-        super("Phòng học", "classrooms");
-        this.controller = new ClassroomController();
+        super("Quản lý Phòng học", "classrooms");
     }
 
     @Override
     public void initializeView() {
+        // Khởi tạo controller nếu chưa có, ví dụ:
+        if (this.controller == null) {
+            this.controller = new ClassroomController();
+        }
+
         // Main layout with padding
         root.setSpacing(10);
         root.setPadding(new Insets(20));
 
         // Screen title
-        Label lblTitle = new Label("Phòng học");
+        Label lblTitle = new Label("Danh sách Phòng học");
         lblTitle.setFont(Font.font("System", FontWeight.BOLD, 24));
         lblTitle.setTextFill(Color.web("#1E88E5"));
 
@@ -54,8 +58,16 @@ public class RoomView extends BaseScreenView {
         // Create table view
         createTableView();
 
+        // Add button (ví dụ)
+        Button btnAddRoom = new Button("Thêm phòng học");
+        btnAddRoom.setStyle("-fx-background-color: #28a745; -fx-text-fill: white;");
+        btnAddRoom.setOnAction(e -> addNewClassroom());
+        HBox bottomControls = new HBox(btnAddRoom);
+        bottomControls.setAlignment(Pos.CENTER_RIGHT);
+        bottomControls.setPadding(new Insets(10, 0, 0, 0));
+
         // Add all to main layout
-        root.getChildren().addAll(lblTitle, searchBar, tblClassroom);
+        root.getChildren().addAll(lblTitle, searchBar, tblClassroom, bottomControls);
         VBox.setVgrow(tblClassroom, Priority.ALWAYS);
 
         // Load data into table
@@ -63,302 +75,347 @@ public class RoomView extends BaseScreenView {
     }
 
     private HBox createSearchBar() {
-        HBox searchBar = new HBox(15);
-        searchBar.setAlignment(Pos.CENTER_LEFT);
+        HBox searchBarLayout = new HBox(15);
+        searchBarLayout.setAlignment(Pos.CENTER_LEFT);
 
         // Keyword field
         Label lblKeyword = new Label("Từ khóa:");
         lblKeyword.setMinWidth(70);
         lblKeyword.setTextFill(Color.BLACK);
         txtKeyword = new TextField();
-        txtKeyword.setPromptText("Từ khóa");
-        txtKeyword.setPrefWidth(350);
+        txtKeyword.setPromptText("Nhập mã, tên phòng...");
+        txtKeyword.setPrefWidth(300);
 
         // Status combobox
-        Label lblStatus = new Label("Trạng thái:");
-        lblStatus.setTextFill(Color.BLACK);
-        cmbStatus = new ComboBox<>();
-        cmbStatus.setPromptText("Chọn");
-        cmbStatus.setItems(FXCollections.observableArrayList("Tất cả", "Sử dụng", "Bảo trì", "Không sử dụng"));
-        cmbStatus.setValue("Tất cả");
-        cmbStatus.setPrefWidth(200);
+        Label lblStatusFilter = new Label("Trạng thái:");
+        lblStatusFilter.setTextFill(Color.BLACK);
+        cmbStatusFilter = new ComboBox<>();
+        cmbStatusFilter.setPromptText("Tất cả trạng thái");
+        cmbStatusFilter.setItems(FXCollections.observableArrayList("Tất cả", "Active", "Inactive", "Maintenance"));
+        cmbStatusFilter.setValue("Tất cả");
+        cmbStatusFilter.setPrefWidth(180);
 
-        // Page size combobox
-        Label lblPageSize = new Label("Cỡ trang:");
+        // Page size combobox (Optional, nếu bạn có phân trang)
+        Label lblPageSize = new Label("Hiện thị:");
         lblPageSize.setTextFill(Color.BLACK);
         cmbPageSize = new ComboBox<>();
-        cmbPageSize.setItems(FXCollections.observableArrayList("10", "20", "50", "100"));
-        cmbPageSize.setValue("20");
-        cmbPageSize.setPrefWidth(120);
+        cmbPageSize.setItems(FXCollections.observableArrayList("10 dòng", "20 dòng", "50 dòng", "100 dòng"));
+        cmbPageSize.setValue("20 dòng");
+        cmbPageSize.setPrefWidth(100);
 
         // Search button with simple search icon
         Button btnSearch = new Button();
-        Text searchIcon = new Text("🔍"); // Unicode magnifying glass
+        Text searchIcon = new Text("🔍");
         searchIcon.setFill(Color.WHITE);
         btnSearch.setGraphic(searchIcon);
-        btnSearch.setStyle("-fx-background-color: #1E88E5; -fx-text-fill: white;");
-        btnSearch.setPrefSize(40, 10);
+        btnSearch.setStyle("-fx-background-color: #007bff; -fx-text-fill: white;");
+        btnSearch.setPrefSize(40, 30);
+        btnSearch.setTooltip(new Tooltip("Tìm kiếm"));
 
         // Add search event
-        btnSearch.setOnAction(e -> performSearch());
-        txtKeyword.setOnAction(e -> performSearch());
-        cmbStatus.setOnAction(e -> performSearch());
+        btnSearch.setOnAction(e -> refreshView());
+        txtKeyword.setOnAction(e -> refreshView());
+        cmbStatusFilter.setOnAction(e -> refreshView());
+        cmbPageSize.setOnAction(e -> refreshView());
 
-        // Add flexible space before search button
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        searchBar.getChildren().addAll(lblKeyword, txtKeyword, lblStatus, cmbStatus, lblPageSize, cmbPageSize, spacer, btnSearch);
-        return searchBar;
+        searchBarLayout.getChildren().addAll(lblKeyword, txtKeyword, lblStatusFilter, cmbStatusFilter, lblPageSize, cmbPageSize, spacer, btnSearch);
+        return searchBarLayout;
     }
 
     private void createTableView() {
         tblClassroom = new TableView<>();
-        tblClassroom.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tblClassroom.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
-        // STT Column
-        TableColumn<Classroom, Integer> colSTT = new TableColumn<>("STT");
+        // Apply default style to the TableView header
+        tblClassroom.setStyle("-fx-table-header-background: #f0f0f0;");
+
+        // Common style for all column headers - make the text black and bold
+        String headerStyle = "-fx-font-weight: bold; -fx-text-fill: black; -fx-alignment: CENTER;";
+
+
+// STT Column
+        TableColumn<Classroom, Integer> colSTT = new TableColumn<>();
+        setBlackHeaderText(colSTT, "STT");
         colSTT.setCellValueFactory(new PropertyValueFactory<>("stt"));
+        colSTT.setPrefWidth(50);
         colSTT.setMaxWidth(70);
-        colSTT.setMinWidth(50);
         colSTT.setSortable(false);
 
-        // Code Column
-        TableColumn<Classroom, String> colMa = new TableColumn<>("Mã");
-        colMa.setCellValueFactory(new PropertyValueFactory<>("ma"));
-        colMa.setMaxWidth(100);
-        colMa.setMinWidth(80);
+// Code Column - Mã phòng
+        TableColumn<Classroom, String> colCode = new TableColumn<>();
+        setBlackHeaderText(colCode, "Mã Phòng");
+        colCode.setCellValueFactory(new PropertyValueFactory<>("code"));
+        colCode.setPrefWidth(100);
+        colCode.setMinWidth(80);
 
-        // Name Column
-        TableColumn<Classroom, String> colTen = new TableColumn<>("Tên");
-        colTen.setCellValueFactory(new PropertyValueFactory<>("ten"));
+// Name Column - Tên phòng
+        TableColumn<Classroom, String> colRoomName = new TableColumn<>();
+        setBlackHeaderText(colRoomName, "Tên Phòng");
+        colRoomName.setCellValueFactory(new PropertyValueFactory<>("roomName"));
+        colRoomName.setPrefWidth(250);
+        colRoomName.setMinWidth(150);
 
-        // Floor Column
-        TableColumn<Classroom, Integer> colTang = new TableColumn<>("Tầng");
-        colTang.setCellValueFactory(new PropertyValueFactory<>("tang"));
-        colTang.setMaxWidth(100);
-        colTang.setMinWidth(80);
+// Floor Column - Tầng
+        TableColumn<Classroom, Integer> colFloor = new TableColumn<>();
+        setBlackHeaderText(colFloor, "Tầng");
+        colFloor.setCellValueFactory(new PropertyValueFactory<>("floor"));
+        colFloor.setPrefWidth(80);
+        colFloor.setMaxWidth(100);
 
-        // Capacity Column
-        TableColumn<Classroom, Integer> colSucChua = new TableColumn<>("Sức chứa");
-        colSucChua.setCellValueFactory(new PropertyValueFactory<>("sucChua"));
-        colSucChua.setMaxWidth(100);
-        colSucChua.setMinWidth(80);
+// Capacity Column - Sức chứa
+        TableColumn<Classroom, Integer> colCapacity = new TableColumn<>();
+        setBlackHeaderText(colCapacity, "Sức chứa");
+        colCapacity.setCellValueFactory(new PropertyValueFactory<>("capacity"));
+        colCapacity.setPrefWidth(100);
+        colCapacity.setMaxWidth(120);
 
-        // Status Column
-        TableColumn<Classroom, String> colTrangThai = new TableColumn<>("Trạng thái");
-        colTrangThai.setCellValueFactory(new PropertyValueFactory<>("trangThai"));
-        colTrangThai.setMaxWidth(150);
-        colTrangThai.setMinWidth(120);
+// Status Column - Trạng thái
+        TableColumn<Classroom, String> colStatus = new TableColumn<>();
+        setBlackHeaderText(colStatus, "Trạng thái");
+        colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
+        colStatus.setPrefWidth(150);
+        colStatus.setMinWidth(120);
 
-        // Set cell factory for status column to display button
-        colTrangThai.setCellFactory(column -> {
-            return new TableCell<>() {
-                final Button button = new Button();
 
-                @Override
-                protected void updateItem(String item, boolean empty) {
-                    super.updateItem(item, empty);
+        // Set cell factory for status column with improved design
+        colStatus.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                    setStyle("");
+                } else {
+                    // Create an HBox to hold the status indicator and text
+                    HBox statusBox = new HBox(8);
+                    statusBox.setAlignment(Pos.CENTER);
 
-                    if (empty || item == null) {
-                        setGraphic(null);
+                    // Create a circle indicator
+                    Circle statusIndicator = new Circle(6);
+
+                    // Create a label for the status text
+                    Label statusLabel = new Label(item);
+                    statusLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
+
+                    // Style based on status
+                    if ("Active".equalsIgnoreCase(item) || "Sử dụng".equalsIgnoreCase(item)) {
+                        statusIndicator.setFill(Color.web("#28a745"));
+                        statusLabel.setTextFill(Color.web("#28a745"));
+                    } else if ("Maintenance".equalsIgnoreCase(item) || "Bảo trì".equalsIgnoreCase(item)) {
+                        statusIndicator.setFill(Color.web("#ffc107"));
+                        statusLabel.setTextFill(Color.web("#856404"));
+                    } else if ("Inactive".equalsIgnoreCase(item) || "Không sử dụng".equalsIgnoreCase(item)) {
+                        statusIndicator.setFill(Color.web("#dc3545"));
+                        statusLabel.setTextFill(Color.web("#dc3545"));
                     } else {
-                        button.setText(item);
-
-                        // Style based on status
-                        switch (item) {
-                            case "Sử dụng":
-                                button.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-background-radius: 20;");
-                                break;
-                            case "Bảo trì":
-                                button.setStyle("-fx-background-color: #FFC107; -fx-text-fill: white; -fx-background-radius: 20;");
-                                break;
-                            case "Không sử dụng":
-                                button.setStyle("-fx-background-color: #F44336; -fx-text-fill: white; -fx-background-radius: 20;");
-                                break;
-                            default:
-                                button.setStyle("-fx-background-color: #9E9E9E; -fx-text-fill: white; -fx-background-radius: 20;");
-                        }
-
-                        button.setPrefWidth(100);
-                        setGraphic(button);
+                        statusIndicator.setFill(Color.web("#6c757d"));
+                        statusLabel.setTextFill(Color.web("#6c757d"));
                     }
+
+                    // Add components to the HBox
+                    statusBox.getChildren().addAll(statusIndicator, statusLabel);
+
+                    // Border and background
+                    statusBox.setPadding(new Insets(3, 10, 3, 10));
+                    statusBox.setStyle("-fx-background-color: #f8f9fa; -fx-background-radius: 15px; -fx-border-radius: 15px; -fx-border-color: #dee2e6;");
+
+                    setGraphic(statusBox);
+                    setAlignment(Pos.CENTER);
                 }
-            };
+            }
         });
 
         // Action Column for details and edit
-        TableColumn<Classroom, Void> colActions = new TableColumn<>("Thao tác");
-        colActions.setCellFactory(column -> {
-            return new TableCell<>() {
-                final Button btnView = new Button();
-                final Button btnEdit = new Button();
-                final HBox hbox = new HBox(10);
+        TableColumn<Classroom, Void> colActions = new TableColumn<>();
+        setBlackHeaderText(colActions,"Thao tác");
+        colActions.setCellFactory(column -> new TableCell<>() {
+            final Button btnView = new Button();
+            final Button btnEdit = new Button("🔨");
+            final Button btnDelete = new Button("❌");
+            final HBox hbox = new HBox(10);
 
-                {
-                    // Details button with eye icon
-                    HBox eyeIcon = createEyeIcon();
-                    btnView.setGraphic(eyeIcon);
-                    btnView.setStyle("-fx-background-color: transparent;");
-                    btnView.setTooltip(new Tooltip("Xem chi tiết"));
+            {
+                // View button with eye icon
+                Text eyeIcon = new Text("👁");
+                btnView.setGraphic(eyeIcon);
+                btnView.setStyle("-fx-background-color: transparent; -fx-padding: 5;");
+                btnView.setTooltip(new Tooltip("Xem chi tiết"));
 
-                    // Edit button with pencil icon
-                    Text editIcon = new Text("✏️"); // Unicode pencil
-                    btnEdit.setGraphic(editIcon);
-                    btnEdit.setStyle("-fx-background-color: transparent;");
-                    btnEdit.setTooltip(new Tooltip("Sửa"));
+                // Edit button
+                btnEdit.setStyle("-fx-background-color: transparent; -fx-padding: 5; -fx-text-fill: #007bff;");
+                btnEdit.setTooltip(new Tooltip("Chỉnh sửa"));
 
-                    // Add actions
-                    btnView.setOnAction(event -> {
-                        Classroom data = getTableView().getItems().get(getIndex());
-                        showDetails(data);
-                    });
+                // Delete button
+                btnDelete.setStyle("-fx-background-color: transparent; -fx-padding: 5; -fx-text-fill: #dc3545;");
+                btnDelete.setTooltip(new Tooltip("Xóa phòng"));
 
-                    btnEdit.setOnAction(event -> {
-                        Classroom data = getTableView().getItems().get(getIndex());
-                        editClassroom(data);
-                    });
+                btnView.setOnAction(event -> {
+                    Classroom data = getTableView().getItems().get(getIndex());
+                    showDetails(data);
+                });
 
-                    hbox.setAlignment(Pos.CENTER);
-                    hbox.getChildren().addAll(btnView, btnEdit);
-                }
+                btnEdit.setOnAction(event -> {
+                    Classroom data = getTableView().getItems().get(getIndex());
+                    editClassroom(data);
+                });
 
-                @Override
-                protected void updateItem(Void item, boolean empty) {
-                    super.updateItem(item, empty);
-                    setGraphic(empty ? null : hbox);
-                }
-            };
+                btnDelete.setOnAction(event -> {
+                    Classroom data = getTableView().getItems().get(getIndex());
+                    deleteClassroom(data);
+                });
+
+                hbox.setAlignment(Pos.CENTER);
+                hbox.getChildren().addAll(btnView, btnEdit, btnDelete);
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty ? null : hbox);
+            }
         });
-        colActions.setMaxWidth(120);
-        colActions.setMinWidth(100);
+        colActions.setPrefWidth(120);
+        colActions.setMaxWidth(150);
         colActions.setSortable(false);
+        colActions.setStyle(headerStyle);
 
-        // Add columns to table
-        tblClassroom.getColumns().addAll(colSTT, colMa, colTen, colTang, colSucChua, colTrangThai, colActions);
+        tblClassroom.getColumns().addAll(colSTT, colCode, colRoomName, colFloor, colCapacity, colStatus, colActions);
+        tblClassroom.setPlaceholder(new Label("Không có dữ liệu phòng học."));
     }
 
-    /**
-     * Create a simple eye icon
-     */
-    private HBox createEyeIcon() {
-        HBox container = new HBox();
-        container.setAlignment(Pos.CENTER);
-
-        // Create outer circle
-        Circle outerCircle = new Circle(9, Color.web("#2E7D32"));
-        outerCircle.setStroke(Color.web("#2E7D32"));
-        outerCircle.setStrokeWidth(1.5);
-        outerCircle.setFill(Color.TRANSPARENT);
-
-        // Create inner circle (pupil)
-        Circle innerCircle = new Circle(3, Color.web("#2E7D32"));
-
-        // Stack shapes
-        container.getChildren().addAll(outerCircle, innerCircle);
-
-        return container;
-    }
-
-    private void performSearch() {
-        String keyword = txtKeyword.getText().trim();
-        String status = cmbStatus.getValue();
-
-        // Use controller to filter classrooms
-        controller.filterClassrooms(keyword, status);
-
-        // Refresh view to show filtered data
-        refreshView();
+    private void addNewClassroom() {
+        editClassroom(null);
     }
 
     private void showDetails(Classroom classroom) {
+        if (classroom == null) return;
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Chi tiết phòng học");
-        alert.setHeaderText("Thông tin phòng học: " + classroom.getTen());
+        alert.setHeaderText("Thông tin phòng học: " + classroom.getRoomName());
 
-        // Create formatted content
         StringBuilder content = new StringBuilder();
-        content.append("Mã: ").append(classroom.getMa()).append("\n");
-        content.append("Tên: ").append(classroom.getTen()).append("\n");
-        content.append("Tầng: ").append(classroom.getTang()).append("\n");
-        content.append("Sức chứa: ").append(classroom.getSucChua()).append(" người\n");
-        content.append("Trạng thái: ").append(classroom.getTrangThai());
+        content.append("Mã phòng: ").append(classroom.getCode()).append("\n");
+        content.append("Tên phòng: ").append(classroom.getRoomName()).append("\n");
+        content.append("Tầng: ").append(classroom.getFloor()).append("\n");
+        content.append("Sức chứa: ").append(classroom.getCapacity()).append(" người\n");
+        content.append("Trạng thái: ").append(classroom.getStatus());
 
         alert.setContentText(content.toString());
+        alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
         alert.showAndWait();
     }
 
     private void editClassroom(Classroom classroom) {
-        // Create dialog for editing
+        boolean isEditMode = classroom != null;
         Dialog<Classroom> dialog = new Dialog<>();
-        dialog.setTitle("Chỉnh sửa phòng học");
-        dialog.setHeaderText("Chỉnh sửa thông tin phòng " + classroom.getTen());
+        dialog.setTitle(isEditMode ? "Chỉnh sửa phòng học" : "Thêm phòng học mới");
+        dialog.setHeaderText(isEditMode ? "Chỉnh sửa thông tin phòng: " + classroom.getRoomName() : "Nhập thông tin phòng học mới");
 
-        // Set buttons
         ButtonType saveButtonType = new ButtonType("Lưu", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
 
-        // Create form grid
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
         grid.setPadding(new Insets(20, 150, 10, 10));
 
-        // Create form fields with existing data
-        TextField txtMa = new TextField(classroom.getMa());
-        TextField txtTen = new TextField(classroom.getTen());
-        Spinner<Integer> spnTang = new Spinner<>(1, 20, classroom.getTang());
-        Spinner<Integer> spnSucChua = new Spinner<>(10, 500, classroom.getSucChua());
-        ComboBox<String> cmbTrangThai = new ComboBox<>();
-        cmbTrangThai.getItems().addAll("Sử dụng", "Bảo trì", "Không sử dụng");
-        cmbTrangThai.setValue(classroom.getTrangThai());
+        TextField txtCode = new TextField(isEditMode ? classroom.getCode() : "");
+        txtCode.setPromptText("Ví dụ: P101");
+        TextField txtRoomName = new TextField(isEditMode ? classroom.getRoomName() : "");
+        txtRoomName.setPromptText("Ví dụ: Phòng học lý thuyết 1");
+        Spinner<Integer> spnFloor = new Spinner<>(1, 20, isEditMode ? classroom.getFloor() : 1);
+        Spinner<Integer> spnCapacity = new Spinner<>(10, 500, isEditMode ? classroom.getCapacity() : 30, 5);
+        ComboBox<String> cmbStatusEditor = new ComboBox<>();
+        cmbStatusEditor.setItems(FXCollections.observableArrayList("Active", "Inactive", "Maintenance"));
+        if (isEditMode) {
+            cmbStatusEditor.setValue(classroom.getStatus());
+        } else {
+            cmbStatusEditor.setValue("Active");
+        }
 
-        // Add fields to grid
-        grid.add(new Label("Mã:"), 0, 0);
-        grid.add(txtMa, 1, 0);
-        grid.add(new Label("Tên:"), 0, 1);
-        grid.add(txtTen, 1, 1);
-        grid.add(new Label("Tầng:"), 0, 2);
-        grid.add(spnTang, 1, 2);
-        grid.add(new Label("Sức chứa:"), 0, 3);
-        grid.add(spnSucChua, 1, 3);
-        grid.add(new Label("Trạng thái:"), 0, 4);
-        grid.add(cmbTrangThai, 1, 4);
+        grid.add(new Label("Mã phòng (*):"), 0, 0); grid.add(txtCode, 1, 0);
+        grid.add(new Label("Tên phòng (*):"), 0, 1); grid.add(txtRoomName, 1, 1);
+        grid.add(new Label("Tầng:"), 0, 2); grid.add(spnFloor, 1, 2);
+        grid.add(new Label("Sức chứa:"), 0, 3); grid.add(spnCapacity, 1, 3);
+        grid.add(new Label("Trạng thái:"), 0, 4); grid.add(cmbStatusEditor, 1, 4);
 
         dialog.getDialogPane().setContent(grid);
+        txtCode.requestFocus();
 
-        // Request focus on the first field
-        txtMa.requestFocus();
-
-        // Convert the result
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == saveButtonType) {
-                // Update classroom properties
-                classroom.setMa(txtMa.getText());
-                classroom.setTen(txtTen.getText());
-                classroom.setTang(spnTang.getValue());
-                classroom.setSucChua(spnSucChua.getValue());
-                classroom.setTrangThai(cmbTrangThai.getValue());
-                return classroom;
+                if (txtCode.getText().trim().isEmpty() || txtRoomName.getText().trim().isEmpty()) {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi nhập liệu", "Mã phòng và Tên phòng không được để trống.", null);
+                    return null;
+                }
+
+                // Create or update the classroom object
+                Classroom result;
+                if (isEditMode) {
+                    result = classroom; // Use existing object to keep ID
+                } else {
+                    result = new Classroom(); // Create new
+                }
+
+                result.setCode(txtCode.getText().trim());
+                result.setRoomName(txtRoomName.getText().trim());
+                result.setFloor(spnFloor.getValue());
+                result.setCapacity(spnCapacity.getValue());
+                result.setStatus(cmbStatusEditor.getValue());
+
+                return result;
             }
             return null;
         });
 
-        // Show dialog and process result
-        dialog.showAndWait().ifPresent(updatedClassroom -> {
-            // Save to database using controller
-            Classroom savedClassroom = controller.saveClassroom(updatedClassroom);
-            if (savedClassroom != null) {
-                // Success
-                refreshView();
-                showAlert(Alert.AlertType.INFORMATION, "Thành công",
-                        "Cập nhật phòng học thành công",
-                        "Thông tin phòng học đã được cập nhật.");
+        dialog.showAndWait().ifPresent(newClassroom -> {
+            boolean success;
+            if (isEditMode) {
+                success = controller.saveClassroom(newClassroom);
+                if (success) {
+                    refreshView();
+                    showAlert(Alert.AlertType.INFORMATION, "Thành công", "Cập nhật phòng học thành công.", null);
+                } else {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", "Không thể cập nhật phòng học.", "Có thể mã phòng đã tồn tại hoặc có lỗi xảy ra.");
+                }
             } else {
-                // Error
-                showAlert(Alert.AlertType.ERROR, "Lỗi",
-                        "Không thể cập nhật phòng học",
-                        "Có lỗi xảy ra khi lưu thông tin phòng học.");
+                success = controller.saveClassroom(newClassroom);
+                if (success) {
+                    refreshView();
+                    showAlert(Alert.AlertType.INFORMATION, "Thành công", "Thêm phòng học mới thành công.", null);
+                } else {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", "Không thể thêm phòng học mới.", "Có thể mã phòng đã tồn tại hoặc có lỗi xảy ra.");
+                }
+            }
+        });
+    }
+
+    private void deleteClassroom(Classroom classroom) {
+        if (classroom == null) return;
+
+        Alert confirmationDialog = new Alert(Alert.AlertType.CONFIRMATION);
+        confirmationDialog.setTitle("Xác nhận xóa");
+        confirmationDialog.setHeaderText("Xóa phòng học " + classroom.getRoomName());
+        confirmationDialog.setContentText("Bạn có chắc chắn muốn xóa phòng học này không?");
+
+        // Customize buttons
+        ButtonType btnYes = new ButtonType("Xóa", ButtonBar.ButtonData.YES);
+        ButtonType btnNo = new ButtonType("Hủy bỏ", ButtonBar.ButtonData.NO);
+        confirmationDialog.getButtonTypes().setAll(btnYes, btnNo);
+
+        confirmationDialog.showAndWait().ifPresent(type -> {
+            if (type == btnYes) {
+                boolean success = controller.deleteClassroom(classroom.getRoomId());
+                if (success) {
+                    refreshView();
+                    showAlert(Alert.AlertType.INFORMATION, "Thành công", "Xóa phòng học thành công.", null);
+                } else {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", "Không thể xóa phòng học.", "Phòng học có thể đang được sử dụng hoặc có lỗi xảy ra.");
+                }
             }
         });
     }
@@ -367,19 +424,40 @@ public class RoomView extends BaseScreenView {
         Alert alert = new Alert(type);
         alert.setTitle(title);
         alert.setHeaderText(header);
-        alert.setContentText(content);
+        if (content != null && !content.isEmpty()) {
+            alert.setContentText(content);
+        }
+        alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
         alert.showAndWait();
     }
 
     @Override
     public void refreshView() {
-        // Set items in table view from controller's filtered list
-        tblClassroom.setItems(controller.getFilteredClassrooms());
+        // Lấy các giá trị từ filter
+        String keyword = txtKeyword.getText().trim();
+        String statusFilter = cmbStatusFilter.getValue();
+        if ("Tất cả".equals(statusFilter)) {
+            statusFilter = null;
+        }
+
+        tblClassroom.setItems(controller.getFilteredClassrooms(keyword, statusFilter));
+        tblClassroom.refresh();
     }
 
     @Override
     public boolean requiresAuthentication() {
-        // Require authentication to access this screen
         return true;
     }
+
+    // Method to set black header text
+    private void setBlackHeaderText(TableColumn<Classroom, ?> column, String text) {
+        Label label = new Label(text);
+        label.setTextFill(Color.BLACK);
+        label.setFont(Font.font("System", FontWeight.BOLD, 12));
+        label.setAlignment(Pos.CENTER);
+        label.setMaxWidth(Double.MAX_VALUE);
+        column.setGraphic(label);
+    }
+
 }
+

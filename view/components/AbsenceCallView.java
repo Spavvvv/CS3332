@@ -286,7 +286,7 @@ public class AbsenceCallView extends BaseScreenView {
 
         if (navController != null) {
             returnButton.setOnAction(e -> navController.goBack());
-            homeworkButton.setOnAction(e -> navController.navigateTo("homework-view"));
+            homeworkButton.setOnAction(e -> navController.navigateTo("classDetails"));
         } else {
             LOGGER.warning("AbsenceCallView: NavigationController from BaseScreenView is null. Navigation buttons will be disabled.");
             if (returnButton != null) returnButton.setDisable(true);

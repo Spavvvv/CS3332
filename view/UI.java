@@ -186,8 +186,9 @@ public class UI {
         });
 
         // Tiêu đề trang
-        pageTitleLabel = new Label("Tổng quan");
-        pageTitleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        pageTitleLabel = new Label();
+        pageTitleLabel.setText("Tổng quan");
+        pageTitleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: black;");
 
         // Breadcrumb
         HBox breadcrumb = new HBox(5);
@@ -201,7 +202,7 @@ public class UI {
             homeIcon.setFitWidth(16);
             homeButton.setGraphic(homeIcon);
         } catch (Exception e) {
-            homeButton.setText("🏠");
+            homeButton.setText("🏠>");
             homeButton.setStyle("-fx-background-color: transparent;");
         }
 
@@ -211,7 +212,8 @@ public class UI {
             }
         });
 
-        breadcrumbPathLabel = new Label("Tổng quan");
+        breadcrumbPathLabel = new Label();
+        breadcrumbPathLabel.setText("Tổng quan");
         breadcrumbPathLabel.setStyle("-fx-text-fill: #757575;");
 
         breadcrumb.getChildren().addAll(homeButton, breadcrumbPathLabel);
@@ -423,7 +425,7 @@ public class UI {
                 case "training": emoji = "📚"; break;
                 case "students": emoji = "👥"; break;
                 case "reports": emoji = "📊"; break;
-                case "management": emoji = "⚙️"; break;
+                case "management": emoji = "⚙"; break;
                 default: emoji = "•";
             }
             Label iconLabel = new Label(emoji);
@@ -565,6 +567,8 @@ public class UI {
         button.setOnAction(e -> {
             if (navigationController != null) {
                 navigationController.navigateTo(route);
+                pageTitleLabel.setText(navigationController.getCurrentView().getTitle());
+                breadcrumbPathLabel.setText(navigationController.getCurrentView().getTitle());
             }
         });
 

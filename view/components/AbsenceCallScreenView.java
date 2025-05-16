@@ -119,7 +119,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         // backButton button
-        backButton = new Button("← Quay lại");
+        backButton = new Button("Quay lại");
         backButton.setStyle(
                 "-fx-background-color: " + PRIMARY_COLOR + ";" +
                         "-fx-text-fill: white;" +

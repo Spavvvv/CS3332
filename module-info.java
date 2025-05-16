@@ -23,4 +23,5 @@ module CS3323 {
     opens src.model.teaching.monthly to javafx.base;
     opens src.model.teaching.quarterly to javafx.base;
     opens src.model.teaching.yearly to javafx.base;
+    opens src.model.report to javafx.base;
 }
