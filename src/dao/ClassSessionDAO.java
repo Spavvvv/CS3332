@@ -1,697 +1,704 @@
+
 package src.dao;
 
 import src.model.ClassSession;
+import src.model.system.course.Course;
+import src.model.classroom.Classroom;
+import src.model.person.Teacher;
+
 import utils.DatabaseConnection;
 
 import java.sql.*;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- * Data Access Object for ClassSession entity
- * Modified to use String IDs for session and class, and adjust public API.
+ * Data Access Object for managing ClassSession entities in the database.
+ * This class handles CRUD operations and more specialized queries for class sessions.
+ *
+ * Key functionality:
+ * 1. Basic CRUD operations for ClassSession objects
+ * 2. Batch generation of sessions for courses based on schedule parameters
+ * 3. Finding sessions by various criteria (date, time range, teacher, etc.)
+ * 4. Transaction management for session operations
  */
 public class ClassSessionDAO {
 
-    // Removed the DatabaseConnection dbConnector member as it's obtained per operation
+    private static final Logger LOGGER = Logger.getLogger(ClassSessionDAO.class.getName());
 
-    // Dependencies - must be set externally by a DaoManager if needed
-    // private CourseDAO courseDAO; // Example dependency
-
-    /**
-     * Constructor. Dependencies are not initialized here; they must be set externally.
-     */
     public ClassSessionDAO() {
-        // Dependencies will be set by DaoManager via setters if ClassSessionDAO had dependencies
-    }
-
-    // Example setter for a dependency, if ClassSessionDAO needed CourseDAO
-    /*
-    public void setCourseDAO(CourseDAO courseDAO) {
-        this.courseDAO = courseDAO;
-    }
-     */
-
-
-    /**
-     * Retrieves all class sessions from the database using an existing connection.
-     *
-     * @param conn the active database connection
-     * @return List of ClassSession objects
-     * @throws SQLException if a database access error occurs
-     */
-    List<ClassSession> internalFindAll(Connection conn) throws SQLException {
-        List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id FROM class_sessions";
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            while (rs.next()) {
-                // Pass the connection down to mapResultSetToClassSession
-                ClassSession session = mapResultSetToClassSession(conn, rs);
-                sessions.add(session);
-            }
-        } // Statement and ResultSet closed here
-
-        return sessions;
+        // Constructor
     }
 
     /**
-     * Retrieves a class session by its ID using an existing connection.
-     * This is a helper for scenarios where a connection is already active (e.g., within a loop).
+     * Maps a database result set row to a ClassSession object.
      *
-     * @param conn the active database connection
-     * @param id the ID of the class session (assuming String/UUID)
-     * @return the ClassSession object, or null if not found
-     * @throws SQLException if a database access error occurs
+     * @param rs ResultSet positioned at the row to map
+     * @return A populated ClassSession object
+     * @throws SQLException If there's an error accessing the ResultSet
      */
-    ClassSession internalFindById(Connection conn, String id) throws SQLException {
-        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id FROM class_sessions WHERE session_id = ?";
-
-        // Use the passed connection, do NOT close it here
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, id);
-
-            try (ResultSet rs = stmt.executeQuery()) { // ResultSet is managed by try-with-resources
-                if (rs.next()) {
-                    // Pass the connection down to mapResultSetToClassSession
-                    return mapResultSetToClassSession(conn, rs);
-                }
-            } // ResultSet and Statement closed here
-        }
-        return null;
-    }
-
-    /**
-     * Creates a new class session in the database using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param session the ClassSession object to create
-     * @return the generated ID of the new class session
-     * @throws SQLException if a database access error occurs
-     */
-    String internalCreate(Connection conn, ClassSession session) throws SQLException {
-        String sql = "INSERT INTO class_sessions (course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
-            prepareStatementFromClassSession(stmt, session);
-            stmt.executeUpdate();
-
-            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
-                if (generatedKeys.next()) {
-                    // Assuming the generated key is the session_id (which is a String)
-                    String generatedId = generatedKeys.getString(1);
-                    session.setId(generatedId); // Set the generated ID back to the object
-                    return generatedId;
-                } else {
-                    // Depending on your DB/schema, you might need a different way to get the ID
-                    // if it's not auto-generated and returned by getGeneratedKeys.
-                    throw new SQLException("Creating class session failed, no ID obtained.");
-                }
-            }
-        } // Statement closed here
-    }
-
-    /**
-     * Updates an existing class session in the database using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param session the ClassSession object to update
-     * @return true if the update was successful, false otherwise
-     * @throws SQLException if a database access error occurs
-     */
-    boolean internalUpdate(Connection conn, ClassSession session) throws SQLException {
-        // Corrected WHERE clause to use session_id instead of id
-        String sql = "UPDATE class_sessions SET course_name = ?, teacher_name = ?, room = ?, " +
-                "session_date = ?, start_time = ?, end_time = ?, class_id = ? " +
-                "WHERE session_id = ?"; // Assuming session_id is the primary key column name
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            prepareStatementFromClassSession(stmt, session);
-            stmt.setString(8, session.getId()); // Set the session_id for the WHERE clause
-
-            return stmt.executeUpdate() > 0;
-        } // Statement closed here
-    }
-
-    /**
-     * Deletes a class session from the database using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param id the ID of the class session to delete (assuming String/UUID)
-     * @return true if the deletion was successful, false otherwise
-     * @throws SQLException if a database access error occurs
-     */
-    boolean internalDelete(Connection conn, String id) throws SQLException {
-        // Corrected WHERE clause to use session_id instead of id
-        String sql = "DELETE FROM class_sessions WHERE session_id = ?"; // Assuming session_id is the primary key column name
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, id);
-            return stmt.executeUpdate() > 0;
-        } // Statement closed here
-    }
-
-    /**
-     * Retrieves all class sessions for a specific class using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param classId the ID of the class (assuming String/UUID)
-     * @return List of ClassSession objects
-     * @throws SQLException if a database access error occurs
-     */
-    List<ClassSession> internalFindByClassId(Connection conn, String classId) throws SQLException {
-        List<ClassSession> sessions = new ArrayList<>();
-        // Assuming class_id in the database is a String/VARCHAR type
-        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id FROM class_sessions WHERE class_id = ?";
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, classId); // Set as String
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    // Pass the connection down
-                    ClassSession session = mapResultSetToClassSession(conn, rs);
-                    sessions.add(session);
-                }
-            } // ResultSet and Statement closed here
-        } // Statement closed here
-
-        return sessions;
-    }
-
-    /**
-     * Finds class sessions within a date range using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param startDate the start date of the range
-     * @param endDate the end date of the range
-     * @return List of ClassSession objects within the date range
-     * @throws SQLException if a database access error occurs
-     */
-    List<ClassSession> internalFindByDateRange(Connection conn, LocalDate startDate, LocalDate endDate) throws SQLException {
-        List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id FROM class_sessions " +
-                "WHERE session_date BETWEEN ? AND ?";
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setDate(1, Date.valueOf(startDate));
-            stmt.setDate(2, Date.valueOf(endDate));
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    // Pass the connection down
-                    ClassSession session = mapResultSetToClassSession(conn, rs);
-                    sessions.add(session);
-                }
-            } // ResultSet and Statement closed here
-        } // Statement closed here
-
-        return sessions;
-    }
-
-
-    /**
-     * Maps a ResultSet to a ClassSession object.
-     * Accepts the active connection to allow loading related entities without closing resources.
-     *
-     * @param conn the active database connection
-     * @param rs the ResultSet to map
-     * @return the ClassSession object
-     * @throws SQLException if a database access error occurs
-     */
-    private ClassSession mapResultSetToClassSession(Connection conn, ResultSet rs) throws SQLException {
-        String id = rs.getString("session_id"); // Using "session_id" as the primary ID
-        String courseName = rs.getString("course_name");
-        String teacher = rs.getString("teacher_name");
-        String room = rs.getString("room");
-
-        Date dateDb = rs.getDate("session_date");
-        LocalDate date = null;
-        if (dateDb != null) {
-            date = dateDb.toLocalDate();
-        }
-
-        Time startTimeDb = rs.getTime("start_time");
-        Time endTimeDb = rs.getTime("end_time");
-
-        LocalTime startTime = null;
-        LocalTime endTime = null;
-
-        if (startTimeDb != null) {
-            startTime = startTimeDb.toLocalTime();
-        }
-
-        if (endTimeDb != null) {
-            endTime = endTimeDb.toLocalTime();
-        }
-
-        String classId = rs.getString("class_id"); // Assuming this is the ID linking to the Class entity (as String)
-
-        // Create a new ClassSession with the base data
+    private ClassSession mapResultSetToClassSession(ResultSet rs) throws SQLException {
         ClassSession session = new ClassSession();
-        session.setId(id); // Setting the session_id as the ID
-        session.setCourseName(courseName);
-        session.setTeacher(teacher);
-        session.setRoom(room);
-        session.setDate(date);
-        session.setClassId(classId); // Setting the class ID string
+        session.setId(rs.getString("session_id"));
+        session.setCourseId(rs.getString("course_id"));
+        session.setClassId(rs.getString("class_id"));
+        session.setCourseName(rs.getString("course_name")); // Denormalized
 
-        // Set the start and end times, which will automatically update the timeSlot
-        if (startTime != null) {
-            session.setStartTime(startTime);
+        // Handle timestamps properly, converting to LocalDateTime
+        Timestamp dbStartTime = rs.getTimestamp("start_time");
+        if (dbStartTime != null) {
+            session.setStartTime(dbStartTime.toLocalDateTime());
         }
 
-        if (endTime != null) {
-            session.setEndTime(endTime);
+        Timestamp dbEndTime = rs.getTimestamp("end_time");
+        if (dbEndTime != null) {
+            session.setEndTime(dbEndTime.toLocalDateTime());
         }
+        // Model's setStartTime/setEndTime also updates sessionDate and timeSlot
 
-        // If ClassSession had relationships to other entities that needed fetching
-        // using other DAOs, you would call those DAOs here, passing the 'conn'
-        // and potentially the injected dependency, e.g.:
-        // Class relatedClass = classDAO.internalFindById(conn, classId).orElse(null);
-        // session.setRelatedClass(relatedClass);
+        session.setRoom(rs.getString("room"));         // Denormalized room name
+        session.setTeacher(rs.getString("teacher_name"));   // Denormalized teacher name
+        session.setSessionNumber(rs.getInt("session_number"));
 
         return session;
     }
 
     /**
-     * Prepares a statement with values from a ClassSession object
-     * @param stmt the PreparedStatement to prepare
-     * @param session the ClassSession providing the values
-     * @throws SQLException if a database access error occurs
+     * Prepares a SQL statement with values from a ClassSession object.
+     *
+     * @param stmt The prepared statement to populate with values
+     * @param session The ClassSession object containing the values
+     * @param includeIdInValues Whether to include the ID as a parameter (for INSERT vs UPDATE)
+     * @throws SQLException If there's an error setting statement parameters
      */
-    private void prepareStatementFromClassSession(PreparedStatement stmt, ClassSession session) throws SQLException {
-        stmt.setString(1, session.getCourseName());
-        stmt.setString(2, session.getTeacher());
-        stmt.setString(3, session.getRoom());
+    private void prepareStatementFromClassSession(PreparedStatement stmt, ClassSession session, boolean includeIdInValues) throws SQLException {
+        int paramIndex = 1;
 
-        if (session.getDate() != null) {
-            stmt.setDate(4, Date.valueOf(session.getDate()));
-        } else {
-            stmt.setNull(4, Types.DATE);
+        if (includeIdInValues) {
+            stmt.setString(paramIndex++, session.getId());
         }
+        stmt.setString(paramIndex++, session.getCourseId());
+        stmt.setString(paramIndex++, session.getClassId());
+        stmt.setString(paramIndex++, session.getCourseName()); // Denormalized
 
         if (session.getStartTime() != null) {
-            stmt.setTime(5, Time.valueOf(session.getStartTime()));
+            stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getStartTime()));
         } else {
-            stmt.setNull(5, Types.TIME);
+            stmt.setNull(paramIndex++, Types.TIMESTAMP);
         }
 
         if (session.getEndTime() != null) {
-            stmt.setTime(6, Time.valueOf(session.getEndTime()));
+            stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getEndTime()));
         } else {
-            stmt.setNull(6, Types.TIME);
+            stmt.setNull(paramIndex++, Types.TIMESTAMP);
         }
 
-        stmt.setString(7, session.getClassId()); // Assuming class_id is String
+        stmt.setString(paramIndex++, session.getRoom());     // Stores room_name
+        stmt.setString(paramIndex++, session.getTeacher());  // Stores teacher_name
+        stmt.setInt(paramIndex++, session.getSessionNumber());
     }
 
+    /**
+     * Creates a new class session record in the database.
+     *
+     * @param conn Active database connection
+     * @param session The ClassSession to create
+     * @return true if creation was successful, false otherwise
+     * @throws SQLException If there's a database error
+     */
+    boolean internalCreate(Connection conn, ClassSession session) throws SQLException {
+        String sql = "INSERT INTO class_sessions (session_id, course_id, class_id, course_name, " +
+                "start_time, end_time, room, teacher_name, " +
+                "session_number) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"; // 9 placeholders for values, not 12 as in the original comment
 
-    // --- Public Wrapper Methods ---
-    // These methods manage their own connection and handle exceptions.
-    // They delegate the core database logic to the internal methods.
+        if (session.getId() == null || session.getId().trim().isEmpty()) {
+            // Generate a fallback ID if one wasn't provided
+            session.setId("SESS_FALLBACK_" + UUID.randomUUID().toString());
+            LOGGER.log(Level.INFO, "internalCreate generated fallback session ID: {0} for course {1}",
+                    new Object[]{session.getId(), session.getCourseName()});
+        }
 
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            prepareStatementFromClassSession(stmt, session, true); // Include ID in values
+            return stmt.executeUpdate() > 0;
+        }
+    }
 
     /**
-     * Finds a class session by its ID (returns Optional). Manages its own connection.
+     * Updates an existing class session in the database.
      *
-     * @param sessionId the ID of the class session (assuming String/UUID)
-     * @return Optional containing the ClassSession if found, empty Optional otherwise
+     * @param conn Active database connection
+     * @param session The ClassSession to update
+     * @return true if update was successful, false otherwise
+     * @throws SQLException If there's a database error
      */
+    boolean internalUpdate(Connection conn, ClassSession session) throws SQLException {
+        String sql = "UPDATE class_sessions SET course_id = ?, class_id = ?, course_name = ?, " +
+                "start_time = ?, end_time = ?, room = ?, teacher_name = ?, " +
+                "session_number = ? " +
+                "WHERE session_id = ?"; // 8 fields to set, 1 for WHERE clause (not 11 as in the original comment)
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            prepareStatementFromClassSession(stmt, session, false); // Don't include ID in SET values
+            stmt.setString(9, session.getId()); // Set the session_id for the WHERE clause (index 9, not 12)
+            return stmt.executeUpdate() > 0;
+        }
+    }
+
+    /**
+     * Generates and saves class sessions for a course based on its schedule parameters.
+     *
+     * @param conn Active database connection
+     * @param course The course to generate sessions for
+     * @param classroomDAO DAO for classroom operations
+     * @param teacherDAO DAO for teacher operations
+     * @param holidayDAO Optional DAO for holiday checking
+     * @param scheduleDAO Optional DAO for room scheduling
+     * @return List of generated and saved class sessions
+     * @throws SQLException If there's a database error
+     */
+    public List<ClassSession> generateAndSaveSessionsForCourse(
+            Connection conn,
+            Course course,
+            src.dao.ClassroomDAO classroomDAO,
+            src.dao.TeacherDAO teacherDAO,
+            src.dao.HolidayDAO holidayDAO,
+            src.dao.ScheduleDAO scheduleDAO
+    ) throws SQLException {
+
+        List<ClassSession> generatedSessions = new ArrayList<>();
+
+        // Validate course and required properties
+        if (course == null) {
+            LOGGER.log(Level.WARNING, "Course object is null. Cannot generate sessions.");
+            return generatedSessions;
+        }
+
+        if (course.getCourseId() == null || course.getStartDate() == null ||
+                course.getEndDate() == null || course.getCourseStartTime() == null || course.getCourseEndTime() == null ||
+                course.getDaysOfWeekAsString() == null || course.getDaysOfWeekAsString().trim().isEmpty() ||
+                course.getClassId() == null) {
+            LOGGER.log(Level.WARNING, "Course {0} has missing essential scheduling fields. Cannot generate sessions.",
+                    course.getCourseId());
+            return generatedSessions;
+        }
+
+        if (course.getStartDate().isAfter(course.getEndDate())) {
+            LOGGER.log(Level.WARNING, "Course {0} start date is after end date. Cannot generate sessions.",
+                    course.getCourseId());
+            return generatedSessions;
+        }
+
+        // Get room and teacher information
+        String actualRoomName = "N/A";
+        String actualTeacherName = "N/A";
+        Classroom classroomForSchedule = null;
+
+        // Fetch Classroom details if available
+        if (classroomDAO != null && course.getRoomId() != null && !course.getRoomId().trim().isEmpty()) {
+            Optional<Classroom> classroomOpt = classroomDAO.findByRoomId(course.getRoomId());
+            if (classroomOpt.isPresent()) {
+                classroomForSchedule = classroomOpt.get();
+                actualRoomName = classroomForSchedule.getRoomName();
+            } else {
+                LOGGER.log(Level.WARNING, "Classroom not found for ID: {0} for course {1}",
+                        new Object[]{course.getRoomId(), course.getCourseId()});
+            }
+        }
+
+        // Fetch Teacher details if available
+        if (teacherDAO != null && course.getTeacherId() != null && !course.getTeacherId().trim().isEmpty()) {
+            Optional<Teacher> teacherOpt = teacherDAO.findById(course.getTeacherId());
+            if (teacherOpt.isPresent()) {
+                actualTeacherName = teacherOpt.get().getName();
+            } else {
+                LOGGER.log(Level.WARNING, "Teacher not found for ID: {0} for course {1}",
+                        new Object[]{course.getTeacherId(), course.getCourseId()});
+            }
+        }
+
+        // Parse scheduled days from string representation
+        Set<DayOfWeek> scheduledDays = new HashSet<>();
+        try {
+            String[] dayStrings = course.getDaysOfWeekAsString().toUpperCase().split(",");
+            for (String dayStr : dayStrings) {
+                if (!dayStr.trim().isEmpty()) {
+                    scheduledDays.add(DayOfWeek.valueOf(dayStr.trim()));
+                }
+            }
+            if (scheduledDays.isEmpty()) {
+                LOGGER.log(Level.WARNING, "No valid days_of_week found for course {0}: {1}",
+                        new Object[]{course.getCourseId(), course.getDaysOfWeekAsString()});
+                return generatedSessions;
+            }
+        } catch (IllegalArgumentException e) {
+            LOGGER.log(Level.SEVERE, "Error parsing days_of_week '" + course.getDaysOfWeekAsString() +
+                    "' for course " + course.getCourseId(), e);
+            throw new SQLException("Invalid days_of_week format for course " + course.getCourseId() +
+                    ": " + course.getDaysOfWeekAsString(), e);
+        }
+
+        // Iterate through dates and generate sessions
+        LocalDate currentIterDate = course.getStartDate();
+        LocalDate courseEndDate = course.getEndDate();
+        LocalTime sessionStartTimeOfDay = course.getCourseStartTime();
+        LocalTime sessionEndTimeOfDay = course.getCourseEndTime();
+        int sessionCounter = 1;
+
+        while (!currentIterDate.isAfter(courseEndDate)) {
+            if (scheduledDays.contains(currentIterDate.getDayOfWeek())) {
+                // Check if this date is a holiday
+                boolean isHoliday = false;
+                if (holidayDAO != null) {
+                    isHoliday = holidayDAO.isHoliday(conn, currentIterDate);
+                }
+
+                if (!isHoliday) {
+                    // Generate session for this date
+                    LocalDateTime actualSessionStartDateTime = LocalDateTime.of(currentIterDate, sessionStartTimeOfDay);
+                    LocalDateTime actualSessionEndDateTime = LocalDateTime.of(currentIterDate, sessionEndTimeOfDay);
+
+                    ClassSession newSession = new ClassSession();
+                    // Generate a unique session ID pattern
+                    String generatedSessionId = "SESS_" + course.getCourseId().replaceAll("[^a-zA-Z0-9]", "") + "_" +
+                            currentIterDate.toString().replace("-", "") + "_" +
+                            String.format("%03d", sessionCounter);
+
+                    newSession.setId(generatedSessionId);
+                    newSession.setCourseId(course.getCourseId());
+                    newSession.setClassId(course.getClassId());
+                    newSession.setCourseName(course.getCourseName());
+                    newSession.setStartTime(actualSessionStartDateTime);
+                    newSession.setEndTime(actualSessionEndDateTime);
+                    newSession.setRoom(actualRoomName);
+                    newSession.setTeacher(actualTeacherName);
+                    newSession.setSessionNumber(sessionCounter);
+
+                    // Save the session
+                    boolean savedSuccessfully = internalCreate(conn, newSession);
+                    if (savedSuccessfully) {
+                        generatedSessions.add(newSession);
+                        LOGGER.log(Level.FINER, "Generated and saved session: {0}", newSession.getId());
+
+                        // Optional room schedule integration would go here
+                        // Placeholder for now, as the full RoomSchedule implementation is commented
+                    } else {
+                        LOGGER.log(Level.WARNING, "Failed to save generated class session: {0} for course {1}. "
+                                        + "Transaction should be rolled back by caller.",
+                                new Object[]{newSession.getId(), course.getCourseId()});
+                    }
+                    sessionCounter++;
+                } else {
+                    LOGGER.log(Level.INFO, "Skipping session generation for course {0} on {1} as it is a holiday.",
+                            new Object[]{course.getCourseId(), currentIterDate});
+                }
+            }
+            currentIterDate = currentIterDate.plusDays(1);
+        }
+
+        LOGGER.log(Level.INFO, "Attempted to generate {0} sessions for course {1}, successfully saved {2}",
+                new Object[]{(sessionCounter - 1), course.getCourseId(), generatedSessions.size()});
+        return generatedSessions;
+    }
+
+    /**
+     * Deletes future class sessions for a course.
+     *
+     * @param conn Active database connection
+     * @param courseId The course ID to delete sessions for
+     * @return Number of deleted sessions
+     * @throws SQLException If there's a database error
+     */
+    public int deleteFutureSessionsByCourseId(Connection conn, String courseId) throws SQLException {
+        String sql = "DELETE FROM class_sessions WHERE course_id = ? AND start_time >= ?";
+        int deletedRows = 0;
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, courseId);
+            stmt.setTimestamp(2, Timestamp.valueOf(LocalDate.now().atStartOfDay()));
+            deletedRows = stmt.executeUpdate();
+            LOGGER.log(Level.INFO, "Deleted {0} future sessions for course ID: {1}",
+                    new Object[]{deletedRows, courseId});
+        }
+        return deletedRows;
+    }
+
+    /**
+     * Deletes all class sessions for a course.
+     *
+     * @param conn Active database connection
+     * @param courseId The course ID to delete sessions for
+     * @return Number of deleted sessions
+     * @throws SQLException If there's a database error
+     */
+    public int deleteAllSessionsByCourseId(Connection conn, String courseId) throws SQLException {
+        String sql = "DELETE FROM class_sessions WHERE course_id = ?";
+        int deletedRows = 0;
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, courseId);
+            deletedRows = stmt.executeUpdate();
+            LOGGER.log(Level.INFO, "Deleted {0} (all) sessions for course ID: {1}",
+                    new Object[]{deletedRows, courseId});
+        }
+        return deletedRows;
+    }
+
+    // Base SELECT statement for consistent column selection
+    private String getBaseSelectClassSessionSQL() {
+        return "SELECT session_id, course_id, class_id, course_name, " +
+                "start_time, end_time, room, teacher_name, " +
+                "session_number " +
+                "FROM class_sessions";
+    }
+
+    // Internal query methods (using provided connection)
+
+    List<ClassSession> internalFindAll(Connection conn) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        String sql = getBaseSelectClassSessionSQL();
+        try (PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                sessions.add(mapResultSetToClassSession(rs));
+            }
+        }
+        return sessions;
+    }
+
+    ClassSession internalFindById(Connection conn, String id) throws SQLException {
+        String sql = getBaseSelectClassSessionSQL() + " WHERE session_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSetToClassSession(rs);
+                }
+            }
+        }
+        return null;
+    }
+
+    boolean internalDelete(Connection conn, String id) throws SQLException {
+        String sql = "DELETE FROM class_sessions WHERE session_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, id);
+            return stmt.executeUpdate() > 0;
+        }
+    }
+
+    List<ClassSession> internalFindByClassId(Connection conn, String classId) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        String sql = getBaseSelectClassSessionSQL() + " WHERE class_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, classId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
+    List<ClassSession> internalFindByCourseId(Connection conn, String courseId) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        String sql = getBaseSelectClassSessionSQL() + " WHERE course_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, courseId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
+    List<ClassSession> internalFindByDateRange(Connection conn, LocalDate startDate, LocalDate endDate) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        String sql = getBaseSelectClassSessionSQL() + " WHERE DATE(start_time) BETWEEN ? AND ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setDate(1, Date.valueOf(startDate));
+            stmt.setDate(2, Date.valueOf(endDate));
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
+    List<ClassSession> internalFindByDateTimeRange(Connection conn, LocalDateTime startDateTime, LocalDateTime endDateTime) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        // Find sessions that overlap with the given range
+        String sql = getBaseSelectClassSessionSQL() + " WHERE start_time < ? AND end_time > ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setTimestamp(1, Timestamp.valueOf(endDateTime));
+            stmt.setTimestamp(2, Timestamp.valueOf(startDateTime));
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
+    List<ClassSession> internalFindByTeacherName(Connection conn, String teacherName) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        String sql = getBaseSelectClassSessionSQL() + " WHERE teacher_name = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, teacherName);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
+    List<ClassSession> internalFindByDate(Connection conn, LocalDate date) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        String sql = getBaseSelectClassSessionSQL() + " WHERE DATE(start_time) = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setDate(1, Date.valueOf(date));
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(rs));
+                }
+            }
+        }
+        return sessions;
+    }
+
+    // Public wrapper methods (managing their own connections)
+
     public Optional<ClassSession> findById(String sessionId) {
-        try (Connection conn = DatabaseConnection.getConnection()) { // Get and close connection here
-            return Optional.ofNullable(internalFindById(conn, sessionId)); // Use the internal helper
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            return Optional.ofNullable(internalFindById(conn, sessionId));
         } catch (SQLException e) {
-            // Log the exception
-            System.err.println("Error finding class session by ID: " + sessionId + ": " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding class session by ID: " + sessionId, e);
             return Optional.empty();
         }
     }
 
-    /**
-     * Finds a class session by its ID (returns Optional) using an existing connection.
-     * Use this when calling from another DAO that already has a connection open.
-     *
-     * @param conn the active database connection
-     * @param sessionId the ID of the class session (assuming String/UUID)
-     * @return Optional containing the ClassSession if found, empty Optional otherwise
-     */
     public Optional<ClassSession> findById(Connection conn, String sessionId) {
         try {
-            return Optional.ofNullable(internalFindById(conn, sessionId)); // Use the internal helper
+            return Optional.ofNullable(internalFindById(conn, sessionId));
         } catch (SQLException e) {
-            // Log the exception
-            System.err.println("Error finding class session by ID using existing connection: " + sessionId + ": " + e.getMessage());
-            e.printStackTrace(); // Still print stack trace for debugging
+            LOGGER.log(Level.SEVERE, "Error finding class session by ID using existing connection: " + sessionId, e);
             return Optional.empty();
         }
     }
 
-
-    /**
-     * Finds all class sessions. Manages its own connection.
-     * @return List of all ClassSession objects
-     */
     public List<ClassSession> findAll() {
         try (Connection conn = DatabaseConnection.getConnection()) {
             return internalFindAll(conn);
         } catch (SQLException e) {
-            // Log the exception
-            System.err.println("Error finding all class sessions: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding all class sessions", e);
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Saves a new class session. Manages its own connection.
-     * @param session the ClassSession object to save
-     * @return true if saving was successful, false otherwise
-     */
     public boolean save(ClassSession session) {
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // Transaction management for single save might be overkill, but good practice if related operations were involved
-            // conn.setAutoCommit(false);
-            String id = internalCreate(conn, session);
-            // conn.commit();
-            session.setId(id); // Set the ID generated by the database back to the object
-            return true;
-        } catch (SQLException e) {
-            // if (conn != null) conn.rollback(); // Rollback on failure if auto-commit was false
-            // Log the exception
-            System.err.println("Error saving class session: " + e.getMessage());
-            e.printStackTrace();
-            return false;
+        if (session.getId() == null || session.getId().trim().isEmpty()) {
+            session.setId("SESS_SAVE_" + UUID.randomUUID().toString());
+            LOGGER.log(Level.INFO, "Public save method generated new session ID: {0}", session.getId());
         }
-    }
-
-    /**
-     * Updates an existing class session. Manages its own connection.
-     * @param session the ClassSession object to update
-     * @return true if the update was successful, false otherwise
-     */
-    public boolean update(ClassSession session) {
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // Transaction management if needed
-            // conn.setAutoCommit(false);
-            boolean success = internalUpdate(conn, session);
-            // if (success) conn.commit(); else conn.rollback();
+        Connection conn = null;
+        try {
+            conn = DatabaseConnection.getConnection();
+            conn.setAutoCommit(false);
+            boolean success = internalCreate(conn, session);
+            if (success) {
+                conn.commit();
+            } else {
+                conn.rollback();
+            }
             return success;
         } catch (SQLException e) {
-            // if (conn != null) conn.rollback(); // Rollback on failure
-            // Log the exception
-            System.err.println("Error updating class session with ID " + session.getId() + ": " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error saving class session: " + session.getId(), e);
+            DatabaseConnection.rollback(conn);
             return false;
+        } finally {
+            DatabaseConnection.closeConnection(conn);
         }
     }
 
-    /**
-     * Deletes a class session by ID. Manages its own connection.
-     *
-     * @param sessionId the ID of the class session to delete (assuming String/UUID)
-     * @return true if the deletion was successful, false otherwise
-     */
+    public boolean update(ClassSession session) {
+        Connection conn = null;
+        try {
+            conn = DatabaseConnection.getConnection();
+            conn.setAutoCommit(false);
+            boolean success = internalUpdate(conn, session);
+            if (success) {
+                conn.commit();
+            } else {
+                conn.rollback();
+            }
+            return success;
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error updating class session with ID " + session.getId(), e);
+            DatabaseConnection.rollback(conn);
+            return false;
+        } finally {
+            DatabaseConnection.closeConnection(conn);
+        }
+    }
+
     public boolean delete(String sessionId) {
         if (sessionId == null || sessionId.trim().isEmpty()) {
-            System.err.println("Attempted to delete class session with null or empty ID.");
+            LOGGER.log(Level.WARNING, "Attempted to delete class session with null or empty ID.");
             return false;
         }
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // Transaction management if needed
-            // conn.setAutoCommit(false);
+        Connection conn = null;
+        try {
+            conn = DatabaseConnection.getConnection();
+            conn.setAutoCommit(false);
             boolean success = internalDelete(conn, sessionId);
-            // if (success) conn.commit(); else conn.rollback();
+            if (success) {
+                conn.commit();
+            } else {
+                conn.rollback();
+            }
             return success;
         } catch (SQLException e) {
-            // if (conn != null) conn.rollback(); // Rollback on failure
-            // Log the exception
-            System.err.println("Error deleting class session with ID " + sessionId + ": " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error deleting class session with ID " + sessionId, e);
+            DatabaseConnection.rollback(conn);
             return false;
+        } finally {
+            DatabaseConnection.closeConnection(conn);
         }
     }
 
-    /**
-     * Finds class sessions by class ID. Manages its own connection.
-     * @param classId the class ID to search for (assuming String/UUID)
-     * @return List of ClassSession objects for the specified class
-     */
+    public List<ClassSession> findByCourseId(String courseId) {
+        if (courseId == null || courseId.trim().isEmpty()) {
+            LOGGER.log(Level.WARNING, "Attempted to find class sessions with null or empty course ID.");
+            return new ArrayList<>();
+        }
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            return internalFindByCourseId(conn, courseId);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding class sessions by course ID " + courseId, e);
+            return new ArrayList<>();
+        }
+    }
+
     public List<ClassSession> findByClassId(String classId) {
         if (classId == null || classId.trim().isEmpty()) {
-            System.err.println("Attempted to find class sessions with null or empty class ID.");
+            LOGGER.log(Level.WARNING, "Attempted to find class sessions with null or empty class ID.");
             return new ArrayList<>();
         }
         try (Connection conn = DatabaseConnection.getConnection()) {
             return internalFindByClassId(conn, classId);
         } catch (SQLException e) {
-            // Log the exception
-            System.err.println("Error finding class sessions by class ID " + classId + ": " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding class sessions by class ID " + classId, e);
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Finds class sessions within a date range. Manages its own connection.
-     * @param startDate the start date of the range
-     * @param endDate the end date of the range
-     * @return List of ClassSession objects within the date range
-     */
     public List<ClassSession> findByDateRange(LocalDate startDate, LocalDate endDate) {
         if (startDate == null || endDate == null) {
-            System.err.println("Attempted to find class sessions with null start or end date.");
+            LOGGER.log(Level.WARNING, "Attempted to find class sessions with null start or end date.");
             return new ArrayList<>();
         }
         try (Connection conn = DatabaseConnection.getConnection()) {
             return internalFindByDateRange(conn, startDate, endDate);
         } catch (SQLException e) {
-            // Log the exception
-            System.err.println("Error finding class sessions by date range (" + startDate + " to " + endDate + "): " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding class sessions by date range (" + startDate + " to " + endDate + ")", e);
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Finds all class sessions for a specific day of the week.
-     * Note: This method retrieves ALL sessions first, then filters in memory.
-     * A database query filtering by day of week might be more efficient if possible.
-     * Manages its own connection indirectly via findAll().
-     *
-     * @param dayOfWeek the day of the week as a string (e.g., "MONDAY")
-     * @return List of ClassSession objects for the specified day
-     */
-    public List<ClassSession> findByDayOfWeek(String dayOfWeek) {
-        // This implementation fetches all sessions and filters.
-        // If performance is an issue with many sessions, consider adding a 'day_of_week' column
-        // or a calculated field/index in the database and query directly.
-        List<ClassSession> allSessions = findAll(); // findAll manages its own connection
-        List<ClassSession> filteredSessions = new ArrayList<>();
-
-        if (dayOfWeek == null) {
-            System.err.println("Attempted to find class sessions with null day of week.");
-            return filteredSessions; // Return empty list if dayOfWeek is null
-        }
-
-        for (ClassSession session : allSessions) {
-            // Check if the session's date's day of week matches the requested day
-            if (session.getDate() != null) {
-                if (session.getDate().getDayOfWeek().toString().equalsIgnoreCase(dayOfWeek)) {
-                    filteredSessions.add(session);
-                }
-            }
-        }
-
-        return filteredSessions;
-    }
-
-    /**
-     * Finds class sessions within a date and time range. Manages its own connection.
-     * Note: This method converts LocalDateTime to Date and Time for the underlying SQL query.
-     * For full time range accuracy, the SQL query should ideally compare timestamps.
-     * The internal method internalFindByDateRange only uses LocalDate. We'll need a new internal method.
-     * @param startDateTime the start date and time of the range
-     * @param endDateTime the end date and time of the range
-     * @return List of ClassSession objects within the date and time range
-     */
-    public List<ClassSession> findByTimeRange(LocalDateTime startDateTime, LocalDateTime endDateTime) {
-        if (startDateTime == null || endDateTime == null) {
-            System.err.println("Attempted to find class sessions with null start or end datetime.");
-            return new ArrayList<>();
-        }
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // Implement a new internal method or adapt existing one
-            return internalFindByTimeRange(conn, startDateTime, endDateTime);
-        } catch (SQLException e) {
-            System.err.println("Error finding class sessions by time range (" + startDateTime + " to " + endDateTime + "): " + e.getMessage());
-            e.printStackTrace();
-            return new ArrayList<>();
-        }
-    }
-
-
-    /**
-     * Finds class sessions by teacher name. Manages its own connection.
-     * @param teacherName the teacher name to search for
-     * @return List of ClassSession objects taught by the specified teacher
-     */
     public List<ClassSession> findByTeacherName(String teacherName) {
         if (teacherName == null || teacherName.trim().isEmpty()) {
-            System.err.println("Attempted to find class sessions with null or empty teacher name.");
+            LOGGER.log(Level.WARNING, "Attempted to find class sessions with null or empty teacher name.");
             return new ArrayList<>();
         }
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // Implement a new internal method
             return internalFindByTeacherName(conn, teacherName);
         } catch (SQLException e) {
-            System.err.println("Error finding class sessions by teacher name " + teacherName + ": " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding class sessions by teacher name " + teacherName, e);
             return new ArrayList<>();
         }
     }
 
-
-    /**
-     * Finds class sessions for a specific date. Manages its own connection.
-     * @param date the date to search for
-     * @return List of ClassSession objects on the specified date
-     */
     public List<ClassSession> findByDate(LocalDate date) {
         if (date == null) {
-            System.err.println("Attempted to find class sessions with null date.");
+            LOGGER.log(Level.WARNING, "Attempted to find class sessions with null date.");
             return new ArrayList<>();
         }
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // Can potentially reuse or adapt internalFindByDateRange for a single date
-            // A dedicated internal method for a single date might be slightly cleaner.
             return internalFindByDate(conn, date);
         } catch (SQLException e) {
-            System.err.println("Error finding class sessions by date " + date + ": " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error finding class sessions by date " + date, e);
             return new ArrayList<>();
         }
     }
 
     /**
-     * Finds class sessions within a date and time range using an existing connection.
-     * Compares based on session_date and start_time/end_time.
+     * Finds class sessions that fall within a specific time range.
+     * This method will find any sessions where the session's time period overlaps
+     * with the given time range.
      *
-     * @param conn the active database connection
-     * @param startDateTime the start date and time of the range
-     * @param endDateTime the end date and time of the range
-     * @return List of ClassSession objects within the date and time range
-     * @throws SQLException if a database access error occurs
+     * @param startTime The start datetime of the range to search
+     * @param endTime The end datetime of the range to search
+     * @return A list of ClassSession objects that overlap with the specified time range
      */
-    List<ClassSession> internalFindByTimeRange(Connection conn, LocalDateTime startDateTime, LocalDateTime endDateTime) throws SQLException {
-        List<ClassSession> sessions = new ArrayList<>();
-        // SQL to find sessions that overlap with the given time range.
-        // A session (start_time, end_time) overlaps with range (range_start, range_end) if
-        // (start_time < range_end AND end_time > range_start)
-        // Assuming session_date stores the date, and start_time/end_time store the time part within that date.
-        // Combining date and time for comparison:
-        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id FROM class_sessions " +
-                "WHERE (session_date + start_time) < ? AND (session_date + end_time) > ?"; // This syntax depends on the specific SQL dialect (e.g., PostgreSQL needs specific syntax for adding TIME to DATE, MySQL might use DATETIME or TIMESTAMP columns)
-
-        // A more portable way might be comparing DATE and TIME components separately, or using TIMESTAMP columns.
-        // Assuming your database supports adding DATE and TIME for comparison or uses TIMESTAMP columns.
-        // If using TIMESTAMP columns for start_time and end_time, the query simplifies.
-        // Let's assume the columns 'start_time' and 'end_time' are actually TIMESTAMP types for easier range query.
-        // If they are TIME types and session_date is DATE, you might need vendor-specific functions like `TIMESTAMP(session_date, start_time)`.
-        // Let's use TIMESTAMP comparison assuming the columns support it or adjust the query for your specific DB.
-
-        // Let's adjust the SQL query assuming start_time and end_time columns are TIMESTAMP
-        String sqlAdjusted = "SELECT session_id, course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id FROM class_sessions " +
-                "WHERE start_time < ? AND end_time > ?"; // Assumes start_time and end_time columns are TIMESTAMP
-
-        try (PreparedStatement stmt = conn.prepareStatement(sqlAdjusted)) {
-
-            // Set LocalDateTime parameters as Timestamp
-            stmt.setTimestamp(1, Timestamp.valueOf(endDateTime));
-            stmt.setTimestamp(2, Timestamp.valueOf(startDateTime));
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    sessions.add(mapResultSetToClassSession(conn, rs));
-                }
-            }
+    public List<ClassSession> findByTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
+        if (startTime == null || endTime == null) {
+            LOGGER.log(Level.WARNING, "Attempted to find class sessions with null start or end time.");
+            return new ArrayList<>();
         }
-        return sessions;
-    }
 
-
-    /**
-     * Finds class sessions by teacher name using an existing connection.
-     * Assumes teacher_name column exists in class_sessions table.
-     *
-     * @param conn the active database connection
-     * @param teacherName the teacher name to search for
-     * @return List of ClassSession objects taught by the specified teacher
-     * @throws SQLException if a database access error occurs
-     */
-    List<ClassSession> internalFindByTeacherName(Connection conn, String teacherName) throws SQLException {
-        List<ClassSession> sessions = new ArrayList<>();
-        // Assuming teacher_name in the database is a String/VARCHAR type
-        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id FROM class_sessions WHERE teacher_name = ?";
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, teacherName); // Set as String
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    sessions.add(mapResultSetToClassSession(conn, rs));
-                }
-            }
+        if (startTime.isAfter(endTime)) {
+            LOGGER.log(Level.WARNING, "Invalid time range: start time is after end time.");
+            return new ArrayList<>();
         }
-        return sessions;
+
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            return internalFindByDateTimeRange(conn, startTime, endTime);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error finding class sessions by time range ("
+                    + startTime + " to " + endTime + ")", e);
+            return new ArrayList<>();
+        }
     }
 
     /**
-     * Finds class sessions for a specific date using an existing connection.
-     * Assumes session_date column exists in class_sessions table.
+     * Overloaded method to find class sessions within a time range using an existing connection.
      *
-     * @param conn the active database connection
-     * @param date the date to search for
-     * @return List of ClassSession objects on the specified date
+     * @param conn An existing database connection
+     * @param startTime The start datetime of the range to search
+     * @param endTime The end datetime of the range to search
+     * @return A list of ClassSession objects that overlap with the specified time range
      * @throws SQLException if a database access error occurs
      */
-    List<ClassSession> internalFindByDate(Connection conn, LocalDate date) throws SQLException {
-        List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT session_id, course_name, teacher_name, room, session_date, " +
-                "start_time, end_time, class_id FROM class_sessions " +
-                "WHERE session_date = ?";
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setDate(1, Date.valueOf(date));
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    sessions.add(mapResultSetToClassSession(conn, rs));
-                }
-            }
+    public List<ClassSession> findByTimeRange(Connection conn, LocalDateTime startTime, LocalDateTime endTime)
+            throws SQLException {
+        if (startTime == null || endTime == null) {
+            LOGGER.log(Level.WARNING, "Attempted to find class sessions with null start or end time.");
+            return new ArrayList<>();
         }
-        return sessions;
-    }
 
+        if (startTime.isAfter(endTime)) {
+            LOGGER.log(Level.WARNING, "Invalid time range: start time is after end time.");
+            return new ArrayList<>();
+        }
+
+        return internalFindByDateTimeRange(conn, startTime, endTime);
+    }
 }
+

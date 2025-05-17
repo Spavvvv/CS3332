@@ -391,7 +391,7 @@ public class AttendanceController {
 
         return sessions.stream()
                 .filter(session -> {
-                    String sessionDay = session.getSchedule();
+                    String sessionDay = session.getDayOfWeek();
                     return sessionDay != null && sessionDay.equalsIgnoreCase(day);
                 })
                 .collect(Collectors.toList());
@@ -414,8 +414,8 @@ public class AttendanceController {
 
         return sessions.stream()
                 .filter(session -> {
-                    boolean matchesClassName = session.getClassName() != null &&
-                            session.getClassName().toLowerCase().contains(searchTerm);
+                    boolean matchesClassName = session.getCourseName() != null &&
+                            session.getCourseName().toLowerCase().contains(searchTerm);
 
                     boolean matchesTeacher = session.getTeacher() != null &&
                             session.getTeacher().toLowerCase().contains(searchTerm);

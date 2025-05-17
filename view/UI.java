@@ -663,13 +663,13 @@ public class UI {
         VBox footerContent = new VBox(5);
         footerContent.setAlignment(Pos.CENTER);
 
-        Label copyrightLabel = new Label("Copyright © 2025 CÔNG TY CỔ PHẦN GIẢI PHÁP GIÁO DỤC AILEARN. All rights reserved.");
+        Label copyrightLabel = new Label("Copyright © 2025 Group 4 CS3332");
         copyrightLabel.setStyle("-fx-text-fill: #666;");
 
-        Label addressLabel = new Label("Địa chỉ: 367 Hoàng Quốc Việt, Cầu Giấy, Hà Nội");
+        Label addressLabel = new Label("Địa chỉ: 1 Đại Cồ Việt");
         addressLabel.setStyle("-fx-text-fill: #666;");
 
-        Label contactLabel = new Label("Hotline: 0966945495 - 0977962582 - Email: aitalkvietnam.edu@gmail.com");
+        Label contactLabel = new Label("Hotline: 0888888888 - 0999999999 - Email: xinhayquamon@super.vjp");
         contactLabel.setStyle("-fx-text-fill: #666;");
 
         footerContent.getChildren().addAll(copyrightLabel, addressLabel, contactLabel);

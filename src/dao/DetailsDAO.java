@@ -141,7 +141,7 @@ public class DetailsDAO {
 
                 // Create ClassSession object using String ID and the created Course object
                 ClassSession session = new ClassSession(
-                        sessionId, course, teacher, room, sessionDate, timeSlot
+                        //sessionId, course, teacher, room, sessionDate, timeSlot
                 );
 
                 // Load details for this session using the String ID
@@ -279,7 +279,7 @@ public class DetailsDAO {
                     course.setCourseName(courseName);
 
                     ClassSession session = new ClassSession(
-                            sessionId, course, teacher, room, sessionDate, timeSlot
+                            //, course, teacher, room, sessionDate, timeSlot
                     );
 
                     detailsModel = new DetailsModel(session);
@@ -362,7 +362,7 @@ public class DetailsDAO {
                         course.setCourseName(courseName);
 
                         ClassSession session = new ClassSession(
-                                currentSessionId, course, teacher, room, sessionDate, timeSlot
+                                //currentSessionId, course, teacher, room, sessionDate, timeSlot
                         );
                         detailsModel = new DetailsModel(session);
                     }
@@ -447,7 +447,7 @@ public class DetailsDAO {
                         course.setCourseName(courseName);
 
                         ClassSession session = new ClassSession(
-                                sessionId, course, teacher, room, date, timeSlot
+                                //sessionId, course, teacher, room, date, timeSlot
                         );
                         detailsModel = new DetailsModel(session);
                     }

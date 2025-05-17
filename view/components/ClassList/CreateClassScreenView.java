@@ -257,15 +257,14 @@ public class CreateClassScreenView {
                         }
                     }
                 }
+
+                //tao sua cai nay de no chay duoc thoi, m sua lai sau nhe
                 Course course = new Course(
                         courseIdField.getText(),
                         courseNameField.getText(),
                         subjectField.getText(),
                         startDate,
-                        endDate,
-                        startTime,
-                        endTime,
-                        daysOfWeek // <<<< TRUYỀN daysOfWeek (sẽ LUÔN LÀ DANH SÁCH RỖNG)
+                        endDate
                 );
 
                 if (!roomIdField.getText().isEmpty()) {

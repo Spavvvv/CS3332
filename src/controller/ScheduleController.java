@@ -359,16 +359,14 @@ public class ScheduleController { // Renaming this to ClassSessionController mig
         }
         try {
             LocalDate date = session.getDate();
-            LocalTime startTime = session.getStartTime();
-            LocalTime endTime = session.getEndTime();
 
-            if (date == null || startTime == null || endTime == null) {
+            if (date == null ) {
                 LOGGER.log(Level.WARNING, "Session has incomplete date/time information: " + session.getId());
                 return false; // Cannot check conflict without complete date/time
             }
 
-            LocalDateTime startDateTime = date.atTime(startTime);
-            LocalDateTime endDateTime = date.atTime(endTime);
+            LocalDateTime startDateTime = session.getStartTime();
+            LocalDateTime endDateTime = session.getEndTime();
 
             // Fetch sessions that overlap with the given session's time range.
             // Uses ClassSessionDAO.findByTimeRange.

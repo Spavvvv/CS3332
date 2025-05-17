@@ -91,7 +91,7 @@ public class DetailsView extends BaseScreenView {
         // Header text
         ClassSession classSession = model.getClassSession();
         headerLabel = new Label(classSession != null ?
-                "LỚP " + classSession.getClassName() + " - THÁNG " +
+                "LỚP " + classSession.getCourseName() + " - THÁNG " +
                         classSession.getDate().format(DateTimeFormatter.ofPattern("MM/yyyy")) + "/Điểm" :
                 "NULL");
         headerLabel.setFont(Font.font("System", FontWeight.BOLD, 18));
@@ -491,7 +491,7 @@ public class DetailsView extends BaseScreenView {
     public void refreshView() {
         ClassSession classSession = model.getClassSession();
         if (classSession != null) {
-            headerLabel.setText("LỚP " + classSession.getClassName() + " - THÁNG " +
+            headerLabel.setText("LỚP " + classSession.getCourseName() + " - THÁNG " +
                     classSession.getDate().format(DateTimeFormatter.ofPattern("MM/yyyy")) + "/Điểm");
 
             // Update table data

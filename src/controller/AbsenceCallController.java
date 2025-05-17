@@ -161,7 +161,7 @@ public class AbsenceCallController {
                         displayIdCounter++,
                         student.getId(),
                         student.getName(),
-                        session.getClassName(), // Using student's class name for the record
+                        session.getCourseName(), // Using student's class name for the record
                         sessionDate,
                         status,
                         note,
@@ -314,4 +314,3 @@ public class AbsenceCallController {
 
 
 }
-

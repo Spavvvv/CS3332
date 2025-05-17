@@ -364,7 +364,7 @@ public class Attendance {
     }
 
     public String getClassName() {
-        return session != null ? session.getClassName() : "";
+        return session != null ? session.getCourseName() : "";
     }
 
     public String getSubjectName() {

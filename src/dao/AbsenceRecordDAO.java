@@ -8,6 +8,7 @@ import utils.DatabaseConnection;
 
 import java.sql.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +27,7 @@ public class AbsenceRecordDAO {
     public List<ClassSession> getAvailableSessions() throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
         String sql = "SELECT cs.session_id, cs.class_id, cs.session_date, cs.course_name, cs.teacher_name, " +
-                "cs.start_time, cs.end_time, cs.room, cl.class_name AS actual_class_name " +
+                "cs.start_time, cs.end_time, cs.room, cl.class_name, cl.session_number AS actual_class_name " +
                 "FROM class_sessions cs " +
                 "JOIN classes cl ON cs.class_id = cl.class_id " +
                 "ORDER BY cs.session_date DESC, cs.start_time DESC";
@@ -44,17 +45,20 @@ public class AbsenceRecordDAO {
                 String room = rs.getString("room");
 
                 Time startTimeSql = rs.getTime("start_time");
-                LocalTime sessionStartTime = (startTimeSql != null) ? startTimeSql.toLocalTime() : null;
+                LocalDateTime sessionStartTime = (startTimeSql != null) ? LocalDateTime.from(startTimeSql.toLocalTime()) : null;
 
                 Time endTimeSql = rs.getTime("end_time");
-                LocalTime sessionEndTime = (endTimeSql != null) ? endTimeSql.toLocalTime() : null;
+                LocalDateTime sessionEndTime = (endTimeSql != null) ? LocalDateTime.from(endTimeSql.toLocalTime()) : null;
+
+                int sessionNumber = rs.getInt("session_number");
 
                 Course tempCourse = new Course(); // Assuming Course has a default constructor
                 tempCourse.setCourseName(courseSubjectName); // Assuming setCourseName exists
 
                 ClassSession session = new ClassSession(
                         sessionId, tempCourse, teacherName, room,
-                        sessionDate, sessionStartTime, sessionEndTime, sessionSpecificClassId
+                        sessionDate, sessionStartTime, sessionEndTime,
+                        sessionSpecificClassId, sessionNumber
                 );
                 sessions.add(session);
             }

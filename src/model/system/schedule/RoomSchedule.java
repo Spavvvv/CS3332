@@ -1,3 +1,4 @@
+
 package src.model.system.schedule;
 
 //import other classes
@@ -35,19 +36,24 @@ public class RoomSchedule extends Schedule {
     public boolean allocateShift(Course course, LocalDateTime startTime, LocalDateTime endTime) {
         // Check if the room is free at the requested time
         for (Course scheduledCourse : scheduledCourses) {
-            // Would need a more sophisticated overlap check in real implementation
-            if (startTime.isBefore(scheduledCourse.getDate().getEndDate().atTime(LocalTime.MAX)) &&
-                    endTime.isAfter(scheduledCourse.getDate().getStartDate().atTime(LocalTime.MIN))) {
-                return false; // Room is already occupied
+            // This checks if the proposed (startTime, endTime) interval for the new course
+            // overlaps with the (startDate at 00:00, endDate at 23:59:59) of an existing scheduledCourse.
+            // This is a coarse check and might need refinement for precise time slot checking including days of the week.
+            if (scheduledCourse.getStartDate() != null && scheduledCourse.getEndDate() != null &&
+                    startTime.isBefore(scheduledCourse.getEndDate().atTime(LocalTime.MAX)) &&
+                    endTime.isAfter(scheduledCourse.getStartDate().atTime(LocalTime.MIN))) {
+                return false; // Room is already occupied at some point during the scheduled course's date range
             }
         }
 
         // Check if course type matches room type (assuming subject matches room type)
-        if (!course.getSubject().equals(this.getTypeOfCourse())) {
+        if (course.getSubject() != null && !course.getSubject().equals(this.getTypeOfCourse())) {
             return false; // Course type doesn't match room type
         }
 
         // Allocate the shift by adding to scheduled courses
+        // Note: This adds the generic 'course' object. If the 'startTime' and 'endTime'
+        // are specific to this instance, you might need a different structure or to update the course object.
         scheduledCourses.add(course);
         return true;
     }
@@ -89,3 +95,4 @@ public class RoomSchedule extends Schedule {
         this.scheduledCourses = scheduledCourses;
     }
 }
+

@@ -1,3 +1,4 @@
+
 package view.components;
 
 import javafx.beans.property.SimpleBooleanProperty;
@@ -184,9 +185,13 @@ public class AbsenceCallScreenView extends BaseScreenView {
             selectedDate = datePicker.getValue();
             loadAbsenceData(); // Reload data when date changes
         });
+        // Change date text color to black
+        datePicker.setStyle("-fx-text-fill: #000000;");
 
         Label dayFilterLabel = new Label("Ngày:");
         dayFilterLabel.setFont(Font.font("System", FontWeight.BOLD, 12)); // Smaller font for label
+        dayFilterLabel.setTextFill(Color.BLACK); // Change to black
+
         dayFilterComboBox = new ComboBox<>();
         dayFilterComboBox.getItems().addAll("Tất cả", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật");
         dayFilterComboBox.setValue("Tất cả");
@@ -194,9 +199,13 @@ public class AbsenceCallScreenView extends BaseScreenView {
             currentDayFilter = dayFilterComboBox.getValue();
             applyFilters();
         });
+        // Set text color to black
+        dayFilterComboBox.setStyle("-fx-text-fill: #000000;");
 
         Label callStatusLabel = new Label("Trạng thái gọi:");
         callStatusLabel.setFont(Font.font("System", FontWeight.BOLD, 12)); // Smaller font for label
+        callStatusLabel.setTextFill(Color.BLACK); // Change to black
+
         callStatusComboBox = new ComboBox<>();
         callStatusComboBox.getItems().addAll("Tất cả", "Đã gọi", "Chưa gọi");
         callStatusComboBox.setValue("Tất cả");
@@ -204,6 +213,8 @@ public class AbsenceCallScreenView extends BaseScreenView {
             currentCallStatusFilter = callStatusComboBox.getValue();
             applyFilters();
         });
+        // Set text color to black
+        callStatusComboBox.setStyle("-fx-text-fill: #000000;");
 
         // Spacer to push search to the right
         Region filterSpacer = new Region();
@@ -247,7 +258,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
         Label progressTitle = new Label("Tiến độ gọi điện:");
         progressTitle.setFont(Font.font("System", 12)); // Smaller font
-        progressTitle.setTextFill(Color.valueOf("#555555")); // Gray color
+        progressTitle.setTextFill(Color.valueOf("#000000")); // Changed to black
 
         callProgressBar = new ProgressBar(0);
         callProgressBar.setPrefWidth(250); // Increased width
@@ -256,7 +267,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
         callProgressLabel = new Label("0/0 (0%)");
         callProgressLabel.setFont(Font.font("System", 12)); // Smaller font
-        callProgressLabel.setTextFill(Color.valueOf("#555555")); // Gray color
+        callProgressLabel.setTextFill(Color.valueOf("#000000")); // Changed to black
 
 
         progressBox.getChildren().addAll(progressTitle, callProgressBar, callProgressLabel);
@@ -273,7 +284,14 @@ public class AbsenceCallScreenView extends BaseScreenView {
         absenceTable.setEditable(true);
         absenceTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        TableColumn<Attendance, String> studentNameCol = new TableColumn<>("Học sinh");
+        // Set style for table headers to have black text
+        absenceTable.setStyle("-fx-table-header-background: #f5f5f5; -fx-table-cell-border-color: #dddddd;");
+
+        // Add CSS to make the column headers black
+        String tableCss = "-fx-text-fill: black; -fx-font-weight: bold;";
+
+        TableColumn<Attendance, String> studentNameCol = new TableColumn<>();
+        setBlackHeaderText(studentNameCol, "Học sinh");
         studentNameCol.setCellValueFactory(data -> {
             Student student = data.getValue().getStudent();
             return javafx.beans.binding.Bindings.createStringBinding(
@@ -281,113 +299,93 @@ public class AbsenceCallScreenView extends BaseScreenView {
             );
         });
 
-        TableColumn<Attendance, String> classSessionCol = new TableColumn<>("Lớp học");
+        TableColumn<Attendance, String> classSessionCol = new TableColumn<>();
+        setBlackHeaderText(classSessionCol, "Lớp học");
         classSessionCol.setCellValueFactory(data -> {
             ClassSession session = data.getValue().getSession();
-            // Ensure session.getId() and session.getClassName() and session.getDate() exist and are correct types
             return javafx.beans.binding.Bindings.createStringBinding(
-                    () -> session != null ? session.getClassName() + " - " +
+                    () -> session != null ? session.getCourseName() + " - " +
                             (session.getDate() != null ? session.getDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "Không rõ ngày") : ""
             );
         });
 
-        TableColumn<Attendance, String> absenceTypeCol = new TableColumn<>("Loại vắng");
+        TableColumn<Attendance, String> absenceTypeCol = new TableColumn<>();
+        setBlackHeaderText(absenceTypeCol, "Loại vắng");
         absenceTypeCol.setCellValueFactory(data -> {
-            // Assuming Attendance model has a method like getAbsenceType() or a property representing absence type
-            // If the type is determined by isPresent and hasPermission, you might derive it here.
-            // For now, assuming getAbsenceType() exists.
-            // If not, derive like: data.getValue().isPresent() ? "Có mặt" : (data.getValue().hasPermission() ? "Vắng có phép" : "Vắng không phép")
-            String absenceType = data.getValue().getAbsenceType(); // Ensure getAbsenceType exists and returns String
+            String absenceType = data.getValue().getAbsenceType();
             return new SimpleStringProperty(absenceType != null && !absenceType.isEmpty() ? absenceType : "Không lý do");
         });
 
-
-        TableColumn<Attendance, String> parentNameCol = new TableColumn<>("Phụ huynh");
+        TableColumn<Attendance, String> parentNameCol = new TableColumn<>();
+        setBlackHeaderText(parentNameCol, "Phụ huynh");
         parentNameCol.setCellValueFactory(data -> {
             Student student = data.getValue().getStudent();
-            // Ensure student.getParent() exists and getParent().getName() exists and returns String
-            // This might require the Student model to have a reference to a Parent model or similar structure
             return javafx.beans.binding.Bindings.createStringBinding(
                     () -> student != null && student.getParent() != null ? student.getParent().getName() : ""
             );
         });
 
-        TableColumn<Attendance, String> parentContactCol = new TableColumn<>("Liên hệ");
+        TableColumn<Attendance, String> parentContactCol = new TableColumn<>();
+        setBlackHeaderText(parentContactCol, "Liên hệ");
         parentContactCol.setCellValueFactory(data -> {
             Student student = data.getValue().getStudent();
-            // Ensure student.getContactNumber() exists and returns String
             return javafx.beans.binding.Bindings.createStringBinding(
                     () -> student != null ? student.getContactNumber() : ""
             );
         });
 
-        TableColumn<Attendance, Boolean> calledCol = new TableColumn<>("Đã gọi");
+        TableColumn<Attendance, Boolean> calledCol = new TableColumn<>();
+        setBlackHeaderText(calledCol, "Đã gọi");
         calledCol.setCellValueFactory(data -> {
-            // Use SimpleBooleanProperty for editable CheckBoxTableCell
-            SimpleBooleanProperty prop = new SimpleBooleanProperty(data.getValue().isCalled()); // Ensure isCalled() exists on Attendance model
-            // Add listener to update the model and controller when checkbox is toggled
+            SimpleBooleanProperty prop = new SimpleBooleanProperty(data.getValue().isCalled());
             prop.addListener((obs, oldVal, newVal) -> {
-                // Ensure data.getValue().getId() returns String
                 String attendanceId = data.getValue().getId();
                 if (attendanceController != null && attendanceId != null && newVal != null) {
                     try {
-                        // Call the controller method to update the database
                         attendanceController.markAttendanceCalled(attendanceId, newVal);
-                        // If successful, update the model object as well
                         data.getValue().setCalled(newVal);
-                        updateProgressBar(); // Update progress bar after a change
+                        updateProgressBar();
                     } catch (SQLException e) {
                         showError("Lỗi khi cập nhật trạng thái gọi: " + e.getMessage());
                         e.printStackTrace();
-                        // Revert the checkbox state in the UI if the update fails
-                        // This part is tricky with SimpleBooleanProperty and CheckBoxTableCell listener
-                        // A common pattern is to revert the model's value if the controller call fails
-                        // and potentially refresh the table row or data.
-                        // For simplicity here, we are just showing an error. A more robust solution
-                        // might involve wrapping the controller call in a Task and handling success/failure.
-                        // Reverting the prop state directly here might cause an infinite loop.
-                        // Reverting the model value is safer.
-                        data.getValue().setCalled(oldVal); // Revert model state
-                        // Need to force UI refresh if reverting model state doesn't update the cell automatically
-                        absenceTable.refresh(); // Might be needed depending on how TableView observes changes
+                        data.getValue().setCalled(oldVal);
+                        absenceTable.refresh();
                     }
                 } else {
                     showError("Không thể cập nhật trạng thái gọi. ID điểm danh hoặc giá trị mới không hợp lệ.");
-                    data.getValue().setCalled(oldVal); // Revert model state
+                    data.getValue().setCalled(oldVal);
                     absenceTable.refresh();
                 }
             });
             return prop;
         });
         calledCol.setCellFactory(CheckBoxTableCell.forTableColumn(calledCol));
-        calledCol.setEditable(true); // Make the column editable
+        calledCol.setEditable(true);
 
-
-        TableColumn<Attendance, String> notesCol = new TableColumn<>("Ghi chú");
-        notesCol.setCellValueFactory(new PropertyValueFactory<>("note")); // Ensure 'note' property exists and is String in Attendance model
-        notesCol.setCellFactory(TextFieldTableCell.forTableColumn()); // Use default TextFieldTableCell
-        notesCol.setEditable(true); // Make the column editable
+        TableColumn<Attendance, String> notesCol = new TableColumn<>();
+        setBlackHeaderText(notesCol, "Ghi chú");
+        notesCol.setCellValueFactory(new PropertyValueFactory<>("note"));
+        notesCol.setCellFactory(TextFieldTableCell.forTableColumn());
+        notesCol.setEditable(true);
         notesCol.setOnEditCommit(event -> {
             Attendance attendance = event.getRowValue();
-            String attendanceId = attendance.getId(); // Ensure getId() returns String
+            String attendanceId = attendance.getId();
             String newNote = event.getNewValue();
             if (attendanceController != null && attendanceId != null) {
                 try {
-                    // Call the controller method to update the database
                     attendanceController.updateAttendanceNote(attendanceId, newNote);
-                    // If successful, update the model object as well
-                    attendance.setNote(newNote); // Update model
+                    attendance.setNote(newNote);
                 } catch (SQLException e) {
                     showError("Lỗi khi cập nhật ghi chú: " + e.getMessage());
                     e.printStackTrace();
-                    // Revert the cell value in the UI if the update fails
-                    absenceTable.refresh(); // Refresh table to show original value or handle reversion explicitly
+                    absenceTable.refresh();
                 }
             } else {
                 showError("Không thể cập nhật ghi chú. ID điểm danh không hợp lệ.");
                 absenceTable.refresh();
             }
         });
+        notesCol.setStyle(tableCss);
 
         absenceTable.getColumns().addAll(studentNameCol, classSessionCol, absenceTypeCol,
                 parentNameCol, parentContactCol, calledCol, notesCol);
@@ -591,7 +589,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
                 boolean contactMatches = student.getContactNumber() != null && student.getContactNumber().toLowerCase().contains(lowerSearchText);
 
 
-                boolean classMatches = session.getClassName() != null && session.getClassName().toLowerCase().contains(lowerSearchText);
+                boolean classMatches = session.getCourseName() != null && session.getCourseName().toLowerCase().contains(lowerSearchText);
 
                 // Match if any of the conditions are true
                 matchesSearchText = nameMatches || parentMatches || contactMatches || classMatches;
@@ -655,7 +653,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
                 // A placeholder call is added, and you would need to implement this method in your controller.
                 boolean success = false;
 
-                        //attendanceController.exportAbsencesToExcel(dataToExport, filename); // This method needs to be implemented in AttendanceController
+                //attendanceController.exportAbsencesToExcel(dataToExport, filename); // This method needs to be implemented in AttendanceController
 
                 if (success) {
                     showInfo("Xuất Excel thành công vào tệp: " + filename);
@@ -791,4 +789,14 @@ public class AbsenceCallScreenView extends BaseScreenView {
         loadAbsenceData();
     }
 
+    // Create a utility method to set up columns with black text
+    private void setBlackHeaderText(TableColumn<Attendance, ?> column, String title) {
+        Label label = new Label(title);
+        label.setTextFill(Color.BLACK);
+        label.setFont(Font.font("System", FontWeight.BOLD, 12));
+        label.setAlignment(Pos.CENTER);
+        label.setMaxWidth(Double.MAX_VALUE);
+        column.setGraphic(label);
+    }
 }
+

@@ -391,4 +391,3 @@ public class AbsenceCallView extends BaseScreenView {
         updateCurrentSessionDayLabel();
     }
 }
-
