@@ -1,8 +1,10 @@
+
 package src.model.attendance;
 
 import src.model.person.Student;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
 import src.model.ClassSession;
@@ -21,7 +23,8 @@ public class Attendance {
     private boolean hasPermission;
     private LocalDateTime checkInTime;
     private LocalDateTime recordTime;
-    private String status; // Added status variable
+    private String status;
+    private LocalDate absenceDate; // The specific date of this attendance record
 
     /**
      * Constructor mặc định
@@ -32,9 +35,10 @@ public class Attendance {
         this.called = false;
         this.hasPermission = false;
         this.recordTime = LocalDateTime.now();
-        this.student = new Student();
-        this.session = new ClassSession();
-        this.status = ""; // Initialize status
+        this.student = new Student(); // Consider if default instantiation is always desired
+        this.session = new ClassSession(); // Consider if default instantiation is always desired
+        this.status = "";
+        this.absenceDate = null; // Initialize absenceDate
     }
 
     /**
@@ -47,6 +51,9 @@ public class Attendance {
         this(); // Call default constructor for initializations
         this.student = student;
         this.session = session;
+        if (session != null) {
+            this.absenceDate = session.getDate(); // Set absenceDate from session date
+        }
     }
 
     /**
@@ -62,10 +69,12 @@ public class Attendance {
      * @param checkInTime   Thời gian học sinh điểm danh (nếu có mặt)
      * @param recordTime    Thời gian ghi nhận bản ghi
      * @param status        Trạng thái của bản ghi (e.g., 'active', 'archived')
+     * @param absenceDate   Ngày cụ thể của bản ghi điểm danh này
      */
     public Attendance(String id, Student student, ClassSession session, boolean present,
                       String note, boolean called, boolean hasPermission,
-                      LocalDateTime checkInTime, LocalDateTime recordTime, String status) { // Added status parameter
+                      LocalDateTime checkInTime, LocalDateTime recordTime, String status,
+                      LocalDate absenceDate) { // Added absenceDate parameter
         this.id = id;
         this.student = student;
         this.session = session;
@@ -75,106 +84,79 @@ public class Attendance {
         this.hasPermission = hasPermission;
         this.checkInTime = checkInTime;
         this.recordTime = recordTime != null ? recordTime : LocalDateTime.now();
-        this.status = status; // Set status
+        this.status = status;
+        this.absenceDate = absenceDate; // Set absenceDate
     }
 
     // Getters và Setters
 
-    /**
-     * Lấy ID của bản ghi điểm danh
-     *
-     * @return ID bản ghi
-     */
     public String getId() {
         return id;
     }
 
-    /**
-     * Thiết lập ID của bản ghi điểm danh
-     *
-     * @param id ID bản ghi
-     */
     public void setId(String id) {
         this.id = id;
     }
 
-    /**
-     * Lấy đối tượng Student được điểm danh
-     *
-     * @return Học sinh
-     */
     public Student getStudent() {
         return student;
     }
 
-    /**
-     * Thiết lập đối tượng Student được điểm danh
-     *
-     * @param student Học sinh
-     */
     public void setStudent(Student student) {
         this.student = student;
     }
 
-    /**
-     * Lấy mã học sinh
-     *
-     * @return Mã học sinh
-     */
     public String getStudentId() {
         return student != null ? student.getId() : null;
     }
 
-    /**
-     * Lấy đối tượng ClassSession
-     *
-     * @return Buổi học
-     */
     public ClassSession getSession() {
         return session;
     }
 
-    /**
-     * Thiết lập đối tượng ClassSession
-     *
-     * @param session Buổi học
-     */
     public void setSession(ClassSession session) {
         this.session = session;
+        // Optionally, you could update absenceDate if the session changes and absenceDate was null
+        // if (this.absenceDate == null && session != null) {
+        //     this.absenceDate = session.getDate();
+        // }
     }
 
-    /**
-     * Lấy ID của buổi học
-     *
-     * @return ID buổi học
-     */
     public String getSessionId() {
         return session != null ? session.getId() : null;
     }
 
     /**
-     * Lấy ngày diễn ra buổi học
+     * Lấy ngày diễn ra buổi học từ đối tượng ClassSession liên quan.
      *
-     * @return Ngày diễn ra
+     * @return Ngày diễn ra buổi học, hoặc null nếu không có session.
      */
     public LocalDate getDate() {
         return session != null ? session.getDate() : null;
     }
 
     /**
-     * Kiểm tra học sinh có mặt hay không
+     * Lấy ngày cụ thể của bản ghi điểm danh này.
      *
-     * @return true nếu học sinh có mặt, ngược lại là false
+     * @return Ngày điểm danh.
      */
+    public LocalDate getAbsenceDate() {
+        return absenceDate;
+    }
+
+    /**
+     * Thiết lập ngày cụ thể cho bản ghi điểm danh này.
+     *
+     * @param absenceDate Ngày điểm danh.
+     */
+    public void setAbsenceDate(LocalDate absenceDate) {
+        this.absenceDate = absenceDate;
+    }
+
     public boolean isPresent() {
         return present;
     }
 
-    /**
-     * Thiết lập trạng thái có mặt của học sinh
-     *
-     * @param present true nếu học sinh có mặt, ngược lại là false
-     */
     public void setPresent(boolean present) {
         this.present = present;
         if (present && this.checkInTime == null) {
@@ -182,157 +164,85 @@ public class Attendance {
         }
     }
 
-    /**
-     * Lấy ghi chú điểm danh
-     *
-     * @return Ghi chú điểm danh
-     */
     public String getNote() {
         return note;
     }
 
-    /**
-     * Thiết lập ghi chú điểm danh
-     *
-     * @param note Ghi chú điểm danh
-     */
     public void setNote(String note) {
         this.note = note;
     }
 
-    /**
-     * Kiểm tra đã gọi điện thông báo hay chưa
-     *
-     * @return true nếu đã gọi điện, ngược lại là false
-     */
+    // Redundant notes getter/setter, aliasing to getNote/setNote
+    public String getNotes() {
+        return getNote();
+    }
+
+    public void setNotes(String note) {
+        setNote(note);
+    }
+
+
     public boolean isCalled() {
         return called;
     }
 
-    /**
-     * Thiết lập trạng thái đã gọi điện thông báo
-     *
-     * @param called true nếu đã gọi điện, ngược lại là false
-     */
     public void setCalled(boolean called) {
         this.called = called;
     }
 
-    /**
-     * Kiểm tra học sinh có phép hay không
-     *
-     * @return true nếu có phép, ngược lại là false
-     */
     public boolean hasPermission() {
         return hasPermission;
     }
 
-    /**
-     * Thiết lập trạng thái có phép của học sinh
-     *
-     * @param hasPermission true nếu có phép, ngược lại là false
-     */
     public void setHasPermission(boolean hasPermission) {
         this.hasPermission = hasPermission;
     }
 
-    /**
-     * Lấy thời gian học sinh điểm danh
-     *
-     * @return Thời gian điểm danh
-     */
     public LocalDateTime getCheckInTime() {
         return checkInTime;
     }
 
-    /**
-     * Thiết lập thời gian học sinh điểm danh
-     *
-     * @param checkInTime Thời gian điểm danh
-     */
     public void setCheckInTime(LocalDateTime checkInTime) {
         this.checkInTime = checkInTime;
     }
 
-    /**
-     * Lấy thời gian ghi nhận bản ghi
-     *
-     * @return Thời gian ghi nhận
-     */
     public LocalDateTime getRecordTime() {
         return recordTime;
     }
 
-    /**
-     * Thiết lập thời gian ghi nhận bản ghi
-     *
-     * @param recordTime Thời gian ghi nhận
-     */
     public void setRecordTime(LocalDateTime recordTime) {
         this.recordTime = recordTime;
     }
 
-    /**
-     * Lấy trạng thái của bản ghi
-     *
-     * @return Trạng thái của bản ghi
-     */
-    public String getStatus() { // Added getStatus method
+    public String getStatus() {
         return status;
     }
 
-    /**
-     * Thiết lập trạng thái của bản ghi
-     *
-     * @param status Trạng thái của bản ghi
-     */
-    public void setStatus(String status) { // Added setStatus method
+    public void setStatus(String status) {
         this.status = status;
     }
 
-    /**
-     * Lấy tên học sinh
-     *
-     * @return Tên học sinh
-     */
     public String getStudentName() {
         return student != null ? student.getName() : "";
     }
 
-    /**
-     * Lấy tên phụ huynh
-     *
-     * @return Tên phụ huynh
-     */
     public String getParentName() {
         return student != null && student.getParentName() != null ?
                 student.getParentName() : "";
     }
 
-    /**
-     * Lấy số điện thoại phụ huynh
-     *
-     * @return Số điện thoại phụ huynh
-     */
     public String getParentContact() {
         return student != null && student.getParentPhoneNumber() != null ?
                 student.getParentPhoneNumber(): "";
     }
 
-    /**
-     * Kiểm tra tính hợp lệ của bản ghi điểm danh
-     *
-     * @return true nếu bản ghi hợp lệ, ngược lại là false
-     */
     public boolean isValid() {
-        return student != null && session != null;
+        // Consider if studentId and sessionId should also be checked for non-null/non-empty
+        return student != null && student.getId() != null && !student.getId().trim().isEmpty() &&
+                session != null && session.getId() != null && !session.getId().trim().isEmpty() &&
+                absenceDate != null; // An attendance record should have a specific date.
     }
 
-    /**
-     * Tạo một thông báo vắng mặt dựa trên thông tin điểm danh
-     *
-     * @return Chuỗi thông báo vắng mặt
-     */
     public String generateAbsenceNotification() {
         if (present) return null;
 
@@ -340,9 +250,16 @@ public class Attendance {
         sb.append("Thông báo: Học sinh ");
         sb.append(getStudentName());
         sb.append(" đã vắng mặt trong buổi học ");
-        sb.append(session != null ? session.getCourseName() : "");
+        sb.append(session != null ? session.getCourseName() : "[Không rõ môn học]");
         sb.append(" ngày ");
-        sb.append(session != null ? session.getFormattedDate() : "");
+        // Use absenceDate for the notification if available, otherwise fall back to session date.
+        LocalDate notificationDate = this.absenceDate != null ? this.absenceDate : getDate();
+        if (notificationDate != null) {
+            sb.append(notificationDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+        } else {
+            sb.append("[Không rõ ngày]");
+        }
+
 
         if (hasPermission) {
             sb.append(" (có phép)");
@@ -362,67 +279,51 @@ public class Attendance {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Attendance that = (Attendance) o;
-        // Include 'status' in equals comparison
         return present == that.present &&
                 called == that.called &&
                 hasPermission == that.hasPermission &&
-                Objects.equals(id, that.id) && // Changed to Objects.equals for String
-                Objects.equals(student, that.student) &&
-                Objects.equals(session, that.session) &&
+                Objects.equals(id, that.id) &&
+                Objects.equals(student, that.student) && // Compares student objects
+                Objects.equals(session, that.session) && // Compares session objects
                 Objects.equals(note, that.note) &&
                 Objects.equals(checkInTime, that.checkInTime) &&
                 Objects.equals(recordTime, that.recordTime) &&
-                Objects.equals(status, that.status); // Included status
+                Objects.equals(status, that.status) &&
+                Objects.equals(absenceDate, that.absenceDate); // Included absenceDate
     }
 
     @Override
     public int hashCode() {
-        // Include 'status' in hashCode calculation
-        return Objects.hash(id, student, session, present, note, called, hasPermission, checkInTime, recordTime, status); // Included status
+        return Objects.hash(id, student, session, present, note, called, hasPermission,
+                checkInTime, recordTime, status, absenceDate); // Included absenceDate
     }
 
     @Override
     public String toString() {
         return "Attendance{" +
-                "id=" + id +
-                ", student=" + (student != null ? student.getId() : "null") +
-                ", session=" + (session != null ? session.getId() : "null") +
+                "id='" + id + '\'' +
+                ", studentId=" + (student != null ? student.getId() : "null") +
+                ", sessionId=" + (session != null ? session.getId() : "null") +
                 ", present=" + present +
+                ", absenceDate=" + absenceDate + // Included absenceDate
                 ", note='" + note + '\'' +
                 ", called=" + called +
                 ", hasPermission=" + hasPermission +
                 ", checkInTime=" + checkInTime +
                 ", recordTime=" + recordTime +
-                ", status='" + status + '\'' + // Included status in toString
+                ", status='" + status + '\'' +
                 '}';
     }
 
-    public void setDate(LocalDate now) {
-        if (session != null) {
-            session.setDate(now);
-        }
-    }
 
-    /**
-     * Kiểm tra đã thông báo hay chưa (alias cho isCalled)
-     * @return true nếu đã thông báo, ngược lại là false
-     */
     public boolean isNotified() {
         return called;
     }
 
-    /**
-     * Thiết lập trạng thái đã thông báo
-     * @param notified true nếu đã thông báo, ngược lại là false
-     */
     public void setNotified(boolean notified) {
         this.called = notified;
     }
 
-    /**
-     * Thiết lập ID của buổi học
-     * @param sessionId ID buổi học
-     */
     public void setSessionId(String sessionId) {
         if (this.session == null) {
             this.session = new ClassSession();
@@ -430,10 +331,6 @@ public class Attendance {
         this.session.setId(sessionId);
     }
 
-    /**
-     * Thiết lập ID của học sinh
-     * @param studentId ID học sinh
-     */
     public void setStudentId(String studentId) {
         if (this.student == null) {
             this.student = new Student();
@@ -441,10 +338,6 @@ public class Attendance {
         this.student.setId(studentId);
     }
 
-    /**
-     * Thiết lập tên học sinh
-     * @param studentName Tên học sinh
-     */
     public void setStudentName(String studentName) {
         if (this.student == null) {
             this.student = new Student();
@@ -452,12 +345,6 @@ public class Attendance {
         this.student.setName(studentName);
     }
 
-
-    /**
-     * Lấy loại vắng mặt của học sinh
-     *
-     * @return Loại vắng mặt (có phép/không phép)
-     */
     public String getAbsenceType() {
         if (present) {
             return "Có mặt";
@@ -468,48 +355,57 @@ public class Attendance {
         }
     }
 
-    /**
-     * Kiểm tra có phải vắng mặt hay không
-     *
-     * @return true nếu học sinh vắng mặt (không có mặt), ngược lại là false
-     */
     public boolean isAbsent() {
         return !present;
     }
 
-    /**
-     * Lấy trạng thái gọi điện dưới dạng văn bản
-     *
-     * @return Trạng thái gọi điện (Đã gọi/Chưa gọi)
-     */
     public String getCallStatus() {
         return called ? "Đã gọi" : "Chưa gọi";
     }
 
-    /**
-     * Lấy thông tin lớp học
-     *
-     * @return Tên lớp học
-     */
     public String getClassName() {
-        return session != null ? session.getClassName() : "";
+        return session != null ? session.getCourseName() : "";
     }
 
-    /**
-     * Lấy thông tin môn học
-     *
-     * @return Tên môn học
-     */
     public String getSubjectName() {
         return session != null ? session.getCourseName() : "";
     }
 
     /**
-     * Lấy thông tin ngày vắng dưới dạng văn bản có định dạng
-     *
-     * @return Ngày vắng dưới dạng chuỗi đã định dạng
+     * Lấy thông tin ngày của buổi học liên quan dưới dạng văn bản có định dạng.
+     * Để lấy ngày cụ thể của bản ghi điểm danh này (this.absenceDate) đã định dạng,
+     * bạn nên tạo một phương thức mới hoặc định dạng this.absenceDate trực tiếp.
+     * Ví dụ: public String getFormattedAbsenceDate() {
+     *     return this.absenceDate != null ? this.absenceDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "";
+     * }
+     * @return Ngày của buổi học dưới dạng chuỗi đã định dạng, hoặc chuỗi rỗng.
      */
     public String getFormattedDate() {
+        // This method still refers to the session's date.
         return session != null ? session.getFormattedDate() : "";
     }
+
+    /**
+     * Lấy ngày cụ thể của bản ghi điểm danh này, đã được định dạng.
+     * @param formatter Đối tượng DateTimeFormatter để định dạng ngày.
+     * @return Ngày điểm danh đã định dạng, hoặc chuỗi rỗng nếu absenceDate là null.
+     */
+    public String getFormattedAbsenceDate(DateTimeFormatter formatter) {
+        if (this.absenceDate == null || formatter == null) {
+            return "";
+        }
+        return this.absenceDate.format(formatter);
+    }
+
+    /**
+     * Lấy ngày cụ thể của bản ghi điểm danh này, đã được định dạng theo "dd/MM/yyyy".
+     * @return Ngày điểm danh đã định dạng, hoặc chuỗi rỗng nếu absenceDate là null.
+     */
+    public String getFormattedAbsenceDate() {
+        if (this.absenceDate == null) {
+            return "";
+        }
+        return this.absenceDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
 }
+

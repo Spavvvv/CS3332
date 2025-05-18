@@ -1,3 +1,4 @@
+
 package src.dao;
 
 import src.model.system.course.Course;
@@ -9,84 +10,45 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.List; // Removed Arrays import as it's unused
 import java.util.Optional;
 
 /**
  * Data Access Object for Course entities.
- * Follows the pattern of using a DaoManager for dependency injection and
- * managing connections per-operation via wrapper methods.
  */
 public class CourseDAO {
-    // Dependent DAOs - must be set externally by a DaoManager
     private StudentDAO studentDAO;
     private TeacherDAO teacherDAO;
 
-    /**
-     * Constructor. Dependencies are not initialized here; they must be set externally.
-     * The class-level connection is removed to manage connections per operation.
-     */
     public CourseDAO() {
-        // Dependencies like StudentDAO and TeacherDAO will be set by DaoManager
+        // Dependencies will be set by DaoManager
     }
 
-    /**
-     * Set StudentDAO - used for dependency injection.
-     * This method must be called after CourseDAO is instantiated to provide the dependency.
-     *
-     * @param studentDAO The StudentDAO instance
-     */
     public void setStudentDAO(StudentDAO studentDAO) {
         this.studentDAO = studentDAO;
     }
 
-    /**
-     * Set TeacherDAO - used for dependency injection.
-     * This method must be called after CourseDAO is instantiated to provide the dependency.
-     *
-     * @param teacherDAO The TeacherDAO instance
-     */
     public void setTeacherDAO(TeacherDAO teacherDAO) {
         this.teacherDAO = teacherDAO;
     }
 
-    /**
-     * Check if StudentDAO dependency is set.
-     * @throws IllegalStateException if StudentDAO dependency is not set.
-     */
     private void checkStudentDAODependency() {
         if (this.studentDAO == null) {
-            throw new IllegalStateException("StudentDAO dependency has not been set on CourseDAO. Cannot load students.");
+            throw new IllegalStateException("StudentDAO dependency has not been set on CourseDAO.");
         }
     }
 
-    /**
-     * Check if TeacherDAO dependency is set.
-     * @throws IllegalStateException if TeacherDAO dependency is not set.
-     */
     private void checkTeacherDAODependency() {
         if (this.teacherDAO == null) {
-            throw new IllegalStateException("TeacherDAO dependency has not been set on CourseDAO. Cannot load teacher.");
+            throw new IllegalStateException("TeacherDAO dependency has not been set on CourseDAO.");
         }
     }
 
-    // --- Internal Methods (Package-private or Private) ---
-    // These methods take a Connection as a parameter and perform the core SQL logic.
-    // They typically throw SQLException and rely on dependencies already being set.
-
-    /**
-     * Internal method to insert a new course into the database using an existing connection.
-     *
-     * @param conn   the active database connection
-     * @param course the course to insert
-     * @return true if successful
-     * @throws SQLException if a database access error occurs
-     */
     private boolean internalInsert(Connection conn, Course course) throws SQLException {
+        // Added class_id to the SQL query and parameter setting
         String sql = "INSERT INTO courses (course_id, course_name, subject, start_date, end_date, " +
-                "days_of_week, start_time, end_time, teacher_id, room_id, progress) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "days_of_week, start_time, end_time, teacher_id, room_id, class_id, progress) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, course.getCourseId());
@@ -96,41 +58,39 @@ public class CourseDAO {
             statement.setDate(5, course.getEndDate() != null ? Date.valueOf(course.getEndDate()) : null);
             statement.setString(6, course.getDaysOfWeekAsString());
 
-            Time startTimeSql = course.getStartTime() != null ? Time.valueOf(course.getStartTime()) : null;
-            Time endTimeSql = course.getEndTime() != null ? Time.valueOf(course.getEndTime()) : null;
+            // Use renamed getters from Course model
+            Time startTimeSql = course.getCourseStartTime() != null ? Time.valueOf(course.getCourseStartTime()) : null;
+            Time endTimeSql = course.getCourseEndTime() != null ? Time.valueOf(course.getCourseEndTime()) : null;
 
             statement.setTime(7, startTimeSql);
             statement.setTime(8, endTimeSql);
 
             statement.setString(9, course.getTeacher() != null ? course.getTeacher().getId() : null);
             statement.setString(10, course.getRoomId());
-            statement.setFloat(11, course.getProgress());
+            statement.setString(11, course.getClassId()); // Set class_id
+            statement.setFloat(12, course.getProgress());
 
             int rowsInserted = statement.executeUpdate();
 
-            if (rowsInserted > 0 && course.getStudents() != null) {
+            // Student enrollment logic: uses course.getCourseId() as the key for enrollment.class_id
+            // This assumes enrollment.class_id actually stores course_id.
+            // If enrollment.class_id refers to classes.class_id, this logic might need adjustment
+            // to use course.getClassId() instead. For now, keeping existing logic.
+            if (rowsInserted > 0 && course.getStudents() != null && !course.getStudents().isEmpty()) {
                 for (Student student : course.getStudents()) {
-                    // Use the same connection for relationship linking
+                    // Assuming addStudentToCourse's second parameter (courseId) refers to the ID used in 'enrollment' table
                     addStudentToCourse(conn, course.getCourseId(), student.getId());
                 }
             }
-
             return rowsInserted > 0;
         }
     }
 
-    /**
-     * Internal method to update an existing course in the database using an existing connection.
-     *
-     * @param conn   the active database connection
-     * @param course the course to update
-     * @return true if successful
-     * @throws SQLException if a database access error occurs
-     */
     private boolean internalUpdate(Connection conn, Course course) throws SQLException {
+        // Added class_id to the SQL query and parameter setting
         String sql = "UPDATE courses SET course_name = ?, subject = ?, start_date = ?, end_date = ?, " +
                 "days_of_week = ?, start_time = ?, end_time = ?, teacher_id = ?, room_id = ?, " +
-                "progress = ? WHERE course_id = ?";
+                "class_id = ?, progress = ? WHERE course_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, course.getCourseName());
@@ -139,45 +99,41 @@ public class CourseDAO {
             statement.setDate(4, course.getEndDate() != null ? Date.valueOf(course.getEndDate()) : null);
             statement.setString(5, course.getDaysOfWeekAsString());
 
-            Time startTimeSql = course.getStartTime() != null ? Time.valueOf(course.getStartTime()) : null;
-            Time endTimeSql = course.getEndTime() != null ? Time.valueOf(course.getEndTime()) : null;
+            // Use renamed getters from Course model
+            Time startTimeSql = course.getCourseStartTime() != null ? Time.valueOf(course.getCourseStartTime()) : null;
+            Time endTimeSql = course.getCourseEndTime() != null ? Time.valueOf(course.getCourseEndTime()) : null;
 
             statement.setTime(6, startTimeSql);
             statement.setTime(7, endTimeSql);
 
             statement.setString(8, course.getTeacher() != null ? course.getTeacher().getId() : null);
             statement.setString(9, course.getRoomId());
-            statement.setFloat(10, course.getProgress());
-            statement.setString(11, course.getCourseId());
+            statement.setString(10, course.getClassId()); // Set class_id
+            statement.setFloat(11, course.getProgress());
+            statement.setString(12, course.getCourseId());
 
             int rowsUpdated = statement.executeUpdate();
 
-            // Update student enrollments if needed
             if (rowsUpdated > 0) {
-                // Use the same connection for related operations
+                // Student enrollment logic: uses course.getCourseId() as the key for enrollment.class_id
+                // See comment in internalInsert regarding this logic.
                 removeAllStudentsFromCourse(conn, course.getCourseId());
-                if (course.getStudents() != null) {
+                if (course.getStudents() != null && !course.getStudents().isEmpty()) {
                     for (Student student : course.getStudents()) {
                         addStudentToCourse(conn, course.getCourseId(), student.getId());
                     }
                 }
             }
-
             return rowsUpdated > 0;
         }
     }
 
-    /**
-     * Internal method to delete a course from the database using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param courseId the ID of the course to delete
-     * @return true if successful
-     * @throws SQLException if a database access error occurs
-     */
     private boolean internalDelete(Connection conn, String courseId) throws SQLException {
-        // Use the same connection for related operations
-        removeAllStudentsFromCourse(conn, courseId);
+        // Student enrollment logic: uses courseId (which is courses.course_id) as the key for enrollment.class_id
+        // See comment in internalInsert regarding this logic.
+        // If enrollments should be removed based on courses.class_id, this would need to fetch
+        // the class_id for the course first.
+        removeAllStudentsFromCourse(conn, courseId); // Assumes courseId is the key for enrollment removal
 
         String sql = "DELETE FROM courses WHERE course_id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -186,26 +142,15 @@ public class CourseDAO {
         }
     }
 
-    /**
-     * Get a course by ID using an existing connection.
-     * Use this when called from another DAO that already has a connection open.
-     *
-     * @param conn the active database connection
-     * @param courseId the course ID
-     * @return the Course object or null if not found
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     Course getById(Connection conn, String courseId) throws SQLException {
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses WHERE course_id = ?";
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE course_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, courseId);
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     return extractCourseFromResultSet(conn, resultSet);
                 }
             }
@@ -213,109 +158,63 @@ public class CourseDAO {
         return null;
     }
 
-    /**
-     * Get all courses from the database using an existing connection.
-     * Primarily for internal use or by other DAOs with an active connection.
-     *
-     * @param conn the active database connection
-     * @return List of all courses
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     List<Course> getAll(Connection conn) throws SQLException {
         List<Course> courses = new ArrayList<>();
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses";
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses";
 
         try (Statement statement = conn.createStatement();
              ResultSet resultSet = statement.executeQuery(sql)) {
-
             while (resultSet.next()) {
-                // Pass the connection down to the extraction helper
                 courses.add(extractCourseFromResultSet(conn, resultSet));
             }
         }
         return courses;
     }
 
-    /**
-     * Add a student to a course by creating an enrollment record using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param courseId the course ID (maps to class_id in enrollment)
-     * @param studentId the student ID
-     * @return true if successful
-     * @throws SQLException if a database access error occurs
-     */
-    private boolean addStudentToCourse(Connection conn, String courseId, String studentId) throws SQLException {
+    private boolean addStudentToCourse(Connection conn, String keyForEnrollment, String studentId) throws SQLException {
+        // This method assumes 'keyForEnrollment' is the value to be inserted into enrollment.class_id
+        // In internalInsert/Update, course.getCourseId() is passed as keyForEnrollment.
         String sql = "INSERT INTO enrollment (student_id, class_id, enrollment_date, status) VALUES (?, ?, ?, ?)";
-
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, studentId);
-            statement.setString(2, courseId);
+            statement.setString(2, keyForEnrollment); // keyForEnrollment is used as enrollment.class_id
             statement.setDate(3, Date.valueOf(LocalDate.now()));
             statement.setString(4, "Active");
-
             return statement.executeUpdate() > 0;
         }
     }
 
-    /**
-     * Remove a student from a course by deleting the enrollment record using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param courseId the course ID (maps to class_id in enrollment)
-     * @param studentId the student ID
-     * @return true if successful
-     * @throws SQLException if a database access error occurs
-     */
-    private boolean removeStudentFromCourse(Connection conn, String courseId, String studentId) throws SQLException {
+    private boolean removeStudentFromCourse(Connection conn, String keyForEnrollment, String studentId) throws SQLException {
+        // This method assumes 'keyForEnrollment' is the value used in enrollment.class_id
         String sql = "DELETE FROM enrollment WHERE class_id = ? AND student_id = ?";
-
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, courseId);
+            statement.setString(1, keyForEnrollment); // keyForEnrollment is used as enrollment.class_id
             statement.setString(2, studentId);
-
             return statement.executeUpdate() > 0;
         }
     }
 
-    /**
-     * Remove all students from a course by deleting enrollment records for that class using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param courseId the course ID (maps to class_id in enrollment)
-     * @throws SQLException if a database access error occurs
-     */
-    private void removeAllStudentsFromCourse(Connection conn, String courseId) throws SQLException {
+    private void removeAllStudentsFromCourse(Connection conn, String keyForEnrollment) throws SQLException {
+        // This method assumes 'keyForEnrollment' is the value used in enrollment.class_id
         String sql = "DELETE FROM enrollment WHERE class_id = ?";
-
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, courseId);
+            statement.setString(1, keyForEnrollment); // keyForEnrollment is used as enrollment.class_id
             statement.executeUpdate();
         }
     }
 
-    /**
-     * Get courses by teacher ID using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param teacherId the teacher ID
-     * @return List of courses taught by the teacher
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     List<Course> getCoursesByTeacherId(Connection conn, String teacherId) throws SQLException {
         List<Course> courses = new ArrayList<>();
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses WHERE teacher_id = ?";
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE teacher_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, teacherId);
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     courses.add(extractCourseFromResultSet(conn, resultSet));
                 }
             }
@@ -323,29 +222,19 @@ public class CourseDAO {
         return courses;
     }
 
-    /**
-     * Get courses by student ID using an existing connection.
-     * Use this when called from another DAO that already has a connection open.
-     *
-     * @param conn the active database connection
-     * @param studentId the student ID
-     * @return List of courses the student is enrolled in
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     List<Course> getCoursesByStudentId(Connection conn, String studentId) throws SQLException {
         List<Course> courses = new ArrayList<>();
+        // Added c.class_id to the SELECT query
+        // The JOIN c.course_id = e.class_id assumes enrollment.class_id stores courses.course_id
         String sql = "SELECT c.course_id, c.course_name, c.subject, c.start_date, c.end_date, c.days_of_week, " +
-                "c.start_time, c.end_time, c.teacher_id, c.room_id, c.progress FROM courses c " +
-                "JOIN enrollment e ON c.course_id = e.class_id " +
+                "c.start_time, c.end_time, c.teacher_id, c.room_id, c.class_id, c.progress FROM courses c " +
+                "JOIN enrollment e ON c.course_id = e.class_id " + // This join condition might need review based on true meaning of enrollment.class_id
                 "WHERE e.student_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, studentId);
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     courses.add(extractCourseFromResultSet(conn, resultSet));
                 }
             }
@@ -353,28 +242,18 @@ public class CourseDAO {
         return courses;
     }
 
-    /**
-     * Search courses by name or subject using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param searchTerm the search term
-     * @return List of matching courses
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     List<Course> searchCourses(Connection conn, String searchTerm) throws SQLException {
         List<Course> courses = new ArrayList<>();
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses WHERE course_name LIKE ? OR subject LIKE ?";
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE course_name LIKE ? OR subject LIKE ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             String searchPattern = "%" + searchTerm + "%";
             statement.setString(1, searchPattern);
             statement.setString(2, searchPattern);
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     courses.add(extractCourseFromResultSet(conn, resultSet));
                 }
             }
@@ -382,26 +261,16 @@ public class CourseDAO {
         return courses;
     }
 
-    /**
-     * Get courses by subject using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param subject the subject name
-     * @return List of courses for the subject
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     List<Course> getCoursesBySubject(Connection conn, String subject) throws SQLException {
         List<Course> courses = new ArrayList<>();
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses WHERE subject = ?";
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE subject = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, subject);
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     courses.add(extractCourseFromResultSet(conn, resultSet));
                 }
             }
@@ -409,29 +278,18 @@ public class CourseDAO {
         return courses;
     }
 
-    /**
-     * Get courses by date range using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param startDate the start date
-     * @param endDate the end date
-     * @return List of courses within the date range
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     List<Course> getCoursesByDateRange(Connection conn, LocalDate startDate, LocalDate endDate) throws SQLException {
         List<Course> courses = new ArrayList<>();
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses WHERE " +
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE " +
                 "NOT (end_date < ? OR start_date > ?)";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setDate(1, Date.valueOf(startDate));
             statement.setDate(2, Date.valueOf(endDate));
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     courses.add(extractCourseFromResultSet(conn, resultSet));
                 }
             }
@@ -439,28 +297,19 @@ public class CourseDAO {
         return courses;
     }
 
-    /**
-     * Get active courses using an existing connection.
-     *
-     * @param conn the active database connection
-     * @return List of active courses
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     List<Course> getActiveCourses(Connection conn) throws SQLException {
         List<Course> courses = new ArrayList<>();
         LocalDate today = LocalDate.now();
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses WHERE " +
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE " +
                 "start_date <= ? AND end_date >= ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setDate(1, Date.valueOf(today));
             statement.setDate(2, Date.valueOf(today));
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     courses.add(extractCourseFromResultSet(conn, resultSet));
                 }
             }
@@ -468,26 +317,17 @@ public class CourseDAO {
         return courses;
     }
 
-    /**
-     * Get upcoming courses using an existing connection.
-     *
-     * @param conn the active database connection
-     * @return List of upcoming courses
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     List<Course> getUpcomingCourses(Connection conn) throws SQLException {
         List<Course> courses = new ArrayList<>();
         LocalDate today = LocalDate.now();
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses WHERE start_date > ?";
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE start_date > ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setDate(1, Date.valueOf(today));
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     courses.add(extractCourseFromResultSet(conn, resultSet));
                 }
             }
@@ -495,26 +335,16 @@ public class CourseDAO {
         return courses;
     }
 
-    /**
-     * Get completed courses using an existing connection.
-     *
-     * @param conn the active database connection
-     * @return List of completed courses
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
-    List<Course> getCompletedCourses(Connection conn) throws SQLException {
+    List<Course> getCompletedCourses(Connection conn, LocalDate referenceDate) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        LocalDate today = LocalDate.now();
+        // Added class_id to the SELECT query
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, progress FROM courses WHERE end_date < ?";
+                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE end_date < ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setDate(1, Date.valueOf(today));
-
+            statement.setDate(1, Date.valueOf(referenceDate));
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    // Pass the connection down to the extraction helper
                     courses.add(extractCourseFromResultSet(conn, resultSet));
                 }
             }
@@ -522,49 +352,31 @@ public class CourseDAO {
         return courses;
     }
 
-    /**
-     * Internal method to update course progress using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param courseId the course ID
-     * @param progress the new progress value
-     * @return true if successful
-     * @throws SQLException if a database access error occurs
-     */
+    // Overloaded method for convenience, using today's date
+    List<Course> getCompletedCourses(Connection conn) throws SQLException {
+        return getCompletedCourses(conn, LocalDate.now());
+    }
+
+
     private boolean internalUpdateProgress(Connection conn, String courseId, float progress) throws SQLException {
         String sql = "UPDATE courses SET progress = ? WHERE course_id = ?";
-
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setFloat(1, progress);
             statement.setString(2, courseId);
-
             return statement.executeUpdate() > 0;
         }
     }
 
-
-    /**
-     * Get students enrolled in a course by looking up enrollment records using an existing connection.
-     * Requires the StudentDAO dependency to be set.
-     *
-     * @param conn the active database connection
-     * @param courseId the course ID (maps to class_id in enrollment)
-     * @return List of students enrolled in the course
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if StudentDAO dependency has not been set
-     */
-    List<Student> getStudentsByCourseId(Connection conn, String courseId) throws SQLException {
+    List<Student> getStudentsByCourseId(Connection conn, String courseIdForEnrollmentKey) throws SQLException {
         checkStudentDAODependency();
         List<Student> students = new ArrayList<>();
+        // This query assumes enrollment.class_id stores the 'courseIdForEnrollmentKey' (which is courses.course_id).
         String sql = "SELECT student_id FROM enrollment WHERE class_id = ?";
-
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, courseId);
-
+            statement.setString(1, courseIdForEnrollmentKey);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     String studentId = resultSet.getString("student_id");
-                    // Use the injected StudentDAO and pass the existing connection
                     Student student = this.studentDAO.getStudentById(conn, studentId);
                     if (student != null) {
                         students.add(student);
@@ -575,16 +387,6 @@ public class CourseDAO {
         return students;
     }
 
-    /**
-     * Helper method to extract a Course object from a ResultSet.
-     * This method now requires a database connection to load related entities (Teacher, Students).
-     *
-     * @param conn the active database connection
-     * @param resultSet ResultSet containing course data
-     * @return the Course object
-     * @throws SQLException if a database access error occurs
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set
-     */
     private Course extractCourseFromResultSet(Connection conn, ResultSet resultSet) throws SQLException {
         String courseId = resultSet.getString("course_id");
         String courseName = resultSet.getString("course_name");
@@ -592,432 +394,272 @@ public class CourseDAO {
 
         LocalDate startDate = null;
         Date startDateSql = resultSet.getDate("start_date");
-        if (startDateSql != null) {
-            startDate = startDateSql.toLocalDate();
-        }
+        if (startDateSql != null) startDate = startDateSql.toLocalDate();
 
         LocalDate endDate = null;
         Date endDateSql = resultSet.getDate("end_date");
-        if (endDateSql != null) {
-            endDate = endDateSql.toLocalDate();
-        }
+        if (endDateSql != null) endDate = endDateSql.toLocalDate();
 
         Course course = new Course(courseId, courseName, subject, startDate, endDate);
 
-        String daysOfWeekString = resultSet.getString("days_of_week");
-        course.setDaysOfWeekFromString(daysOfWeekString);
+        course.setDaysOfWeekFromString(resultSet.getString("days_of_week"));
 
         Time startTimeSql = resultSet.getTime("start_time");
-        LocalTime startTime = startTimeSql != null ? startTimeSql.toLocalTime() : null;
-        course.setStartTime(startTime);
+        course.setCourseSessionStartTime(startTimeSql != null ? startTimeSql.toLocalTime() : null); // Use renamed setter
 
         Time endTimeSql = resultSet.getTime("end_time");
-        LocalTime endTime = endTimeSql != null ? endTimeSql.toLocalTime() : null;
-        course.setEndTime(endTime);
+        course.setCourseSessionEndTime(endTimeSql != null ? endTimeSql.toLocalTime() : null); // Use renamed setter
 
         String teacherId = resultSet.getString("teacher_id");
         String roomId = resultSet.getString("room_id");
+        String classId = resultSet.getString("class_id"); // Retrieve class_id
         float progress = resultSet.getFloat("progress");
 
         course.setRoomId(roomId);
+        course.setClassId(classId); // Set class_id on Course object
         course.setProgress(progress);
 
-        // Set teacher if available - requires TeacherDAO
         if (teacherId != null && !teacherId.trim().isEmpty()) {
             checkTeacherDAODependency();
-            // Use the injected TeacherDAO and pass the existing connection
             Teacher teacher = this.teacherDAO.getById(conn, teacherId);
-            if (teacher != null) {
-                course.setTeacher(teacher);
-            }
+            course.setTeacher(teacher);
         }
 
-        // Load students - requires StudentDAO
-        // Use the helper method that takes a connection
-        List<Student> students = getStudentsByCourseId(conn, courseId); // Pass the connection
-        if (students != null) {
-            course.setStudents(students);
-        } else {
-            course.setStudents(new ArrayList<>());
-        }
+        // Fetches students based on course.course_id (passed as courseId to getStudentsByCourseId).
+        // This aligns with the assumption that enrollment.class_id stores courses.course_id.
+        List<Student> students = getStudentsByCourseId(conn, courseId);
+        course.setStudents(students != null ? students : new ArrayList<>());
 
         return course;
     }
 
     // --- Public Wrapper Methods ---
-    // These methods manage their own connection and handle exceptions.
-    // They delegate the core database logic to the internal methods.
-
-    /**
-     * Save a new course. Manages its own connection and transaction.
-     *
-     * @param course the course to save
-     * @return true if saving was successful, false otherwise
-     * @throws IllegalStateException if a required dependency (StudentDAO) has not been set (propagated from internalInsert)
-     */
     public boolean save(Course course) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            conn.setAutoCommit(false);
+            conn.setAutoCommit(false); // Manage transaction
             boolean success = internalInsert(conn, course);
-            if (success) {
-                conn.commit();
-            } else {
-                conn.rollback();
-            }
+            if (success) conn.commit();
+            else conn.rollback();
             return success;
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error saving course: " + e.getMessage());
-            e.printStackTrace();
+            // Consider logging the stack trace or using a proper logger
             return false;
         }
     }
 
-    /**
-     * Update an existing course. Manages its own connection and transaction.
-     *
-     * @param course the course to update
-     * @return true if the update was successful, false otherwise
-     * @throws IllegalStateException if a required dependency (StudentDAO) has not been set (propagated from internalUpdate)
-     */
     public boolean update(Course course) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            conn.setAutoCommit(false);
+            conn.setAutoCommit(false); // Manage transaction
             boolean success = internalUpdate(conn, course);
-            if (success) {
-                conn.commit();
-            } else {
-                conn.rollback();
-            }
+            if (success) conn.commit();
+            else conn.rollback();
             return success;
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error updating course: " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }
 
-    /**
-     * Delete a course. Manages its own connection and transaction.
-     *
-     * @param courseId the ID of the course to delete
-     * @return true if the deletion was successful, false otherwise
-     */
     public boolean delete(String courseId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            conn.setAutoCommit(false);
+            conn.setAutoCommit(false); // Manage transaction
             boolean success = internalDelete(conn, courseId);
-            if (success) {
-                conn.commit();
-            } else {
-                conn.rollback();
-            }
+            if (success) conn.commit();
+            else conn.rollback();
             return success;
         } catch (SQLException e) {
             System.err.println("Error deleting course with ID: " + courseId + ": " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }
 
-    /**
-     * Find a course by ID. Manages its own connection.
-     *
-     * @param courseId the course ID
-     * @return Optional containing the Course if found, empty Optional otherwise. Returns empty Optional on database error or if dependencies are not set.
-     */
     public Optional<Course> findById(String courseId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getById(Connection, String) might throw IllegalStateException
             return Optional.ofNullable(getById(conn, courseId));
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding course by ID: " + courseId + ": " + e.getMessage());
-            e.printStackTrace();
             return Optional.empty();
         }
     }
 
-    /**
-     * Get all courses. Manages its own connection.
-     *
-     * @return List of all courses. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> findAll() {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getAll(Connection) might throw IllegalStateException
             return getAll(conn);
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding all courses: " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Add a student to a course. Manages its own connection.
-     *
-     * @param courseId the course ID
-     * @param studentId the student ID
-     * @return true if successful, false otherwise (including on error)
-     */
     public boolean addStudentToCourse(String courseId, String studentId) {
+        // This public method uses 'courseId' (courses.course_id) as the key for enrollment.
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // No transaction needed for a single insert, auto-commit is fine by default
+            // Auto-commit is usually default, explicit transaction not strictly needed for single op.
             return addStudentToCourse(conn, courseId, studentId);
         } catch (SQLException e) {
             System.err.println("Error adding student " + studentId + " to course " + courseId + ": " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }
 
-    /**
-     * Remove a student from a course. Manages its own connection.
-     *
-     * @param courseId the course ID
-     * @param studentId the student ID
-     * @return true if successful, false otherwise (including on error)
-     */
     public boolean removeStudentFromCourse(String courseId, String studentId) {
+        // This public method uses 'courseId' (courses.course_id) as the key for enrollment.
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // No transaction needed for a single delete, auto-commit is fine by default
             return removeStudentFromCourse(conn, courseId, studentId);
         } catch (SQLException e) {
             System.err.println("Error removing student " + studentId + " from course " + courseId + ": " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }
 
-
-    /**
-     * Get courses by teacher ID. Manages its own connection.
-     *
-     * @param teacherId the teacher ID
-     * @return List of courses taught by the teacher. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> findCoursesByTeacherId(String teacherId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getCoursesByTeacherId(Connection, String) might throw IllegalStateException
             return getCoursesByTeacherId(conn, teacherId);
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding courses by teacher ID: " + teacherId + ": " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Get courses by student ID. Manages its own database connection.
-     *
-     * @param studentId the student ID
-     * @return List of courses the student is enrolled in. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> findCoursesByStudentId(String studentId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getCoursesByStudentId(Connection, String) might throw IllegalStateException
             return getCoursesByStudentId(conn, studentId);
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding courses for student ID: " + studentId + ": " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Search courses by name or subject. Manages its own connection.
-     *
-     * @param searchTerm the search term
-     * @return List of matching courses. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> search(String searchTerm) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // searchCourses(Connection, String) might throw IllegalStateException
             return searchCourses(conn, searchTerm);
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error searching courses for term: '" + searchTerm + "': " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Get courses by subject. Manages its own connection.
-     *
-     * @param subject the subject name
-     * @return List of courses for the subject. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> findCoursesBySubject(String subject) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getCoursesBySubject(Connection, String) might throw IllegalStateException
             return getCoursesBySubject(conn, subject);
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding courses by subject: " + subject + ": " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Get courses by date range. Manages its own connection.
-     *
-     * @param startDate the start date
-     * @param endDate the end date
-     * @return List of courses within the date range. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> findCoursesByDateRange(LocalDate startDate, LocalDate endDate) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getCoursesByDateRange(Connection, LocalDate, LocalDate) might throw IllegalStateException
             return getCoursesByDateRange(conn, startDate, endDate);
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding courses by date range (" + startDate + " to " + endDate + "): " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Get active courses. Manages its own connection.
-     *
-     * @return List of active courses. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> findActiveCourses() {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getActiveCourses(Connection) might throw IllegalStateException
             return getActiveCourses(conn);
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding active courses: " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Get upcoming courses. Manages its own connection.
-     *
-     * @return List of upcoming courses. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> findUpcomingCourses() {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getUpcomingCourses(Connection) might throw IllegalStateException
             return getUpcomingCourses(conn);
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding upcoming courses: " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Get completed courses. Manages its own connection.
-     *
-     * @return List of completed courses. Returns empty list on database error or if dependencies are not set.
-     */
     public List<Course> findCompletedCourses() {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // getCompletedCourses(Connection) might throw IllegalStateException
-            return getCompletedCourses(conn);
+            return getCompletedCourses(conn, LocalDate.now());
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error finding completed courses: " + e.getMessage());
-            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
-    /**
-     * Update course progress based on the course's start and end dates and current date.
-     * Manages its own connection.
-     *
-     * @param courseId the course ID
-     * @return true if successful, false otherwise (including on error or if course not found)
-     * @throws IllegalStateException if a required dependency (StudentDAO, TeacherDAO) has not been set (propagated from findById)
-     */
+    public List<Course> findCompletedCourses(LocalDate referenceDate) {
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            return getCompletedCourses(conn, referenceDate);
+        } catch (SQLException | IllegalStateException e) {
+            System.err.println("Error finding completed courses: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+
     public boolean updateProgressBasedOnDate(String courseId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // Need to get the course first to calculate progress
-            Course course = getById(conn, courseId); // getById(Connection, String) might throw IllegalStateException
+            conn.setAutoCommit(false); // Start transaction
+            Course course = getById(conn, courseId);
             if (course == null) {
                 System.err.println("Error updating progress: Course with ID " + courseId + " not found.");
+                conn.rollback(); // Rollback if course not found
                 return false;
             }
-
             float calculatedProgress = (float) course.calculateProgressBasedOnDate();
-
-            // Use the same connection to update the progress
-            return internalUpdateProgress(conn, courseId, calculatedProgress);
-
+            boolean success = internalUpdateProgress(conn, courseId, calculatedProgress);
+            if (success) conn.commit();
+            else conn.rollback();
+            return success;
         } catch (SQLException | IllegalStateException e) {
             System.err.println("Error updating progress for course ID: " + courseId + ": " + e.getMessage());
-            e.printStackTrace();
+            // A rollback might be needed here if the connection is still open and an error occurred after setAutoCommit(false)
+            // However, try-with-resources will close the connection. If an error occurs before commit/rollback, DB handles it.
             return false;
         }
     }
 
-
-    /**
-     * Update course progress. Manages its own connection.
-     *
-     * @param courseId the course ID
-     * @param progress the new progress value
-     * @return true if successful, false otherwise (including on error)
-     */
     public boolean updateProgress(String courseId, float progress) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // No transaction needed for a single update, auto-commit is fine by default
+            // Auto-commit is fine for single update unless part of a larger transaction managed externally
             return internalUpdateProgress(conn, courseId, progress);
         } catch (SQLException e) {
             System.err.println("Error setting progress for course ID: " + courseId + " to " + progress + ": " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }
 
-
-    /**
-     * Check if two courses have time conflicts. Does not interact with the database.
-     *
-     * @param course1 the first course
-     * @param course2 the second course
-     * @return true if there is a time conflict based on overlapping dates and time slots on common days.
-     */
     public boolean hasTimeConflict(Course course1, Course course2) {
-        // Check if date ranges overlap
-        if (!course1.overlapsDateRange(course2)) {
-            return false;
-        }
+        if (course1 == null || course2 == null) return false;
+        if (!course1.overlapsDateRange(course2)) return false;
 
-        // Check if time slots overlap and if there's at least one common day of the week
-        LocalTime start1 = course1.getStartTime();
-        LocalTime end1 = course1.getEndTime();
-        LocalTime start2 = course2.getStartTime();
-        LocalTime end2 = course2.getEndTime();
+        // Use renamed getters for start/end times and daysOfWeek list
+        LocalTime start1 = course1.getCourseStartTime();
+        LocalTime end1 = course1.getCourseEndTime();
+        LocalTime start2 = course2.getCourseStartTime();
+        LocalTime end2 = course2.getCourseEndTime();
 
-        List<String> days1 = course1.getDaysOfWeek();
-        List<String> days2 = course2.getDaysOfWeek();
+        List<String> days1 = course1.getDaysOfWeekList(); // Use renamed getter
+        List<String> days2 = course2.getDaysOfWeekList(); // Use renamed getter
 
-        // Check for intersection of days of week
         boolean hasDayIntersection = false;
-        if (days1 != null && days2 != null) {
-            for (String day1 : days1) {
-                if (day1 != null && !day1.trim().isEmpty() && days2.contains(day1.trim())) {
-                    hasDayIntersection = true;
-                    break;
+        if (days1 != null && !days1.isEmpty() && days2 != null && !days2.isEmpty()) {
+            for (String day1Str : days1) {
+                if (day1Str != null && !day1Str.trim().isEmpty()) {
+                    for (String day2Str : days2) {
+                        if (day1Str.trim().equalsIgnoreCase(day2Str != null ? day2Str.trim() : "")) {
+                            hasDayIntersection = true;
+                            break;
+                        }
+                    }
                 }
+                if (hasDayIntersection) break;
             }
         }
+        if (!hasDayIntersection) return false;
 
-        if (!hasDayIntersection) {
-            return false;
-        }
-
-        // Check if time periods overlap, handling potential null times
         if (start1 != null && end1 != null && start2 != null && end2 != null) {
-            // Overlap if (start1 <= end2) and (start2 <= end1)
-            return !(end1.isBefore(start2) || start1.isAfter(end2));
-        } else {
-            // If times aren't defined for both courses, there's no *specific* time slot conflict to check.
-            return false;
+            return !(end1.isBefore(start2) || start1.isAfter(end2) || end1.equals(start2) || start1.equals(end2));
         }
+        return false; // No specific time slot conflict if times are not defined
     }
-
-    // The closeConnection method is removed as connections are managed per method call via try-with-resources.
 }
+

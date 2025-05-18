@@ -494,15 +494,15 @@ public class LoginUI {
             NotificationDAO notificationDAO = new NotificationDAO(); // Giả sử NotificationDAO có constructor mặc định và tự quản lý kết nối
             NotificationService notificationService = new NotificationService(notificationDAO); // Truyền DAO vào service
 
-            // Tạo controllers và truyền thông tin người dùng đã đăng nhập
-            NavigationController navigationController1 = new NavigationController(ui);
-            MainController mainController1 = new MainController(ui, navigationController1);
+            navigationController = new NavigationController(ui);
+            mainController = new MainController(ui, navigationController);
+
 
             // Liên kết UI với các controller
             ui.setControllers(mainController1, navigationController1, notificationService);
 
             // Truyền thông tin người dùng vào controller
-            mainController1.setCurrentUser(user);
+            mainController.setCurrentUser(user);
 
             // Thêm dòng này để truyền trực tiếp thông tin người dùng cho UI
             ui.setCurrentUser(user);
@@ -515,13 +515,13 @@ public class LoginUI {
 
             // Xử lý sự kiện đóng cửa sổ
             uiStage.setOnCloseRequest(event -> {
-                mainController1.onAppExit();
+                mainController.onAppExit();
             });
 
             uiStage.show();
 
             // Khởi động ứng dụng
-            mainController1.onAppStart();
+            mainController.onAppStart();
 
         } catch (Exception e) {
             showAlert(Alert.AlertType.ERROR, "Lỗi khởi động",
@@ -532,7 +532,6 @@ public class LoginUI {
             primaryStage.show();
         }
     }
-
 
     private void gotoRegister() {
         primaryStage.close();

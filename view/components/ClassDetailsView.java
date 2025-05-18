@@ -25,7 +25,7 @@ public class ClassDetailsView extends BaseScreenView {
     private HBox actionBox;
 
     public ClassDetailsView() {
-        super("Chi tiết lớp học", "classDetails");
+        super("Chi tiết lớp học", "classroom-attendance-view");
     }
 
     @Override

@@ -112,7 +112,6 @@ public class RegisterDAO {
             String roleTableId = UUID.randomUUID().toString(); // Tạo ID riêng cho bảng vai trò
 
             switch (roleForDB) {
-
                 case "TEACHER":
                     // Dựa trên cấu trúc bảng teachers bạn cung cấp
                     insertRoleSQL = "INSERT INTO teachers (id, user_id, name, gender, contact_number, birthday, email, address) " +

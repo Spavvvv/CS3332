@@ -1,3 +1,4 @@
+
 package view.components;
 
 import javafx.geometry.Insets;
@@ -67,6 +68,11 @@ public class AttendanceScreenView extends BaseScreenView {
     private Map<String, List<Attendance>> sessionAttendanceMap;
     private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
+    // Track current filter state
+    private String currentStatusFilter = "ALL";
+    private String currentDayFilter = null;
+    private String currentSearchKeyword = "";
+
     // Controller
     private AttendanceController attendanceController;
 
@@ -78,7 +84,6 @@ public class AttendanceScreenView extends BaseScreenView {
 
         // Initialize controller - DAOs should be managed within the controller
         attendanceController = new AttendanceController();
-
 
         initializeView();
         // Don't load data here - we'll load it in onActivate()
@@ -148,7 +153,8 @@ public class AttendanceScreenView extends BaseScreenView {
             dayButton.setOnAction(e -> {
                 if (dayButton.isSelected()) {
                     String day = (String) dayButton.getUserData();
-                    filterSessionsByDay(day);
+                    currentDayFilter = day;
+                    applyFilters();
                 }
             });
         }
@@ -156,27 +162,35 @@ public class AttendanceScreenView extends BaseScreenView {
         // Status filter button events
         allButton.setOnAction(e -> {
             setActiveStatusButton(allButton);
-            filterSessionsByStatus("ALL");
+            currentStatusFilter = "ALL";
+            // Don't clear day filter
+            applyFilters();
         });
 
         unmarkedButton.setOnAction(e -> {
             setActiveStatusButton(unmarkedButton);
-            filterSessionsByStatus("UNMARKED");
+            currentStatusFilter = "UNMARKED";
+            // Don't clear day filter
+            applyFilters();
         });
 
         markedButton.setOnAction(e -> {
             setActiveStatusButton(markedButton);
-            filterSessionsByStatus("MARKED");
+            currentStatusFilter = "MARKED";
+            // Don't clear day filter
+            applyFilters();
         });
 
         // Search button event
         searchButton.setOnAction(e -> {
-            searchSessions(searchField.getText().trim());
+            currentSearchKeyword = searchField.getText().trim();
+            applyFilters();
         });
 
         // Search field enter key event
         searchField.setOnAction(e -> {
-            searchSessions(searchField.getText().trim());
+            currentSearchKeyword = searchField.getText().trim();
+            applyFilters();
         });
 
         // Export Excel button event
@@ -188,6 +202,34 @@ public class AttendanceScreenView extends BaseScreenView {
         attendanceListButton.setOnAction(e -> {
             viewAttendanceList();
         });
+    }
+
+    /**
+     * Apply all current filters in the correct order
+     */
+    private void applyFilters() {
+        // Start with all sessions
+        List<ClassSession> filteredSessions = new ArrayList<>(sessions);
+
+        // First apply search if present
+        if (currentSearchKeyword != null && !currentSearchKeyword.isEmpty()) {
+            filteredSessions = searchSessionsInternal(filteredSessions, currentSearchKeyword);
+        }
+
+        // Then apply day filter if present
+        if (currentDayFilter != null) {
+            filteredSessions = filterSessionsByDayInternal(filteredSessions, currentDayFilter);
+        }
+
+        // Finally apply status filter
+        List<ClassSession> statusFilteredSessions = filterSessionsByStatusInternal(filteredSessions, currentStatusFilter);
+
+        // Update UI
+        updateClassCards(statusFilteredSessions);
+
+        // For updating filter counts, we need to use the original sessions list
+        // filtered only by day and search, not by status
+        updateFilterButtonCounts(filteredSessions);
     }
 
     /**
@@ -214,8 +256,8 @@ public class AttendanceScreenView extends BaseScreenView {
                 sessionAttendanceMap.put(session.getId(), attendances);
             }
 
-            updateClassCards(sessions);
-            updateFilterButtonCounts(sessions);
+            // Apply current filters
+            applyFilters();
         } catch (SQLException e) {
             showError("Lỗi khi kết nối với cơ sở dữ liệu: " + e.getMessage());
             e.printStackTrace();
@@ -322,6 +364,7 @@ public class AttendanceScreenView extends BaseScreenView {
         int todayIndex = LocalDate.now().getDayOfWeek().getValue() - 1;
         if (todayIndex >= 0 && todayIndex < dayButtons.size()) {
             dayButtons.get(todayIndex).setSelected(true);
+            currentDayFilter = days[todayIndex]; // Set initial day filter
         }
 
         dayFilterBox.getChildren().add(dayFilterLabel);
@@ -452,7 +495,7 @@ public class AttendanceScreenView extends BaseScreenView {
         card.setEffect(dropShadow);
 
         // Class name - Assuming ClassSession has getClassName() or similar
-        Label classNameLabel = new Label(session.getClassName());
+        Label classNameLabel = new Label(session.getCourseName());
         classNameLabel.setFont(Font.font("System", FontWeight.BOLD, 18));
         classNameLabel.setTextFill(Color.web("#333333"));
         classNameLabel.setWrapText(true); // Allow wrapping
@@ -469,7 +512,7 @@ public class AttendanceScreenView extends BaseScreenView {
         roomLabel.setTextFill(Color.web("#555555"));
 
         // Schedule - Assuming ClassSession has getSchedule() or getTimeSlot()
-        Label scheduleLabel = new Label("Lịch học: " + session.getSchedule()); // Or session.getTimeSlot()
+        Label scheduleLabel = new Label("Lịch học: " + session.getTimeSlot()); // Or session.getTimeSlot()
         scheduleLabel.setFont(Font.font("System", 14));
         scheduleLabel.setTextFill(Color.web("#555555"));
 
@@ -521,7 +564,7 @@ public class AttendanceScreenView extends BaseScreenView {
 
             // Ensure widths sum up to totalWidth if there are students
             double currentTotalWidth = presentWidth + absentExcusedWidth + absentUnexcusedWidth;
-            if(totalStudents > 0 && currentTotalWidth > 0) {
+            if (totalStudents > 0 && currentTotalWidth > 0) {
                 double scaleFactor = totalWidth / currentTotalWidth;
                 presentWidth *= scaleFactor;
                 absentExcusedWidth *= scaleFactor;
@@ -607,7 +650,7 @@ public class AttendanceScreenView extends BaseScreenView {
             boolean success = false;
             //attendanceController.exportToExcel(sessions, sessionAttendanceMap);
             if (success) {
-                showInfo("Xuất dữ liệu Excel thành công!");
+                showSuccess("Xuất dữ liệu Excel thành công!");
             } else {
                 showError("Không thể xuất dữ liệu Excel. Có thể không có dữ liệu hoặc lỗi hệ thống.");
             }
@@ -686,7 +729,7 @@ public class AttendanceScreenView extends BaseScreenView {
             // will load data based on some state or a different mechanism.
             // If the target view needs the session ID, modify navigationController.navigateTo
             // or pass the ClassSession object itself.
-            showInfo("Navigating to Attendance Entry for Session ID: " + sessionId);
+            showSuccess("Navigating to Attendance Entry for Session ID: " + sessionId);
             // Example if navigation accepts parameters:
             // navigationController.navigateTo("absence-call-view", Map.of("sessionId", sessionId));
             navigationController.navigateTo("absence-call-view"); // Placeholder navigation
@@ -697,42 +740,38 @@ public class AttendanceScreenView extends BaseScreenView {
     }
 
     /**
-     * Filters sessions by day
-     * Uses controller for filtering logic
+     * Filters sessions by day - but doesn't update UI directly
+     * Returns filtered list for further processing
      */
-    private void filterSessionsByDay(String day) {
-        if (attendanceController == null) {
-            showError("Bộ điều khiển điểm danh chưa được khởi tạo.");
-            return;
+    private List<ClassSession> filterSessionsByDayInternal(List<ClassSession> sessionsToFilter, String day) {
+        if (attendanceController == null || sessionsToFilter == null) {
+            return new ArrayList<>();
         }
+
         try {
-            // Controller receives the full list of sessions (with String IDs) and the day string
-            List<ClassSession> filteredSessions = attendanceController.filterSessionsByDay(sessions, day);
-            updateClassCards(filteredSessions);
-            updateFilterButtonCounts(filteredSessions);
+            // Controller receives the list of sessions to filter (with String IDs) and the day string
+            return attendanceController.filterSessionsByDay(sessionsToFilter, day);
         } catch (Exception e) {
             showError("Lỗi khi lọc buổi học theo ngày: " + e.getMessage());
             e.printStackTrace();
+            return new ArrayList<>();
         }
     }
 
     /**
-     * Filters sessions by attendance status
-     * Uses controller for filtering logic
+     * Filters sessions by attendance status - but doesn't update UI directly
+     * Returns filtered list for further processing
      */
-    private void filterSessionsByStatus(String status) {
-        // This filtering logic is kept in the view as it operates on the locally loaded 'sessions' list
-        // and the 'sessionAttendanceMap', which are already managed by the view's state.
-        // If this logic were complex or involved further data fetching, it might move to the controller.
-        if (sessions == null || sessionAttendanceMap == null) {
-            return;
+    private List<ClassSession> filterSessionsByStatusInternal(List<ClassSession> sessionsToFilter, String status) {
+        if (sessionsToFilter == null || sessionAttendanceMap == null) {
+            return new ArrayList<>();
         }
 
-        List<ClassSession> filteredSessions;
+        List<ClassSession> result = new ArrayList<>();
 
         switch (status) {
             case "UNMARKED":
-                filteredSessions = sessions.stream()
+                result = sessionsToFilter.stream()
                         .filter(session -> {
                             // session.getId() must return String
                             List<Attendance> attendances = sessionAttendanceMap.getOrDefault(session.getId(), new ArrayList<>());
@@ -741,7 +780,7 @@ public class AttendanceScreenView extends BaseScreenView {
                         .collect(Collectors.toList());
                 break;
             case "MARKED":
-                filteredSessions = sessions.stream()
+                result = sessionsToFilter.stream()
                         .filter(session -> {
                             // session.getId() must return String
                             List<Attendance> attendances = sessionAttendanceMap.getOrDefault(session.getId(), new ArrayList<>());
@@ -751,36 +790,33 @@ public class AttendanceScreenView extends BaseScreenView {
                 break;
             case "ALL":
             default:
-                filteredSessions = new ArrayList<>(sessions); // Return a copy to avoid modifying the original list
+                result = new ArrayList<>(sessionsToFilter); // Return a copy to avoid modifying the original list
                 break;
         }
 
-        updateClassCards(filteredSessions);
+        return result;
     }
 
     /**
-     * Search sessions by keyword
-     * Uses controller for searching logic
+     * Search sessions by keyword - but doesn't update UI directly
+     * Returns filtered list for further processing
      */
-    private void searchSessions(String keyword) {
-        if (attendanceController == null) {
-            showError("Bộ điều khiển điểm danh chưa được khởi tạo.");
-            return;
+    private List<ClassSession> searchSessionsInternal(List<ClassSession> sessionsToSearch, String keyword) {
+        if (attendanceController == null || sessionsToSearch == null) {
+            return new ArrayList<>();
         }
+
         try {
             if (keyword == null || keyword.trim().isEmpty()) {
-                updateClassCards(sessions); // Show all sessions if search is empty
-                updateFilterButtonCounts(sessions);
-                return;
+                return new ArrayList<>(sessionsToSearch); // Return a copy to avoid modifying the original list
             }
 
-            // Controller searches within the current list of sessions (with String IDs)
-            List<ClassSession> filteredSessions = attendanceController.searchSessions(sessions, keyword.trim());
-            updateClassCards(filteredSessions);
-            updateFilterButtonCounts(filteredSessions);
+            // Controller searches within the provided list of sessions (with String IDs)
+            return attendanceController.searchSessions(sessionsToSearch, keyword.trim());
         } catch (Exception e) {
             showError("Lỗi khi tìm kiếm buổi học: " + e.getMessage());
             e.printStackTrace();
+            return new ArrayList<>();
         }
     }
 
@@ -840,6 +876,7 @@ public class AttendanceScreenView extends BaseScreenView {
 
     /**
      * Gets attendance statistics for a session
+     *
      * @param sessionId the session ID (String)
      * @return array with [present count, absent excused count, absent unexcused count]
      * Requires Attendance model to have isPresent(), hasPermission() methods
@@ -858,6 +895,7 @@ public class AttendanceScreenView extends BaseScreenView {
                 presentCount++;
             } else if (attendance.hasPermission()) {
                 absentExcusedCount++;
+                //System.out.println(attendance.hasPermission());
             } else {
                 absentUnexcusedCount++;
             }
@@ -868,6 +906,7 @@ public class AttendanceScreenView extends BaseScreenView {
 
     /**
      * Checks if all unexcused absences for a session have been notified
+     *
      * @param sessionId the session ID (String)
      * @return true if all unexcused absences have been notified, false otherwise
      * Requires Attendance model to have isPresent(), hasPermission(), isCalled() methods
@@ -900,28 +939,6 @@ public class AttendanceScreenView extends BaseScreenView {
     @Override
     public void onActivate() {
         super.onActivate();
-        loadData();
-    }
-
-    /**
-     * Show information in a dialog
-     */
-    private void showInfo(String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Thông báo");
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
-    }
-
-    /**
-     * Show error in a dialog
-     */
-    public void showError(String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Lỗi");
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
     }
 }
+

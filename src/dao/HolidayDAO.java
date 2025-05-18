@@ -1,4 +1,4 @@
-// File: dao/HolidayDAO.java
+
 package src.dao;
 
 import src.model.holidays.Holiday;
@@ -66,17 +66,28 @@ public class HolidayDAO {
 
     public List<Holiday> findHolidaysByYear(int year) {
         List<Holiday> holidays = new ArrayList<>();
-        // Handle cases where start_date or end_date is in the specified year, or the holiday spans the entire year
+        // For standard SQL, direct date comparison is better than STRFTIME if columns are DATE/TIMESTAMP
+        // Assumes start_date and end_date are DATE or TIMESTAMP type
+        // Holiday overlaps if:
+        // (start_date is in year) OR (end_date is in year) OR (holiday spans the entire year)
         String sql = "SELECT id, name, start_date, end_date, color_hex FROM holidays " +
-                "WHERE (STRFTIME('%Y', start_date) = ? OR STRFTIME('%Y', end_date) = ?) " + // Use STRFTIME for year extraction (SQLite/MySQL compatible)
-                "OR (start_date <= ? AND end_date >= ?)"; // Handle holidays spanning the year
+                "WHERE (start_date >= ? AND start_date <= ?) " + // Starts within the year
+                "OR (end_date >= ? AND end_date <= ?) " +       // Ends within the year
+                "OR (start_date < ? AND end_date > ?)";        // Spans the entire year
+
+        LocalDate yearStart = LocalDate.of(year, 1, 1);
+        LocalDate yearEnd = LocalDate.of(year, 12, 31);
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, String.valueOf(year));
-            stmt.setString(2, String.valueOf(year));
-            stmt.setDate(3, Date.valueOf(LocalDate.of(year, 12, 31)));
-            stmt.setDate(4, Date.valueOf(LocalDate.of(year, 1, 1)));
+
+            stmt.setDate(1, Date.valueOf(yearStart));
+            stmt.setDate(2, Date.valueOf(yearEnd));
+            stmt.setDate(3, Date.valueOf(yearStart));
+            stmt.setDate(4, Date.valueOf(yearEnd));
+            stmt.setDate(5, Date.valueOf(yearStart)); // For spanning condition: start_date < yearStart
+            stmt.setDate(6, Date.valueOf(yearEnd));   // For spanning condition: end_date > yearEnd
+
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     holidays.add(mapResultSetToHoliday(rs));
@@ -90,10 +101,71 @@ public class HolidayDAO {
         return holidays;
     }
 
+    /**
+     * Checks if a given date falls within any holiday period.
+     * Uses the provided database connection.
+     *
+     * @param conn The database connection to use for the query.
+     * @param date The date to check.
+     * @return true if the date is a holiday, false otherwise.
+     */
+    public boolean isHoliday(Connection conn, LocalDate date) {
+        if (date == null) {
+            LOGGER.log(Level.WARNING, "isHoliday check called with null date.");
+            return false;
+        }
+        if (conn == null) {
+            LOGGER.log(Level.SEVERE, "isHoliday check called with null connection. Cannot perform query.");
+            return false; // Or throw an IllegalArgumentException
+        }
+
+        // Query to see if the date falls between any holiday's start_date and end_date (inclusive)
+        String sql = "SELECT 1 FROM holidays WHERE start_date <= ? AND end_date >= ? LIMIT 1";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setDate(1, Date.valueOf(date));
+            stmt.setDate(2, Date.valueOf(date));
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next(); // If a row is found, it's a holiday
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error checking if date " + date + " is a holiday.", e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error checking if date " + date + " is a holiday.", e);
+        }
+        return false; // Default to false if error or not found
+    }
+
+    /**
+     * Checks if a given date falls within any holiday period.
+     * This version creates its own database connection.
+     *
+     * @param date The date to check.
+     * @return true if the date is a holiday, false otherwise.
+     */
+    public boolean isHoliday(LocalDate date) {
+        if (date == null) {
+            LOGGER.log(Level.WARNING, "isHoliday check called with null date.");
+            return false;
+        }
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            return isHoliday(conn, date); // Delegate to the version that takes a connection
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error obtaining connection for isHoliday check for date " + date, e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error obtaining connection for isHoliday check for date " + date, e);
+        }
+        return false;
+    }
+
 
     public Holiday saveHoliday(Holiday holiday) {
         if (holiday == null) {
             LOGGER.log(Level.WARNING, "Attempted to save a null holiday.");
+            return null;
+        }
+        // Consider validating holiday.getStartDate() and holiday.getEndDate() are not null
+        if (holiday.getStartDate() == null || holiday.getEndDate() == null) {
+            LOGGER.log(Level.WARNING, "Attempted to save holiday with null start or end date.");
             return null;
         }
         if (holiday.getId() == null) {
@@ -120,16 +192,18 @@ public class HolidayDAO {
             try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
                     holiday.setId(generatedKeys.getLong(1));
+                    // Log history after successful insert
+                    logHolidayChange(conn, "SYSTEM", "Created holiday: " + holiday.getName() + " (ID: " + holiday.getId() + ")");
                 } else {
                     throw new SQLException("Creating holiday failed, no ID obtained.");
                 }
             }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error inserting holiday: " + holiday.getName(), e);
-            holiday = null; // Indicate failure
+            return null; // Indicate failure
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error inserting holiday: " + holiday.getName(), e);
-            holiday = null; // Indicate failure
+            return null; // Indicate failure
         }
         return holiday;
     }
@@ -144,13 +218,19 @@ public class HolidayDAO {
             stmt.setString(4, holiday.getColorHex());
             stmt.setLong(5, holiday.getId());
 
-            stmt.executeUpdate();
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                // Log history after successful update
+                logHolidayChange(conn, "SYSTEM", "Updated holiday: " + holiday.getName() + " (ID: " + holiday.getId() + ")");
+            } else {
+                LOGGER.log(Level.INFO, "Update holiday with ID: " + holiday.getId() + " affected 0 rows. May not exist or no changes made.");
+            }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error updating holiday with ID: " + holiday.getId(), e);
-            holiday = null; // Indicate failure
+            return null; // Indicate failure
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error updating holiday with ID: " + holiday.getId(), e);
-            holiday = null; // Indicate failure
+            return null; // Indicate failure
         }
         return holiday;
     }
@@ -160,11 +240,24 @@ public class HolidayDAO {
             LOGGER.log(Level.WARNING, "Attempted to delete holiday with null ID.");
             return;
         }
+        String holidayNameForLog = "";
+        // Optionally, fetch the holiday name before deleting for logging purposes
+        Holiday holidayToDelete = findHolidayById(id); // Uses its own connection
+        if (holidayToDelete != null) {
+            holidayNameForLog = holidayToDelete.getName();
+        }
+
+
         String sql = "DELETE FROM holidays WHERE id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, id);
-            stmt.executeUpdate();
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0 && holidayToDelete != null) {
+                logHolidayChange(conn, "SYSTEM", "Deleted holiday: " + holidayNameForLog + " (ID: " + id + ")");
+            } else if (affectedRows == 0) {
+                LOGGER.log(Level.INFO, "Delete holiday with ID: " + id + " affected 0 rows. Holiday might not exist.");
+            }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error deleting holiday with ID: " + id, e);
         } catch (Exception e) {
@@ -190,7 +283,7 @@ public class HolidayDAO {
             LOGGER.log(Level.WARNING, "Attempted to find history with null ID.");
             return null;
         }
-        String sql = "SELECT id, user, action, timestamp FROM holiday_history WHERE id = ?";
+        String sql = "SELECT id, user_name, action, timestamp FROM holiday_history WHERE id = ?"; // Changed 'user' to 'user_name' for clarity
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, id);
@@ -209,7 +302,7 @@ public class HolidayDAO {
 
     public List<HolidayHistory> findAllHistory() {
         List<HolidayHistory> histories = new ArrayList<>();
-        String sql = "SELECT id, user, action, timestamp FROM holiday_history ORDER BY timestamp DESC";
+        String sql = "SELECT id, user_name, action, timestamp FROM holiday_history ORDER BY timestamp DESC";
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
@@ -230,7 +323,7 @@ public class HolidayDAO {
             return new ArrayList<>();
         }
         List<HolidayHistory> histories = new ArrayList<>();
-        String sql = "SELECT id, user, action, timestamp FROM holiday_history ORDER BY timestamp DESC LIMIT ?";
+        String sql = "SELECT id, user_name, action, timestamp FROM holiday_history ORDER BY timestamp DESC LIMIT ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, limit);
@@ -247,21 +340,44 @@ public class HolidayDAO {
         return histories;
     }
 
+    // Centralized method to log holiday changes to history table using a provided connection
+    private void logHolidayChange(Connection conn, String user, String action) {
+        if (conn == null) {
+            LOGGER.log(Level.SEVERE, "Cannot log holiday change, provided connection is null.");
+            return;
+        }
+        HolidayHistory history = new HolidayHistory(null, user, action, LocalDateTime.now()); // ID will be auto-generated
+        // Use the provided connection for inserting history to maintain transaction if needed
+        String sql = "INSERT INTO holiday_history (user_name, action, timestamp) VALUES (?, ?, ?)";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, history.getUser());
+            stmt.setString(2, history.getAction());
+            stmt.setTimestamp(3, Timestamp.valueOf(history.getTimestamp()));
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error logging holiday change: " + action, e);
+        }
+    }
+
+    // Public method to save history, creating its own connection
+    // This might be used if saving history is an independent action
     public HolidayHistory saveHistory(HolidayHistory history) {
         if (history == null) {
             LOGGER.log(Level.WARNING, "Attempted to save a null history entry.");
             return null;
         }
         if (history.getId() == null) {
-            return insertHistory(history);
+            return insertHistory(history); // insertHistory creates its own connection
         } else {
-            return updateHistory(history);
+            return updateHistory(history); // updateHistory creates its own connection
         }
     }
 
+    // insertHistory and updateHistory now manage their own connections if called directly
+    // If called from saveHoliday/deleteHoliday/updateHoliday, those methods pass their connection to logHolidayChange
     private HolidayHistory insertHistory(HolidayHistory history) {
-        String sql = "INSERT INTO holiday_history (user, action, timestamp) VALUES (?, ?, ?)";
-        try (Connection conn = DatabaseConnection.getConnection();
+        String sql = "INSERT INTO holiday_history (user_name, action, timestamp) VALUES (?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getConnection(); // Manages its own connection
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, history.getUser());
             stmt.setString(2, history.getAction());
@@ -281,17 +397,17 @@ public class HolidayDAO {
             }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error inserting history for user: " + history.getUser(), e);
-            history = null; // Indicate failure
+            return null; // Indicate failure
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error inserting history for user: " + history.getUser(), e);
-            history = null; // Indicate failure
+            return null; // Indicate failure
         }
         return history;
     }
 
     private HolidayHistory updateHistory(HolidayHistory history) {
-        String sql = "UPDATE holiday_history SET user = ?, action = ?, timestamp = ? WHERE id = ?";
-        try (Connection conn = DatabaseConnection.getConnection();
+        String sql = "UPDATE holiday_history SET user_name = ?, action = ?, timestamp = ? WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection(); // Manages its own connection
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, history.getUser());
             stmt.setString(2, history.getAction());
@@ -301,17 +417,17 @@ public class HolidayDAO {
             stmt.executeUpdate();
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error updating history with ID: " + history.getId(), e);
-            history = null; // Indicate failure
+            return null; // Indicate failure
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error updating history with ID: " + history.getId(), e);
-            history = null; // Indicate failure
+            return null; // Indicate failure
         }
         return history;
     }
 
     private HolidayHistory mapResultSetToHistory(ResultSet rs) throws SQLException {
         Long id = rs.getLong("id");
-        String user = rs.getString("user");
+        String user = rs.getString("user_name"); // Changed 'user' to 'user_name'
         String action = rs.getString("action");
         Timestamp timestampSql = rs.getTimestamp("timestamp");
         LocalDateTime timestamp = timestampSql != null ? timestampSql.toLocalDateTime() : null;
@@ -319,3 +435,4 @@ public class HolidayDAO {
         return new HolidayHistory(id, user, action, timestamp);
     }
 }
+

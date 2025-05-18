@@ -1,3 +1,4 @@
+
 package src.model.system.schedule;
 
 //import other classes
@@ -20,27 +21,18 @@ public class StudentSchedule extends Schedule {
         this.courses = new ArrayList<>();
     }
 
-    // Methods specific to StudentSchedule
-    public int getCoursesTimePerDay(LocalDate day) {
-        // Implementation to calculate total course time for a specific day
-        int totalMinutes = 0;
-        for (Course course : courses) {
-            if (course.getDate().isDateWithinRange(day)) {
-                // Assuming a standard course time per day (e.g. 2 hours = 120 minutes)
-                totalMinutes += 120;
-            }
-        }
-        return totalMinutes;
-    }
-
     public boolean checkScheduleConflict(Course newCourse) {
         // Implementation to check if adding a new course would create a conflict
         for (Course existingCourse : courses) {
-            // Check if dates overlap
-            if (existingCourse.getDate().overlapsDateRange(newCourse.getDate())) {
-                // For simplicity, assuming time conflict if date overlaps
-                // In a real system, you'd check specific time slots
-                return true; // Conflict exists
+            // Check if dates overlap. This uses the overlapsDateRange method from the Course model.
+            // This method should compare the date ranges of the two courses.
+            if (existingCourse.overlapsDateRange(newCourse)) {
+                // Further check for time conflict on common days of the week
+                // This part is simplified in the original comment. A full check would involve:
+                // 1. Finding common days of the week.
+                // 2. For those common days, checking if their LocalTime intervals overlap.
+                // For now, respecting the original simplicity:
+                return true; // Conflict exists if date ranges overlap
             }
         }
         return false; // No conflict
@@ -63,7 +55,8 @@ public class StudentSchedule extends Schedule {
         if (!checkScheduleConflict(course)) {
             this.courses.add(course);
         } else {
-            throw new IllegalArgumentException("Cannot add course due to schedule conflict");
+            // Consider making this a custom, checked exception for better error handling.
+            throw new IllegalArgumentException("Cannot add course '" + course.getCourseName() + "' due to schedule conflict with an existing course.");
         }
     }
 
@@ -75,3 +68,4 @@ public class StudentSchedule extends Schedule {
         this.courses = courses;
     }
 }
+

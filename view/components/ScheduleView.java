@@ -348,10 +348,10 @@ public class ScheduleView extends BaseScreenView {
     private VBox createSessionBox(ClassSession session) {
         VBox box = new VBox(5);
         box.setPadding(new Insets(8));
-        box.setStyle("-fx-background-color: " + getColorForClass(session.getClassName()) +
+        box.setStyle("-fx-background-color: " + getColorForClass(session.getCourseName()) +
                 "; -fx-background-radius: 5; -fx-border-radius: 5;");
 
-        Label titleLabel = new Label(session.getClassName());
+        Label titleLabel = new Label(session.getCourseName());
         titleLabel.setStyle("-fx-font-weight: bold;");
         titleLabel.setWrapText(true);
 
@@ -365,12 +365,12 @@ public class ScheduleView extends BaseScreenView {
 
         // Thêm hiệu ứng khi hover
         box.setOnMouseEntered(e ->
-                box.setStyle("-fx-background-color: " + getColorForClass(session.getClassName()) +
+                box.setStyle("-fx-background-color: " + getColorForClass(session.getCourseName()) +
                         "; -fx-background-radius: 5; -fx-border-radius: 5; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.4), 5, 0, 0, 0);")
         );
 
         box.setOnMouseExited(e ->
-                box.setStyle("-fx-background-color: " + getColorForClass(session.getClassName()) +
+                box.setStyle("-fx-background-color: " + getColorForClass(session.getCourseName()) +
                         "; -fx-background-radius: 5; -fx-border-radius: 5;")
         );
 

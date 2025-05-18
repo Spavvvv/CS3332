@@ -76,9 +76,9 @@ public class DashboardDAO {
      */
     public List<ClassSession> getTodayClasses() {
         // Adjusted query to select session_id explicitly and match column names used below
-        String query = "SELECT c.session_id, c.course_name, c.teacher_name, c.room, c.class_date, " +
-                "c.start_time, c.end_time, c.class_id FROM class_sessions c " +
-                "WHERE c.class_date = ?";
+        String query = "SELECT c.session_id, c.course_name, c.teacher_name, c.room, c.session_date, " +
+                "c.start_time, c.end_time, c.class_id, c.session_number FROM class_sessions c " +
+                "WHERE c.session_date = ?";
 
         List<ClassSession> classes = new ArrayList<>();
 
@@ -96,16 +96,18 @@ public class DashboardDAO {
                     String room = rs.getString("room");
 
                     // Check for null dates and times before converting
-                    Date dateDb = rs.getDate("class_date");
+                    Date dateDb = rs.getDate("session_date");
                     LocalDate date = (dateDb != null) ? dateDb.toLocalDate() : null;
 
                     Time startTimeDb = rs.getTime("start_time");
-                    LocalTime startTime = (startTimeDb != null) ? startTimeDb.toLocalTime() : null;
+                    LocalDateTime startTime = (startTimeDb != null) ? LocalDateTime.from(startTimeDb.toLocalTime()) : null;
 
                     Time endTimeDb = rs.getTime("end_time");
-                    LocalTime endTime = (endTimeDb != null) ? endTimeDb.toLocalTime() : null;
+                    LocalDateTime endTime = (endTimeDb != null) ? LocalDateTime.from(endTimeDb.toLocalTime()) : null;
 
                     String classId = rs.getString("class_id"); // Assuming this links to Class/Course
+
+                    int SessionNumber = rs.getInt("session_number");
 
                     // Create a minimal Course object with available information
                     // Assuming class_id from the database maps to the Course ID or similar identifier
@@ -116,7 +118,7 @@ public class DashboardDAO {
                     // Create ClassSession object using the appropriate constructor
                     // Assuming ClassSession has a constructor like:
                     // ClassSession(String id, Course course, String teacher, String room, LocalDate date, LocalTime startTime, LocalTime endTime, String classId)
-                    ClassSession classSession = new ClassSession(id, course, teacher, room, date, startTime, endTime, classId);
+                    ClassSession classSession = new ClassSession(id, course, teacher, room, date, startTime, endTime, classId, SessionNumber);
 
                     classes.add(classSession);
                 }
@@ -158,7 +160,7 @@ public class DashboardDAO {
      * @return The total number of active classes
      */
     public int getTotalClasses() {
-        String query = "SELECT COUNT(*) FROM classes WHERE status = 'active'";
+        String query = "SELECT COUNT(*) FROM classes WHERE status = 'Active'";
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
@@ -181,7 +183,7 @@ public class DashboardDAO {
      */
     public double getAttendanceRate() {
         String query = "SELECT " +
-                "(SELECT COUNT(*) FROM attendance WHERE status = 'Present') AS present_count, " + // Assuming 'Present' status
+                "(SELECT COUNT(*) FROM attendance WHERE status = 'Có mặt') AS present_count, " + // Assuming 'Present' status
                 "(SELECT COUNT(*) FROM attendance) AS total_count";
 
         try (Connection conn = DatabaseConnection.getConnection();

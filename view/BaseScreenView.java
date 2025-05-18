@@ -18,8 +18,8 @@ public abstract class BaseScreenView implements ScreenView {
     protected VBox root;
     protected StringProperty title = new SimpleStringProperty("Unnamed Screen");
     protected String viewId = "base-view";
-    protected NavigationController navigationController;
-    protected MainController mainController;
+    protected static NavigationController navigationController;
+    protected static MainController mainController;
     private boolean initialized = false;
 
     public BaseScreenView() {
@@ -190,5 +190,4 @@ public abstract class BaseScreenView implements ScreenView {
         ensureInitialized();
         System.out.println("BaseScreenView.onShow() cho " + viewId);
     }
-
 }

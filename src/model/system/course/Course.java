@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 import src.model.person.Student;
 import src.model.person.Teacher;
+import view.components.ClassList.ClassListScreenView;
 
 public class Course {
     private String courseId;
@@ -24,33 +25,17 @@ public class Course {
     private LocalTime endTime;      // end time of the course sessions
     private List<String> daysOfWeek; // days of the week when course is held (e.g., "Mon", "Wed", "Fri")
 
-    private Teacher teacher;
-    private List<Student> students;
-    private int totalCurrentStudent;
+    private Teacher teacher; // Holds the Teacher object. teacher_id is accessible via teacher.getId()
+    private String roomId;   // Foreign key to rooms/classrooms table
+    private String classId;  // Foreign key to classes table (student group/cohort)
+
+    private List<Student> students; // Transient or managed by enrollment
+    private int totalCurrentStudent; // Derived from students list or enrollment
     private float progress; // Variable to store progress loaded from DB
-    private String roomId;
 
-    public Course(String courseId, String courseName, String subject, LocalDate startDate, LocalDate endDate) {
-        this.courseId = courseId;
-        this.courseName = courseName;
-        this.subject = subject;
-        this.startDate = startDate;
-        this.endDate = endDate;
-
-        // Initialize fields with defaults or empty lists
-        this.daysOfWeek = new ArrayList<>();
-        // Default times, assuming they might be set later or retrieved from DB
-        this.startTime = null;
-        this.endTime = null;
-
-        this.students = new ArrayList<>();
-        this.totalCurrentStudent = 0;
-        this.progress = 0.0f;
-    }
-
-    // Constructor with more parameters including times and daysOfWeek
+    // Constructor with classId
     public Course(String courseId, String courseName, String subject, LocalDate startDate, LocalDate endDate,
-                  LocalTime startTime, LocalTime endTime, List<String> daysOfWeek) {
+                  LocalTime startTime, LocalTime endTime, List<String> daysOfWeek, String roomId, String classId, Teacher teacher) {
         this.courseId = courseId;
         this.courseName = courseName;
         this.subject = subject;
@@ -59,11 +44,35 @@ public class Course {
         this.startTime = startTime;
         this.endTime = endTime;
         this.daysOfWeek = daysOfWeek != null ? new ArrayList<>(daysOfWeek) : new ArrayList<>();
+        this.roomId = roomId;
+        this.classId = classId; // Initialize classId
+        this.teacher = teacher;
 
         this.students = new ArrayList<>();
         this.totalCurrentStudent = 0;
         this.progress = 0.0f;
     }
+
+    // Simpler constructor, might be used when not all details are immediately available
+    public Course(String courseId, String courseName, String subject, LocalDate startDate, LocalDate endDate) {
+        this.courseId = courseId;
+        this.courseName = courseName;
+        this.subject = subject;
+        this.startDate = startDate;
+        this.endDate = endDate;
+
+        this.daysOfWeek = new ArrayList<>();
+        this.startTime = null;
+        this.endTime = null;
+        this.roomId = null;
+        this.classId = null; // Initialize classId
+        this.teacher = null;
+
+        this.students = new ArrayList<>();
+        this.totalCurrentStudent = 0;
+        this.progress = 0.0f;
+    }
+
 
     // Default constructor
     public Course() {
@@ -71,6 +80,7 @@ public class Course {
         this.daysOfWeek = new ArrayList<>();
         this.totalCurrentStudent = 0;
         this.progress = 0.0f;
+        // classId, roomId, teacher will be null by default
     }
 
     // --- Getters and Setters for Course fields ---
@@ -106,18 +116,27 @@ public class Course {
         this.teacher = teacher;
     }
 
+    /**
+     * Gets the ID of the teacher assigned to this course.
+     * Returns an empty string if no teacher is assigned or if teacher object is null.
+     * @return Teacher's ID or empty string.
+     */
+    public String getTeacherId() {
+        if (teacher != null) {
+            return teacher.getId(); // Assumes Teacher model has getId()
+        }
+        return ""; // Or null, depending on how you want to handle no teacher
+    }
+
     public List<Student> getStudents() {
-        // Return a copy to prevent external modification of the internal list
         return new ArrayList<>(students);
     }
 
     public void setStudents(List<Student> students) {
-        // Ensure the incoming list is not null before assigning
         if (students != null) {
-            this.students = new ArrayList<>(students); // Store a copy
+            this.students = new ArrayList<>(students);
             this.totalCurrentStudent = this.students.size();
         } else {
-            // Handle null input by initializing an empty list and resetting count
             this.students = new ArrayList<>();
             this.totalCurrentStudent = 0;
         }
@@ -131,23 +150,10 @@ public class Course {
         this.totalCurrentStudent = students != null ? students.size() : 0;
     }
 
-    /**
-     * Gets the current progress of the course.
-     * This value is typically loaded from the database.
-     *
-     * @return the course progress as a float
-     */
     public float getProgress() {
-        return progress; // Return the stored progress value
+        return progress;
     }
 
-    /**
-     * Sets the progress of the course.
-     * This method should be used to update the progress value,
-     * for example, when loading from the database or after calculating it.
-     *
-     * @param progress the new progress value
-     */
     public void setProgress(float progress) {
         this.progress = progress;
     }
@@ -160,12 +166,28 @@ public class Course {
         this.roomId = roomId;
     }
 
+    /**
+     * Gets the ID of the class (student group/cohort) associated with this course.
+     * This ID links to the 'classes' table.
+     * @return The class ID.
+     */
+    public String getClassId() {
+        return classId;
+    }
+
+    /**
+     * Sets the ID of the class (student group/cohort) associated with this course.
+     * @param classId The class ID from the 'classes' table.
+     */
+    public void setClassId(String classId) {
+        this.classId = classId;
+    }
+
+
     public void addStudent(Student student) {
-        // Check if the students list is initialized
         if (this.students == null) {
             this.students = new ArrayList<>();
         }
-        // Check if the student is not already in the list before adding
         if (student != null && !this.students.contains(student)) {
             this.students.add(student);
             updateTotalCurrentStudent();
@@ -173,7 +195,6 @@ public class Course {
     }
 
     public void removeStudent(Student student) {
-        // Check if the students list is initialized and contains the student
         if (this.students != null && student != null) {
             if (this.students.remove(student)) {
                 updateTotalCurrentStudent();
@@ -181,7 +202,6 @@ public class Course {
         }
     }
 
-    // --- Getters and Setters for fields moved from CourseDate ---
     public LocalDate getStartDate() {
         return startDate;
     }
@@ -198,44 +218,39 @@ public class Course {
         this.endDate = endDate;
     }
 
-    public LocalTime getStartTime() {
+    // Renamed from getStartTime to avoid conflict if a general "get start time of course entity" was meant
+    public LocalTime getCourseStartTime() {
         return startTime;
     }
 
-    public void setStartTime(LocalTime startTime) {
+    // Renamed from setStartTime
+    public void setCourseSessionStartTime(LocalTime startTime) {
         this.startTime = startTime;
     }
 
-    public LocalTime getEndTime() {
+    // Renamed from getEndTime
+    public LocalTime getCourseEndTime() {
         return endTime;
     }
 
-    public void setEndTime(LocalTime endTime) {
+    // Renamed from setEndTime
+    public void setCourseSessionEndTime(LocalTime endTime) {
         this.endTime = endTime;
     }
 
-    public List<String> getDaysOfWeek() {
-        // Return a copy to prevent external modification of the internal list
+    public List<String> getDaysOfWeekList() { // Renamed to avoid confusion with getDaysOfWeekAsString
         return new ArrayList<>(daysOfWeek);
     }
 
-    public void setDaysOfWeek(List<String> daysOfWeek) {
-        // Ensure the incoming list is not null before assigning
+    public void setDaysOfWeekList(List<String> daysOfWeek) { // Renamed
         if (daysOfWeek != null) {
-            this.daysOfWeek = new ArrayList<>(daysOfWeek); // Store a copy
+            this.daysOfWeek = new ArrayList<>(daysOfWeek);
         } else {
-            this.daysOfWeek = new ArrayList<>(); // Initialize with an empty list if null
+            this.daysOfWeek = new ArrayList<>();
         }
     }
 
-    // --- Methods previously in CourseDate, now in Course ---
-
-    /**
-     * Add a day of the week to the course schedule
-     * @param day the day to add (e.g., "Mon", "Tue", etc.)
-     */
     public void addDayOfWeek(String day) {
-        // Ensure daysOfWeek list is initialized
         if (this.daysOfWeek == null) {
             this.daysOfWeek = new ArrayList<>();
         }
@@ -247,11 +262,6 @@ public class Course {
         }
     }
 
-    /**
-     * Remove a day of the week from the course schedule
-     * @param day the day to remove
-     * @return true if the day was removed, false if it wasn't in the list
-     */
     public boolean removeDayOfWeek(String day) {
         if (this.daysOfWeek != null && day != null && !day.trim().isEmpty()) {
             return daysOfWeek.remove(day.trim());
@@ -260,245 +270,188 @@ public class Course {
     }
 
     /**
-     * Get days of week as a comma-separated string
-     * @return comma-separated string of days
+     * Get days of week as a comma-separated string (e.g., "Mon,Wed,Fri").
+     * This is suitable for display or for storage in a database column
+     * if the column expects this format.
+     * The ClassSessionDAO will take this string, convert to uppercase, and then split.
+     * @return comma-separated string of days, or empty string if none.
      */
     public String getDaysOfWeekAsString() {
         if (daysOfWeek == null || daysOfWeek.isEmpty()) {
             return "";
         }
+        // Example: if daysOfWeek is ["Mon", "Wed"], this returns "Mon,Wed"
+        // The ClassSessionDAO will take this and convert to "MONDAY,WEDNESDAY"
         return String.join(",", daysOfWeek);
     }
 
-    /**
-     * Set days of week from a comma-separated string
-     * @param daysString comma-separated string of days (e.g., "Mon,Wed,Fri")
-     */
     public void setDaysOfWeekFromString(String daysString) {
         if (daysString == null || daysString.trim().isEmpty()) {
             this.daysOfWeek = new ArrayList<>();
             return;
         }
-
         this.daysOfWeek = Arrays.stream(daysString.split(","))
                 .map(String::trim)
-                .filter(day -> !day.isEmpty()) // Filter out empty strings resulting from split
-                .distinct() // Ensure no duplicate days
+                .filter(day -> !day.isEmpty())
+                .distinct()
                 .collect(Collectors.toList());
     }
 
-    // calculating total days in the date range
     public long getTotalDaysInRange() {
-        if (startDate == null || endDate == null) {
-            return 0; // Cannot calculate if dates are null
-        }
-        // Ensure startDate is not after endDate
-        if (startDate.isAfter(endDate)) {
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
             return 0;
         }
-        return ChronoUnit.DAYS.between(startDate, endDate) + 1; // +1 to include the last day
+        return ChronoUnit.DAYS.between(startDate, endDate) + 1;
     }
 
-    // calculating days elapsed in the date range up to today
     public long getDaysElapsedInRange() {
-        if (startDate == null || endDate == null) {
-            return 0; // Cannot calculate if dates are null
-        }
-
+        if (startDate == null || endDate == null) return 0;
         LocalDate today = LocalDate.now();
-
-        // if today is before start date, return 0 elapsed
-        if (today.isBefore(startDate)) {
-            return 0;
-        }
-
-        // if today is after end date, return total days in range
-        if (today.isAfter(endDate)) {
-            return getTotalDaysInRange();
-        }
-
-        // if today is between start and end date, return days elapsed
-        return ChronoUnit.DAYS.between(startDate, today) + 1; // +1 to include current day
+        if (today.isBefore(startDate)) return 0;
+        if (today.isAfter(endDate)) return getTotalDaysInRange();
+        return ChronoUnit.DAYS.between(startDate, today) + 1;
     }
 
-    /**
-     * Calculates the progress percentage based on the current date relative to the course dates.
-     * This is a calculation based on the date range, not the progress value stored in the database.
-     *
-     * @return the calculated progress as a double
-     */
     public double calculateProgressBasedOnDate() {
         long totalDays = getTotalDaysInRange();
         long daysElapsed = getDaysElapsedInRange();
-
-        if (totalDays <= 0) { // Handle totalDays being 0 or negative
-            return 0.0; // avoid division by zero or incorrect percentage
-        }
-
-        // Ensure daysElapsed does not exceed totalDays
-        if (daysElapsed > totalDays) {
-            daysElapsed = totalDays;
-        }
-
+        if (totalDays <= 0) return 0.0;
+        if (daysElapsed > totalDays) daysElapsed = totalDays;
         return (double) daysElapsed / totalDays * 100.0;
     }
 
-    // check if course is completed based on end date
     public boolean isCompleted() {
-        if (endDate == null) {
-            return false; // Cannot be completed if end date is null
-        }
-        return LocalDate.now().isAfter(endDate);
+        return endDate != null && LocalDate.now().isAfter(endDate);
     }
 
-    // check if course has started based on start date
     public boolean hasStarted() {
-        if (startDate == null) {
-            return false; // Cannot have started if start date is null
-        }
-        return LocalDate.now().isEqual(startDate) || LocalDate.now().isAfter(startDate);
+        return startDate != null && !LocalDate.now().isBefore(startDate);
     }
 
-    // Check if course is currently active based on date range
     public boolean isActive() {
-        if (startDate == null || endDate == null) {
-            return false; // Cannot be active if dates are null
-        }
+        if (startDate == null || endDate == null) return false;
         LocalDate today = LocalDate.now();
         return !today.isBefore(startDate) && !today.isAfter(endDate);
     }
 
-    // Check if a given date is within this course's date range
     public boolean isDateWithinRange(LocalDate date) {
-        if (startDate == null || endDate == null || date == null) {
-            return false; // Cannot check range if any date is null
-        }
+        if (startDate == null || endDate == null || date == null) return false;
         return !date.isBefore(startDate) && !date.isAfter(endDate);
     }
 
-    // Check if this course date range overlaps with another course's date range
     public boolean overlapsDateRange(Course other) {
         if (this.startDate == null || this.endDate == null || other.getStartDate() == null || other.getEndDate() == null) {
-            return false; // Cannot check overlap if any date is null
+            return false;
         }
-        // Check for non-overlap: Does this course end before the other starts OR does this course start after the other ends?
-        boolean nonOverlap = this.endDate.isBefore(other.getStartDate()) || this.startDate.isAfter(other.getEndDate());
-        return !nonOverlap; // If they don't non-overlap, they must overlap
+        return !this.endDate.isBefore(other.getStartDate()) && !this.startDate.isAfter(other.getEndDate());
     }
 
-
-    /**
-     * Calculate the number of sessions in the course based on date range and days of week.
-     *
-     * @return the total number of sessions
-     */
     public int getTotalSessions() {
-        if (startDate == null || endDate == null || daysOfWeek == null || daysOfWeek.isEmpty()) {
+        if (startDate == null || endDate == null || daysOfWeek == null || daysOfWeek.isEmpty() || startDate.isAfter(endDate)) {
             return 0;
         }
-
-        List<Integer> courseDays = daysOfWeekToValues();
-        if (courseDays.isEmpty()) {
-            return 0; // No sessions if no valid days are set
-        }
+        List<java.time.DayOfWeek> courseDaysEnum = daysOfWeekToEnumValues(); // Changed to use java.time.DayOfWeek
+        if (courseDaysEnum.isEmpty()) return 0;
 
         int sessionCount = 0;
         LocalDate currentDate = startDate;
-
-        // Ensure startDate is not after endDate
-        if (startDate.isAfter(endDate)) {
-            return 0;
-        }
-
         while (!currentDate.isAfter(endDate)) {
-            if (courseDays.contains(currentDate.getDayOfWeek().getValue())) {
+            if (courseDaysEnum.contains(currentDate.getDayOfWeek())) {
                 sessionCount++;
             }
             currentDate = currentDate.plusDays(1);
         }
-
         return sessionCount;
     }
 
     /**
-     * Convert day of week strings (e.g., "Mon") to day-of-week values (1-7, where 1 is Monday)
-     *
-     * @return a list of day-of-week values
+     * Convert day of week strings (e.g., "Mon", "MONDAY") to java.time.DayOfWeek enum values.
+     * This makes comparison more robust.
+     * @return a list of java.time.DayOfWeek enum values
      */
-    private List<Integer> daysOfWeekToValues() {
-        List<Integer> values = new ArrayList<>();
-        if (daysOfWeek == null) {
-            return values; // Return empty list if daysOfWeek is null
-        }
+    private List<java.time.DayOfWeek> daysOfWeekToEnumValues() {
+        List<java.time.DayOfWeek> values = new ArrayList<>();
+        if (daysOfWeek == null) return values;
         for (String day : daysOfWeek) {
             if (day != null) {
-                switch (day.trim().toLowerCase()) {
-                    case "mon": values.add(1); break;
-                    case "tue": values.add(2); break;
-                    case "wed": values.add(3); break;
-                    case "thu": values.add(4); break;
-                    case "fri": values.add(5); break;
-                    case "sat": values.add(6); break;
-                    case "sun": values.add(7); break;
+                try {
+                    // Attempt to parse common abbreviations and full names
+                    String upperDay = day.trim().toUpperCase();
+                    if (upperDay.length() >= 3) {
+                        String threeLetterDay = upperDay.substring(0,3);
+                        switch (threeLetterDay) {
+                            case "MON": values.add(java.time.DayOfWeek.MONDAY); break;
+                            case "TUE": values.add(java.time.DayOfWeek.TUESDAY); break;
+                            case "WED": values.add(java.time.DayOfWeek.WEDNESDAY); break;
+                            case "THU": values.add(java.time.DayOfWeek.THURSDAY); break;
+                            case "FRI": values.add(java.time.DayOfWeek.FRIDAY); break;
+                            case "SAT": values.add(java.time.DayOfWeek.SATURDAY); break;
+                            case "SUN": values.add(java.time.DayOfWeek.SUNDAY); break;
+                            default: // Try full name parsing if abbreviation fails
+                                values.add(java.time.DayOfWeek.valueOf(upperDay)); break;
+                        }
+                    } else {
+                        values.add(java.time.DayOfWeek.valueOf(upperDay)); // For full names like MONDAY
+                    }
+                } catch (IllegalArgumentException e) {
+                    System.err.println("Warning: Could not parse day of week: " + day);
+                    // Optionally log this error or handle it as appropriate
                 }
             }
         }
-        return values;
+        return values.stream().distinct().collect(Collectors.toList()); // Ensure uniqueness
     }
 
-    /**
-     * Get session duration in minutes
-     *
-     * @return duration of each session in minutes, or 0 if times are null or invalid
-     */
+
     public long getSessionDurationMinutes() {
         if (startTime == null || endTime == null || startTime.isAfter(endTime)) {
-            return 0; // Cannot calculate duration if times are null or start is after end
+            return 0;
         }
         return ChronoUnit.MINUTES.between(startTime, endTime);
     }
 
-    /**
-     * Get total course hours based on calculated sessions and session duration.
-     *
-     * @return total hours for the course (sessions × duration), or 0.0 if calculation is not possible
-     */
     public double getTotalCourseHours() {
         long sessionDuration = getSessionDurationMinutes();
         int totalSessions = getTotalSessions();
-
-        if (sessionDuration <= 0 || totalSessions <= 0) {
-            return 0.0;
-        }
-
+        if (sessionDuration <= 0 || totalSessions <= 0) return 0.0;
         return (double) totalSessions * sessionDuration / 60.0;
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Course [").append(courseId).append("] ").append(courseName).append(" - ").append(subject);
-        sb.append(" From ").append(startDate).append(" To ").append(endDate);
+        return "Course [" + courseId + "] " + courseName + " - " + subject +
+                ", Dates: " + startDate + " to " + endDate +
+                ", Days: " + getDaysOfWeekAsString() +
+                ", Times: " + (startTime != null ? startTime : "N/A") + " - " + (endTime != null ? endTime : "N/A") +
+                ", RoomID: " + (roomId != null ? roomId : "N/A") +
+                ", ClassID: " + (classId != null ? classId : "N/A") + // Added classId
+                ", Teacher: " + (teacher != null ? teacher.getName() : "N/A") + // Assumes teacher.getName()
+                ", Progress: " + String.format("%.2f%%", progress) +
+                ", Students: " + totalCurrentStudent;
+    }
 
-        if (daysOfWeek != null && !daysOfWeek.isEmpty()) {
-            sb.append(" on ").append(getDaysOfWeekAsString());
-        }
+    // Removed: public Course getDate() { return this; } - This was confusing.
 
-        if (startTime != null && endTime != null) {
-            sb.append(" at ").append(startTime).append(" - ").append(endTime);
-        }
-        sb.append(", Room: ").append(roomId);
-        sb.append(", Progress: ").append(String.format("%.2f%%", progress));
-        sb.append(", Students: ").append(totalCurrentStudent);
+    // These are already present or were renamed slightly
+    // public LocalTime getCourseStartTime() { return startTime; } // Now getCourseSessionStartTime()
+    // public LocalTime getCourseEndTime() { return endTime; } // Now getCourseSessionEndTime()
 
+    // Equals and HashCode (consider which fields define uniqueness for a Course)
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Course course = (Course) o;
+        return Objects.equals(courseId, course.courseId); // Primary key equality
+    }
 
-        return sb.toString();
+    @Override
+    public int hashCode() {
+        return Objects.hash(courseId); // Primary key hashcode
     }
 
     //actually, it's kinda strange when a getDate method return object... idk @@
     public Course getDate() {
         return this;
     }
-
-    // Removed the getDate() method as CourseDate is no longer used.
 }

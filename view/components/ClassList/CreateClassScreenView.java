@@ -16,9 +16,10 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import src.model.system.course.Course;
 import src.dao.CourseDAO; // Đảm bảo import này tồn tại và đúng
+
 import java.time.LocalDate;
 import java.time.LocalTime;
-// import java.time.format.DateTimeFormatter; // Không được sử dụng, có thể bỏ
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -256,15 +257,14 @@ public class CreateClassScreenView {
                         }
                     }
                 }
+
+                //tao sua cai nay de no chay duoc thoi, m sua lai sau nhe
                 Course course = new Course(
                         courseIdField.getText(),
                         courseNameField.getText(),
                         subjectField.getText(),
                         startDate,
-                        endDate,
-                        startTime,
-                        endTime,
-                        daysOfWeek // <<<< TRUYỀN daysOfWeek (sẽ LUÔN LÀ DANH SÁCH RỖNG)
+                        endDate
                 );
 
                 if (!roomIdField.getText().isEmpty()) {
@@ -291,6 +291,8 @@ public class CreateClassScreenView {
             }
         }
     }
+
+
 
     private boolean validateInputs() {
         StringBuilder errorMessage = new StringBuilder();
