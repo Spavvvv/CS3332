@@ -1,31 +1,29 @@
-
 package src.model.person;
 
 import java.util.ArrayList;
 import java.util.List;
-
-//import other classes
 import src.model.system.course.Course;
 
 public class Student extends Person {
     private List<Course> currentCourses;
-    private Parent parent;
-    private String classId; // Added classId field
+    private String parentName;
+    private String parentPhoneNumber;
+    private String userId; // Maintained as an attribute
 
-    // Updated constructor to include classId
-    public Student(String id, String name, String gender, String contactNumber, String birthday,
-                   String email, Parent parent, String classId) {
+    // Constructor without userId (complies with intent)
+    public Student(String id, String name, String gender, String contactNumber, String birthday, String email) {
         super(id, name, gender, contactNumber, birthday, email);
         this.currentCourses = new ArrayList<>();
-        this.parent = parent;
-        this.classId = classId; // Initialize classId
+        this.parentName = "";
+        this.parentPhoneNumber = "";
+        // userId is auto-generated and not passed to the constructor
+        this.userId = null;
     }
 
-    // Default constructor
+    // No-argument constructor
     public Student() {
         super();
         this.currentCourses = new ArrayList<>();
-        // classId will be null by default, can be set via setter
     }
 
     @Override
@@ -33,21 +31,7 @@ public class Student extends Person {
         return Role.STUDENT;
     }
 
-    // Student-specific methods
-    public void enrollCourse(Course course) {
-        if (currentCourses == null) {
-            currentCourses = new ArrayList<>();
-        }
-        currentCourses.add(course);
-    }
-
-    public void withdrawCourse(Course course) {
-        if (currentCourses != null) {
-            currentCourses.remove(course);
-        }
-    }
-
-    // Getters and Setters
+    // Getters and Setters for courses
     public List<Course> getCurrentCourses() {
         return currentCourses;
     }
@@ -56,21 +40,38 @@ public class Student extends Person {
         this.currentCourses = currentCourses;
     }
 
-    public Parent getParent() {
-        return parent;
+    // Getters and Setters for parent-related attributes
+    public String getParentName() {
+        return parentName;
     }
 
-    public void setParent(Parent parent) {
-        this.parent = parent;
+    public void setParentName(String parentName) {
+        this.parentName = parentName;
     }
 
-    // Getter and Setter for classId
-    public String getClassId() {
-        return classId;
+    public String getParentPhoneNumber() {
+        return parentPhoneNumber;
     }
 
-    public void setClassId(String classId) {
-        this.classId = classId;
+    public void setParentPhoneNumber(String parentPhoneNumber) {
+        this.parentPhoneNumber = parentPhoneNumber;
+    }
+    // Getters and Setters for userId
+    public String getUserId() {
+        return userId; // To be set externally if required
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId; // Set when obtained from database or external logic
+    }
+
+    // Getters/Setters for status (already existing)
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     @Override
@@ -79,7 +80,8 @@ public class Student extends Person {
                 ", Role: " + getRole() +
                 ", Class ID: " + (classId != null ? classId : "N/A") + // Added classId to toString
                 ", Number of Current Courses: " + (currentCourses != null ? currentCourses.size() : 0) +
-                ", Parent: " + (parent != null ? parent.getName() : "None");
+                ", Parent Name: " + (parentName != null ? parentName : "None") +
+                ", Parent Phone: " + (parentPhoneNumber != null ? parentPhoneNumber : "None");
     }
 }
 

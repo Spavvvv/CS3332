@@ -227,13 +227,13 @@ public class Attendance {
     }
 
     public String getParentName() {
-        return student != null && student.getParent() != null ?
-                student.getParent().getName() : "";
+        return student != null && student.getParentName() != null ?
+                student.getParentName() : "";
     }
 
     public String getParentContact() {
-        return student != null && student.getParent() != null ?
-                student.getParent().getContactNumber() : "";
+        return student != null && student.getParentPhoneNumber() != null ?
+                student.getParentPhoneNumber(): "";
     }
 
     public boolean isValid() {
