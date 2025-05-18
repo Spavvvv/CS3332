@@ -305,8 +305,8 @@ public class Attendance {
      * @return Tên phụ huynh
      */
     public String getParentName() {
-        return student != null && student.getParent() != null ?
-                student.getParent().getName() : "";
+        return student != null && student.getParentName() != null ?
+                student.getParentName() : "";
     }
 
     /**
@@ -315,8 +315,8 @@ public class Attendance {
      * @return Số điện thoại phụ huynh
      */
     public String getParentContact() {
-        return student != null && student.getParent() != null ?
-                student.getParent().getContactNumber() : "";
+        return student != null && student.getParentPhoneNumber() != null ?
+                student.getParentPhoneNumber(): "";
     }
 
     /**

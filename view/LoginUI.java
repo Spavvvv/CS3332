@@ -1,5 +1,5 @@
 package view;
-
+import src.dao.NotificationDAO;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -22,8 +22,8 @@ import java.util.Optional;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.event.EventHandler;
-import java.util.Scanner;
 import java.util.prefs.Preferences;
+import src.model.Notification.NotificationService; // THÊM DÒNG NÀY
 
 /**
  * Giao diện đăng nhập của ứng dụng
@@ -70,13 +70,15 @@ public class LoginUI {
      * Tải thông tin đăng nhập đã lưu
      */
     private void loadSavedCredentials() {
-        if (rememberMeCheck != null) {
+        if (rememberMeCheck != null && usernameField != null && passwordField != null) { // Thêm kiểm tra null cho passwordField
             Preferences prefs = Preferences.userNodeForPackage(LoginUI.class);
             boolean rememberMe = prefs.getBoolean("rememberMe", false);
 
             if (rememberMe) {
                 String savedUsername = prefs.get("savedUsername", "");
+                String savedPassword = prefs.get("savedPassword", ""); // Lấy mật khẩu đã lưu
                 usernameField.setText(savedUsername);
+                passwordField.setText(savedPassword); // Điền mật khẩu đã lưu
                 rememberMeCheck.setSelected(true);
             }
         }
@@ -87,14 +89,16 @@ public class LoginUI {
      * @param username Tên đăng nhập cần lưu
      * @param remember True nếu cần lưu lại, false nếu không
      */
-    private void saveCredentials(String username, boolean remember) {
+    private void saveCredentials(String username, String password, boolean remember) { // Thêm tham số password
         Preferences prefs = Preferences.userNodeForPackage(LoginUI.class);
         prefs.putBoolean("rememberMe", remember);
 
         if (remember) {
             prefs.put("savedUsername", username);
+            prefs.put("savedPassword", password); // Lưu mật khẩu
         } else {
             prefs.remove("savedUsername");
+            prefs.remove("savedPassword"); // Xóa mật khẩu đã lưu
         }
     }
 
@@ -438,7 +442,7 @@ public class LoginUI {
      */
     private void handleLogin() {
         String username = usernameField.getText().trim();
-        String password = passwordField.getText().trim();
+        String password = passwordField.getText().trim(); // Lấy mật khẩu từ trường passwordField
         boolean rememberMe = rememberMeCheck.isSelected();
 
         // Kiểm tra nếu username hoặc password rỗng
@@ -458,7 +462,7 @@ public class LoginUI {
                 System.out.println("Đăng nhập thành công với vai trò: " + user.getRole());
 
                 // Lưu thông tin đăng nhập nếu cần
-                saveCredentials(username, rememberMe);
+                saveCredentials(username, password, rememberMe); // Truyền cả password vào hàm saveCredentials
 
                 // Gọi giao diện chính
                 launchMainUI(user, user.getName());
@@ -487,13 +491,15 @@ public class LoginUI {
             // Khởi tạo và hiển thị UI chính
             Stage uiStage = new Stage();
             UI ui = new UI();
+            NotificationDAO notificationDAO = new NotificationDAO(); // Giả sử NotificationDAO có constructor mặc định và tự quản lý kết nối
+            NotificationService notificationService = new NotificationService(notificationDAO); // Truyền DAO vào service
 
             // Tạo controllers và truyền thông tin người dùng đã đăng nhập
             NavigationController navigationController1 = new NavigationController(ui);
             MainController mainController1 = new MainController(ui, navigationController1);
 
             // Liên kết UI với các controller
-            ui.setControllers(mainController1, navigationController1);
+            ui.setControllers(mainController1, navigationController1, notificationService);
 
             // Truyền thông tin người dùng vào controller
             mainController1.setCurrentUser(user);

@@ -308,7 +308,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
             // Ensure student.getParent() exists and getParent().getName() exists and returns String
             // This might require the Student model to have a reference to a Parent model or similar structure
             return javafx.beans.binding.Bindings.createStringBinding(
-                    () -> student != null && student.getParent() != null ? student.getParent().getName() : ""
+                    () -> student != null && student.getParentName() != null ? student.getParentPhoneNumber() : ""
             );
         });
 
@@ -584,9 +584,8 @@ public class AbsenceCallScreenView extends BaseScreenView {
                 boolean nameMatches = student.getName() != null && student.getName().toLowerCase().contains(lowerSearchText);
 
                 // Check parent existence and then parent name
-                boolean parentMatches = student.getParent() != null &&
-                        student.getParent().getName() != null &&
-                        student.getParent().getName().toLowerCase().contains(lowerSearchText);
+                boolean parentMatches = student.getParentName() != null &&
+                        student.getParentPhoneNumber() != null;
 
                 boolean contactMatches = student.getContactNumber() != null && student.getContactNumber().toLowerCase().contains(lowerSearchText);
 

@@ -1,9 +1,12 @@
 package view.components.StudentList;
+import javafx.scene.Node;
 import javafx.stage.Stage;
 import src.controller.MainController;
+import src.dao.NotificationDAO;
 import src.dao.StudentDAO;
 import src.model.person.Person;
 import src.model.person.Student;
+import utils.DatabaseConnection;
 import view.components.StudentList.AddStudentDialog;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -11,7 +14,8 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.PropertyValueFactory;
+import src.model.Notification.NotificationService;
+import src.model.person.Person;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -20,14 +24,13 @@ import view.BaseScreenView;
 import src.model.person.Permission; // Import enum Permission (đảm bảo đường dẫn đúng)
 import src.model.person.RolePermissions;
 
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,8 +49,7 @@ public class StudentListScreenView extends BaseScreenView {
     private static final String TEXT_COLOR = "#424242"; // Main text color
 
     // Constants cho đường dẫn file
-    private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-
+    private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     // UI Components
     private Label titleLabel;
     private HBox statisticsContainer;
@@ -99,12 +101,13 @@ public class StudentListScreenView extends BaseScreenView {
                             stt++,
                             student.getName(),
                             student.getBirthday(),
-                            "Chưa có lớp", // Update with logic if className is available
+                            "Chưa có lớp",
                             student.getContactNumber(),
-                            "Chưa điền", // Update with logic if parent details are available
-                            "Đang học", // Replace with actual status logic if fetched
+                            student.getStatus() != null ? student.getStatus().toUpperCase() : "Bảo lưu", // Gán trạng thái
                             student.getEmail(),
-                            student.getId()
+                            student.getId(),
+                            student.getParentName() != null ? student.getParentName() : "Chưa điền",      // Gán Parent Name
+                            student.getParentPhoneNumber() != null ? student.getParentPhoneNumber() : "Chưa điền" // Gán Parent Phone
                     );
                     students.add(studentInfo);
                     System.out.println("DEBUG: Added student to table: " + student.getName());
@@ -134,7 +137,7 @@ public class StudentListScreenView extends BaseScreenView {
     }
     private int calculateAge(String birthDate) {
         try {
-            LocalDate dob = LocalDate.parse(birthDate, DATE_FORMATTER);
+            LocalDate dob = LocalDate.parse(birthDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")); // ISO format
             LocalDate now = LocalDate.now();
             return Period.between(dob, now).getYears();
         } catch (DateTimeParseException e) {
@@ -477,13 +480,25 @@ public class StudentListScreenView extends BaseScreenView {
         System.out.println("DEBUG: Set items to table. Size: " + filteredStudents.size());
 
         // Styling the table
-        studentsTable.setStyle(
+        String tableBaseStyle =
                 "-fx-background-color: white;" +
                         "-fx-border-color: " + BORDER_COLOR + ";" +
                         "-fx-border-radius: 5;" +
                         "-fx-background-radius: 5;" +
-                        "-fx-border-width: 1;"
-        );
+                        "-fx-border-width: 1;";
+// Styles for the header row
+// Bạn có thể tùy chỉnh màu sắc và font chữ tại đây
+        String headerRowStyle =
+                ".table-view { " +
+                        "-fx-table-header-row-background: #e3f2fd;" +  // Màu nền cho dòng tiêu đề
+                        "-fx-font-weight: bold;" +                    // Chữ đậm
+                        "-fx-text-fill: " + PRIMARY_COLOR + ";" +      // Màu chữ cho dòng tiêu đề
+                        "-fx-background-radius: 5;" +                 // Bo tròn phần trên
+                        "-fx-padding: 8px 12px;" +                    // Khoảng cách padding trong tiêu đề
+                        "-fx-border-color: " + BORDER_COLOR + ";" +   // Màu đường viền xung quanh
+                        "-fx-border-width: 0 0 2px 0;" +              // Đường viền phía dưới
+                        "}";
+        studentsTable.setStyle(tableBaseStyle + headerRowStyle);
 
         // Selection column with checkboxes
         TableColumn<StudentInfo, Void> selectCol = new TableColumn<>();
@@ -499,6 +514,7 @@ public class StudentListScreenView extends BaseScreenView {
                         }
                     });
                 }
+
 
                 @Override
                 protected void updateItem(Void item, boolean empty) {
@@ -550,10 +566,10 @@ public class StudentListScreenView extends BaseScreenView {
         // Lớp học column
         TableColumn<StudentInfo, String> classCol = new TableColumn<>("Lớp học");
         classCol.setCellValueFactory(cellData -> {
-            if (cellData.getValue() != null) {
+            if (cellData.getValue() != null && cellData.getValue().getClassName() != null) {
                 return new SimpleStringProperty(cellData.getValue().getClassName());
             } else {
-                return new SimpleStringProperty("");
+                return new SimpleStringProperty("Chưa có lớp"); // Placeholder nếu chưa có dữ liệu lớp học
             }
         });
         classCol.setPrefWidth(120);
@@ -568,17 +584,6 @@ public class StudentListScreenView extends BaseScreenView {
             }
         });
         phoneCol.setPrefWidth(120);
-        // Phụ huynh column
-        TableColumn<StudentInfo, String> parentCol = new TableColumn<>("Phụ huynh");
-        parentCol.setCellValueFactory(cellData -> {
-            if (cellData.getValue() != null) {
-                return new SimpleStringProperty(cellData.getValue().getParent());
-            } else {
-                return new SimpleStringProperty("");
-            }
-        });
-        parentCol.setPrefWidth(150);
-
         // Email column
         TableColumn<StudentInfo, String> emailCol = new TableColumn<>("Email");
         emailCol.setCellValueFactory(cellData -> {
@@ -594,11 +599,14 @@ public class StudentListScreenView extends BaseScreenView {
         TableColumn<StudentInfo, String> statusCol = new TableColumn<>("Trạng thái");
         statusCol.setCellValueFactory(cellData -> {
             if (cellData.getValue() != null) {
-                if(cellData.getValue().toString() == "Active") {
+                String status = cellData.getValue().getStatus(); // Lấy giá trị trạng thái từ StudentInfo
+                if ("ACTIVE".equalsIgnoreCase(status)) {
                     return new SimpleStringProperty("Đang học");
-                } else return new SimpleStringProperty("Đang bảo lưu");
+                } else {
+                    return new SimpleStringProperty("Bảo lưu"); // Trả về "Bảo lưu" nếu null hoặc khác "ACTIVE"
+                }
             } else {
-                return new SimpleStringProperty("");
+                return new SimpleStringProperty("Bảo lưu"); // Giá trị mặc định
             }
         });
         statusCol.setPrefWidth(120);
@@ -639,7 +647,27 @@ public class StudentListScreenView extends BaseScreenView {
                 }
             }
         });
+        // Cột tên phụ huynh
+        TableColumn<StudentInfo, String> parentCol = new TableColumn<>("Phụ huynh");
+        parentCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                return new SimpleStringProperty(cellData.getValue().getParentName()); // Sử dụng `getParentName()`
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
+        parentCol.setPrefWidth(150);
 
+// Cột số điện thoại phụ huynh
+        TableColumn<StudentInfo, String> parentPhoneCol = new TableColumn<>("SĐT Phụ huynh");
+        parentPhoneCol.setCellValueFactory(cellData -> {
+            if (cellData.getValue() != null) {
+                return new SimpleStringProperty(cellData.getValue().getParentPhone()); // Sử dụng `getParentPhone()`
+            } else {
+                return new SimpleStringProperty("");
+            }
+        });
+        parentPhoneCol.setPrefWidth(150);
 
         // Chi tiết column
         TableColumn<StudentInfo, Void> detailsCol = new TableColumn<>("Chi tiết");
@@ -680,11 +708,91 @@ public class StudentListScreenView extends BaseScreenView {
             cell.setAlignment(Pos.CENTER);
             return cell;
         });
-
+        TableColumn<StudentInfo, Void> deleteActionColumn = new TableColumn<>("Hành động");
+        deleteActionColumn.setCellFactory(param -> new TableCell<StudentInfo, Void>() {
+            private final Button deleteButton = new Button("Xóa");
+            {
+                deleteButton.setStyle(
+                        "-fx-background-color: #e53935; " +  // Màu đỏ đậm (có thể dùng #dc3545, #f44336, hoặc màu đỏ bạn thích)
+                                "-fx-text-fill: white; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-background-radius: 5px; " +     // Bo tròn góc
+                                "-fx-border-radius: 5px; " +
+                                "-fx-padding: 6 12 6 12; " +        // Padding (top, right, bottom, left)
+                                "-fx-cursor: hand; " +               // Con trỏ chuột hình bàn tay khi hover
+                                "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 1);" // Đổ bóng nhẹ
+                );
+                // Hiệu ứng khi di chuột qua (hover) - làm nút sáng hơn một chút
+                deleteButton.setOnMouseEntered(e -> deleteButton.setStyle(
+                        "-fx-background-color: #f44336; " + // Màu đỏ sáng hơn một chút khi hover
+                                "-fx-text-fill: white; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-background-radius: 5px; " +
+                                "-fx-border-radius: 5px; " +
+                                "-fx-padding: 6 12 6 12; " +
+                                "-fx-cursor: hand; " +
+                                "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 6, 0, 0, 2);" // Bóng đậm hơn chút
+                ));
+                // Trở lại style gốc khi chuột rời đi
+                deleteButton.setOnMouseExited(e -> deleteButton.setStyle(
+                        "-fx-background-color: #e53935; " +
+                                "-fx-text-fill: white; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-background-radius: 5px; " +
+                                "-fx-border-radius: 5px; " +
+                                "-fx-padding: 6 12 6 12; " +
+                                "-fx-cursor: hand; " +
+                                "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 1);"
+                ));
+                deleteButton.setOnAction(event -> {
+                    StudentInfo student = getTableView().getItems().get(getIndex());
+                    // Confirmation dialog for deletion
+                    Alert confirmationAlert = new Alert(Alert.AlertType.CONFIRMATION);
+                    confirmationAlert.setTitle("Xác nhận xóa");
+                    confirmationAlert.setHeaderText(null);
+                    confirmationAlert.setContentText("Bạn có chắc muốn xóa học sinh này?");
+                    ButtonType confirmButtonType = new ButtonType("Chắc chắn", ButtonBar.ButtonData.OK_DONE);
+                    ButtonType cancelButtonType = new ButtonType("Hủy", ButtonBar.ButtonData.CANCEL_CLOSE);
+                    confirmationAlert.getButtonTypes().setAll(confirmButtonType, cancelButtonType);
+                    confirmationAlert.showAndWait().ifPresent(type -> {
+                        if (type == confirmButtonType) {
+                            // Call database delete and refresh table
+                            boolean success = deleteStudentFromDatabase(student.getUserId());
+                            if (success) {
+                                getTableView().getItems().remove(student);
+                                getTableView().refresh();
+                                showInfo("Đã xóa thành công học viên ");
+                            } else {
+                                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
+                                errorAlert.setTitle("Lỗi");
+                                errorAlert.setHeaderText(null);
+                                errorAlert.setContentText("Xóa học sinh thất bại. Vui lòng thử lại.");
+                                errorAlert.showAndWait();
+                            }
+                        }
+                    });
+                });
+            }
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty ? null : deleteButton);
+            }
+        });
         // Add all columns to the table
-        studentsTable.getColumns().addAll(
-                selectCol, sttCol, nameCol, birthDateCol, classCol,
-                phoneCol, parentCol, emailCol, statusCol, detailsCol
+        studentsTable.getColumns().setAll(
+                selectCol,
+                sttCol,
+                nameCol,
+                birthDateCol,
+                classCol,
+                phoneCol,
+                parentCol, // Cột "Phụ huynh" (tên cha mẹ)
+                parentPhoneCol, // Cột "SĐT Phụ huynh"
+                emailCol,
+                statusCol,
+                detailsCol,
+                deleteActionColumn
         );
 
         // Custom row styling
@@ -744,8 +852,20 @@ public class StudentListScreenView extends BaseScreenView {
         // Lấy Stage từ Node gốc của màn hình hiện tại
         Stage primaryStage = (Stage) root.getScene().getWindow();
 
-        // Tạo dialog với tham số là stage chính
-        AddStudentDialog dialog = new AddStudentDialog(primaryStage);
+        NotificationDAO notificationDAO = new NotificationDAO(); // Giả sử NotificationDAO có constructor mặc định và tự quản lý kết nối
+        NotificationService notificationService = new NotificationService(notificationDAO); // Truyền DAO vào service
+
+
+        Person currentUser = getCurrentUser(); // Sử dụng phương thức getCurrentUser() đã có trong lớp của bạn
+        String currentUserId = "SYSTEM_USER"; // Giá trị mặc định nếu không tìm thấy người dùng
+
+        if (currentUser != null && currentUser.getId() != null && !currentUser.getId().isEmpty()) {
+            currentUserId = currentUser.getId();
+        } else {
+            System.err.println("StudentListScreenView: Không thể xác định ID người dùng hiện tại. Sử dụng giá trị mặc định cho senderId.");
+        }
+
+        AddStudentDialog dialog = new AddStudentDialog(primaryStage, notificationService, currentUserId);
 
         // Hiển thị dialog
         dialog.showAndWait();
@@ -851,13 +971,10 @@ public class StudentListScreenView extends BaseScreenView {
     private void handleViewDetails(StudentInfo studentInfo) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Hồ sơ học viên: " + studentInfo.getName());
-        alert.setHeaderText(null); // Bỏ header mặc định
-
-        // Main content VBox
-        VBox mainContent = new VBox(20); // Khoảng cách giữa các phần
+        alert.setHeaderText(null);
+        VBox mainContent = new VBox(20);
         mainContent.setPadding(new Insets(20));
-        mainContent.setStyle("-fx-background-color: #f8f9fa;"); // Màu nền nhẹ cho dialog
-
+        mainContent.setStyle("-fx-background-color: #f8f9fa;");
         // --- Phần 1: Thông tin cá nhân ---
         VBox personalInfoSection = new VBox(10);
         personalInfoSection.setPadding(new Insets(15));
@@ -868,131 +985,348 @@ public class StudentListScreenView extends BaseScreenView {
                         "-fx-border-radius: 8;" +
                         "-fx-background-radius: 8;"
         );
-
         Label personalTitle = new Label("👤 Thông tin cá nhân");
         personalTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
-        personalTitle.setTextFill(Color.web("#0056b3")); // Màu tiêu đề
-
+        personalTitle.setTextFill(Color.web("#0056b3"));
         GridPane personalGrid = new GridPane();
-        personalGrid.setHgap(10); // Khoảng cách ngang
-        personalGrid.setVgap(8);  // Khoảng cách dọc
-
+        personalGrid.setHgap(10);
+        personalGrid.setVgap(8);
+        // ID (Không chỉnh sửa)
         personalGrid.add(createDetailLabel("ID:", true), 0, 0);
-        personalGrid.add(createDetailLabel(studentInfo.getUserId(), false), 1, 0);
-
+        personalGrid.add(new HBox(5, createDetailLabel(studentInfo.getUserId(), false)), 1, 0);
+        // Họ tên (Chỉnh sửa bằng TextField)
         personalGrid.add(createDetailLabel("Họ tên:", true), 0, 1);
-        personalGrid.add(createDetailLabel(studentInfo.getName(), false), 1, 1);
-
+        personalGrid.add(
+                setupEditableTextField(studentInfo, studentInfo.getName(), "name", "Họ tên",
+                        createEditButton("Họ tên")), // Truyền nút Sửa đã tạo
+                1, 1
+        );
+        // Ngày sinh (Chỉnh sửa bằng DatePicker)
         personalGrid.add(createDetailLabel("Ngày sinh:", true), 0, 2);
-        personalGrid.add(createDetailLabel(studentInfo.getBirthDate(), false), 1, 2);
-
-        personalGrid.add(createDetailLabel("Phụ huynh:", true), 0, 3);
-        personalGrid.add(createDetailLabel(studentInfo.getParent(), false), 1, 3);
-
-        personalInfoSection.getChildren().addAll(personalTitle, createVerticalSpacer(10), personalGrid);
-
-        // --- Phần 2: Thông tin liên hệ ---
-        VBox contactInfoSection = new VBox(10);
-        contactInfoSection.setPadding(new Insets(15));
-        contactInfoSection.setStyle(
-                "-fx-background-color: white;" +
-                        "-fx-border-color: #dee2e6;" +
-                        "-fx-border-width: 1;" +
-                        "-fx-border-radius: 8;" +
-                        "-fx-background-radius: 8;"
+        personalGrid.add(
+                setupEditableDateField(studentInfo, studentInfo.getBirthDate(), "birthDate", "Ngày sinh",
+                        createEditButton("Ngày sinh")),
+                1, 2
         );
 
+        // Phụ huynh (Chỉnh sửa bằng TextField)
+        personalGrid.add(createDetailLabel("Phụ huynh:", true), 0, 3);
+        personalGrid.add(
+                setupEditableTextField(studentInfo, studentInfo.getParentName(), "parentName", "Phụ huynh",
+                        createEditButton("Phụ huynh")),
+                1, 3
+        );
+        // SĐT phụ huynh (Chỉnh sửa bằng TextField)
+        personalGrid.add(createDetailLabel("SĐT phụ huynh:", true), 0, 4);
+        HBox parentPhoneEditableBox = setupEditableTextField(
+                studentInfo, studentInfo.getParentPhone(), "parentPhone", "SĐT phụ huynh",
+                createEditButton("SĐT phụ huynh") // Nút Sửa
+        );
+        // Thêm nút Copy vào HBox này một cách cẩn thận
+        // Nút copy sẽ nằm giữa Label/TextField và nút Sửa/Lưu
+        // Cấu trúc của setupEditableTextField trả về HBox(labelOrInput, editButton)
+        // Chúng ta cần chèn nút copy vào.
+        HBox finalParentPhoneBox = new HBox(5);
+        Node displayOrEditNodeForParentPhone = parentPhoneEditableBox.getChildren().get(0); // Label hoặc TextField
+        Button editOrSaveButtonForParentPhone = (Button) parentPhoneEditableBox.getChildren().get(parentPhoneEditableBox.getChildren().size() -1 ); // Nút Sửa/Lưu
+        finalParentPhoneBox.getChildren().addAll(
+                displayOrEditNodeForParentPhone,
+                createCopyButton(studentInfo.getParentPhone(), "Sao chép SĐT phụ huynh"), // Nút copy
+                editOrSaveButtonForParentPhone
+        );
+        finalParentPhoneBox.setAlignment(Pos.CENTER_LEFT);
+        // Cần đảm bảo logic của nút Sửa/Lưu vẫn hoạt động đúng với Node trong finalParentPhoneBox
+        // Điều này phức tạp hơn, tạm thời đơn giản hóa SĐT phụ huynh chỉ có Sửa, không copy khi đang sửa.
+        // Hoặc nút copy sẽ copy giá trị hiện tại của Label/TextField.
+        // Đơn giản hóa: Tạo HBox riêng cho SĐT phụ huynh để xử lý dễ hơn
+        Label parentPhoneValueLabel = createDetailLabel(studentInfo.getParentPhone(), false);
+        Button parentPhoneEditButton = createEditButton("SĐT phụ huynh");
+        HBox parentPhoneCellBox = new HBox(5,
+                parentPhoneValueLabel,
+                createCopyButton(studentInfo.getParentPhone(), "Sao chép SĐT phụ huynh"), // Copy giá trị label
+                parentPhoneEditButton
+        );
+        parentPhoneCellBox.setAlignment(Pos.CENTER_LEFT);
+        setupFieldEditLogic(studentInfo, "parentPhone", "SĐT phụ huynh", parentPhoneValueLabel, parentPhoneEditButton, parentPhoneCellBox, studentInfo.getParentPhone());
+        personalGrid.add(parentPhoneCellBox, 1, 4);
+        personalInfoSection.getChildren().addAll(personalTitle, createVerticalSpacer(10), personalGrid);
+        // --- Phần 2: Thông tin liên hệ ---
+        VBox contactInfoSection = new VBox(10); // Tương tự như trên
+        contactInfoSection.setPadding(new Insets(15));
+        contactInfoSection.setStyle("-fx-background-color: white; -fx-border-color: #dee2e6; -fx-border-width: 1; -fx-border-radius: 8; -fx-background-radius: 8;");
         Label contactTitle = new Label("📞 Thông tin liên hệ");
         contactTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
         contactTitle.setTextFill(Color.web("#0056b3"));
-
         GridPane contactGrid = new GridPane();
         contactGrid.setHgap(10);
         contactGrid.setVgap(8);
-
+        // Điện thoại (Chỉnh sửa bằng TextField)
         contactGrid.add(createDetailLabel("Điện thoại:", true), 0, 0);
-        HBox phoneBox = new HBox(5, createDetailLabel(studentInfo.getPhone(), false), createCopyButton(studentInfo.getPhone(), "Sao chép SĐT"));
-        phoneBox.setAlignment(Pos.CENTER_LEFT);
-        contactGrid.add(phoneBox, 1, 0);
+        Label phoneValueLabel = createDetailLabel(studentInfo.getPhone(), false);
+        Button phoneEditButton = createEditButton("SĐT");
+        HBox phoneCellBox = new HBox(5,
+                phoneValueLabel,
+                createCopyButton(studentInfo.getPhone(), "Sao chép SĐT"),
+                phoneEditButton
+        );
+        phoneCellBox.setAlignment(Pos.CENTER_LEFT);
+        setupFieldEditLogic(studentInfo, "phone", "Điện thoại", phoneValueLabel, phoneEditButton, phoneCellBox, studentInfo.getPhone());
+        contactGrid.add(phoneCellBox, 1, 0);
 
+        // Email (Không có nút sửa trong code gốc, giữ nguyên)
         contactGrid.add(createDetailLabel("Email:", true), 0, 1);
         HBox emailBox = new HBox(5, createDetailLabel(studentInfo.getEmail(), false), createCopyButton(studentInfo.getEmail(), "Sao chép Email"));
         emailBox.setAlignment(Pos.CENTER_LEFT);
         contactGrid.add(emailBox, 1, 1);
-
         contactInfoSection.getChildren().addAll(contactTitle, createVerticalSpacer(10), contactGrid);
-
         // --- Phần 3: Thông tin học tập ---
-        VBox academicInfoSection = new VBox(10);
+        VBox academicInfoSection = new VBox(10); // Tương tự
         academicInfoSection.setPadding(new Insets(15));
-        academicInfoSection.setStyle(
-                "-fx-background-color: white;" +
-                        "-fx-border-color: #dee2e6;" +
-                        "-fx-border-width: 1;" +
-                        "-fx-border-radius: 8;" +
-                        "-fx-background-radius: 8;"
-        );
-
+        academicInfoSection.setStyle("-fx-background-color: white; -fx-border-color: #dee2e6; -fx-border-width: 1; -fx-border-radius: 8; -fx-background-radius: 8;");
         Label academicTitle = new Label("🎓 Thông tin học tập");
         academicTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
         academicTitle.setTextFill(Color.web("#0056b3"));
-
         GridPane academicGrid = new GridPane();
         academicGrid.setHgap(10);
         academicGrid.setVgap(8);
-
+        // Lớp học (Chỉnh sửa bằng ComboBox)
         academicGrid.add(createDetailLabel("Lớp học:", true), 0, 0);
-        academicGrid.add(createDetailLabel(studentInfo.getClassName(), false), 1, 0);
-
+        List<String> classOptions = Arrays.asList("Lớp A1", "Lớp B2", "Lớp C3", "Chưa xếp lớp"); // Lấy từ ClassDAO sau
+        academicGrid.add(
+                setupEditableComboBoxField(studentInfo, studentInfo.getClassName(), "className", "Lớp học",
+                        createEditButton("Lớp học"), classOptions),
+                1, 0
+        );
+        // Trạng thái (Chỉnh sửa bằng ComboBox)
         academicGrid.add(createDetailLabel("Trạng thái:", true), 0, 1);
-        Label statusValueLabel = createDetailLabel(studentInfo.getStatus(), false);
-        // Tùy chỉnh màu sắc cho trạng thái (giống như trong bảng)
-        String statusBgColor;
-        String statusTextColor;
+        List<String> statusOptions = Arrays.asList("Đang học", "Nghỉ học", "Bảo lưu", "Mới"); // Các trạng thái hợp lệ
+        // HBox cho trạng thái cần được xây dựng cẩn thận để giữ style màu mè
+        Label statusValueLabelOriginal = createDetailLabel(studentInfo.getStatus(), false); // Label gốc để lấy style
+        String initialStatusBgColor, initialStatusTextColor;
+        // ... (copy logic switch case để lấy màu cho initialStatusBgColor, initialStatusTextColor)
         switch (studentInfo.getStatus()) {
-            case "Đang học":
-                statusBgColor = GREEN_COLOR + "40"; // Thêm alpha cho màu nền
-                statusTextColor = GREEN_COLOR;
-                break;
-            case "Nghỉ học":
-                statusBgColor = RED_COLOR + "40";
-                statusTextColor = RED_COLOR;
-                break;
-            case "Mới":
-                statusBgColor = YELLOW_COLOR + "40";
-                statusTextColor = "#856404"; // Màu chữ đậm hơn cho nền vàng
-                break;
-            default:
-                statusBgColor = LIGHT_GRAY + "40";
-                statusTextColor = TEXT_COLOR;
+            case "Đang học": initialStatusBgColor = GREEN_COLOR + "40"; initialStatusTextColor = GREEN_COLOR; break;
+            case "Nghỉ học": initialStatusBgColor = RED_COLOR + "40"; initialStatusTextColor = RED_COLOR; break;
+            case "Mới": initialStatusBgColor = YELLOW_COLOR + "40"; initialStatusTextColor = "#856404"; break;
+            default: initialStatusBgColor = LIGHT_GRAY + "40"; initialStatusTextColor = TEXT_COLOR;
         }
-        statusValueLabel.setStyle(
-                "-fx-background-color: " + statusBgColor + ";" +
-                        "-fx-text-fill: " + statusTextColor + ";" +
+        statusValueLabelOriginal.setStyle("-fx-background-color: " + initialStatusBgColor + ";" + "-fx-text-fill: " + initialStatusTextColor + ";" + "-fx-padding: 3px 8px;" + "-fx-background-radius: 4px;" + "-fx-font-weight: bold;");
+        statusValueLabelOriginal.setMaxWidth(Double.MAX_VALUE);
+        HBox statusCellBox = setupEditableComboBoxFieldWithStyledLabel(
+                studentInfo, studentInfo.getStatus(), "status", "Trạng thái",
+                createEditButton("Trạng thái"), statusOptions, statusValueLabelOriginal
+        );
+        statusCellBox.setAlignment(Pos.CENTER_LEFT);
+        academicGrid.add(statusCellBox, 1, 1);
+        academicInfoSection.getChildren().addAll(academicTitle, createVerticalSpacer(10), academicGrid);
+        mainContent.getChildren().addAll(personalInfoSection, contactInfoSection, academicInfoSection);
+        DialogPane dialogPane = alert.getDialogPane();
+        dialogPane.setContent(mainContent);
+        dialogPane.setPrefWidth(550); // Tăng chiều rộng nếu cần
+        dialogPane.setPrefHeight(Region.USE_COMPUTED_SIZE);
+        alert.getButtonTypes().setAll(new ButtonType("Đóng", ButtonBar.ButtonData.OK_DONE));
+        alert.showAndWait();
+    }
+    private void setupFieldEditLogic(StudentInfo studentInfo, String fieldKey, String fieldDisplayName,
+                                     Label valueLabel, Button actionButton, HBox container, String originalValueFromStudentInfo) {
+        TextField editField = new TextField();
+        editField.setPrefWidth(150); // Điều chỉnh nếu cần
+        actionButton.setOnAction(event -> {
+            Node currentDisplayNode = container.getChildren().get(0); // Node đầu tiên trong HBox là Label hoặc TextField
+            if (actionButton.getText().equals("Sửa")) {
+                editField.setText(valueLabel.getText()); // Lấy giá trị hiện tại từ Label
+                // Thay thế Label bằng TextField trong container
+                // Cần đảm bảo thứ tự các con của container không bị thay đổi ngoài ý muốn
+                int valueLabelIndex = container.getChildren().indexOf(valueLabel);
+                if (valueLabelIndex != -1) {
+                    container.getChildren().set(valueLabelIndex, editField);
+                } else if (container.getChildren().contains(currentDisplayNode) && currentDisplayNode instanceof Label) {
+                    container.getChildren().set(container.getChildren().indexOf(currentDisplayNode), editField);
+                }
+                actionButton.setText("Lưu");
+                editField.requestFocus();
+            } else { // "Lưu"
+                String newValue = editField.getText().trim();
+                // originalValueFromStudentInfo đã được truyền vào
+                if (newValue.isEmpty() && !"status".equals(fieldKey) && !"className".equals(fieldKey)) { // Một số trường có thể trống
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", fieldDisplayName + " không được để trống.");
+                    valueLabel.setText(originalValueFromStudentInfo); // Khôi phục giá trị gốc
+
+                    int editFieldIndex = container.getChildren().indexOf(editField);
+                    if (editFieldIndex != -1) {
+                        container.getChildren().set(editFieldIndex, valueLabel);
+                    } else if (container.getChildren().contains(currentDisplayNode) && currentDisplayNode instanceof TextField){
+                        container.getChildren().set(container.getChildren().indexOf(currentDisplayNode), valueLabel);
+                    }
+                    actionButton.setText("Sửa");
+                    return;
+                }
+                saveIndividualFieldUpdate(studentInfo, fieldKey, newValue, originalValueFromStudentInfo, valueLabel, editField, actionButton, container, fieldDisplayName, null, null);
+            }
+        });
+    }
+
+    private HBox setupEditableTextField(StudentInfo studentInfo, String initialValue, String fieldKey, String fieldDisplayName, Button actionButton) {
+        Label valueLabel = createDetailLabel(initialValue, false);
+        TextField editField = new TextField();
+        editField.setPrefWidth(150);
+        HBox cellContent = new HBox(5, valueLabel, actionButton); // Ban đầu là Label và Button
+        cellContent.setAlignment(Pos.CENTER_LEFT);
+        actionButton.setOnAction(event -> {
+            if (actionButton.getText().equals("Sửa")) {
+                editField.setText(valueLabel.getText());
+                cellContent.getChildren().set(0, editField); // Thay Label bằng TextField
+                actionButton.setText("Lưu");
+                editField.requestFocus();
+            } else { // "Lưu"
+                String newValue = editField.getText().trim();
+                String originalValue = getOriginalValue(studentInfo, fieldKey, initialValue); // Lấy giá trị gốc thực sự
+                if (newValue.isEmpty() && shouldNotBeEmpty(fieldKey)) {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", fieldDisplayName + " không được để trống.");
+                    valueLabel.setText(originalValue);
+                    cellContent.getChildren().set(0, valueLabel);
+                    actionButton.setText("Sửa");
+                    return;
+                }
+                saveIndividualFieldUpdate(studentInfo, fieldKey, newValue, originalValue, valueLabel, editField, actionButton, cellContent, fieldDisplayName, null, null);
+            }
+        });
+        return cellContent;
+    }
+    private HBox setupEditableComboBoxFieldWithStyledLabel(StudentInfo studentInfo, String initialValue, String fieldKey, String fieldDisplayName, Button actionButton, List<String> options, Label styledValueLabel) {
+        // styledValueLabel đã được tạo và style từ bên ngoài
+        ComboBox<String> comboBox = new ComboBox<>(FXCollections.observableArrayList(options));
+        comboBox.setPrefWidth(150); // Hoặc Double.MAX_VALUE để chiếm không gian
+        comboBox.setValue(initialValue);
+        HBox cellContent = new HBox(5, styledValueLabel, actionButton); // Label đã style, và Button
+        cellContent.setAlignment(Pos.CENTER_LEFT);
+        // HBox.setHgrow(comboBox, Priority.ALWAYS); // Cho comboBox giãn ra nếu cần
+        // HBox.setHgrow(styledValueLabel, Priority.ALWAYS);
+        actionButton.setOnAction(event -> {
+            if (actionButton.getText().equals("Sửa")) {
+                comboBox.setValue(styledValueLabel.getText());
+                cellContent.getChildren().set(0, comboBox); // Thay Label bằng ComboBox
+                actionButton.setText("Lưu");
+                comboBox.requestFocus();
+            } else { // "Lưu"
+                String newValue = comboBox.getValue();
+                String originalValue = getOriginalValue(studentInfo, fieldKey, initialValue);
+                if (newValue == null || newValue.isEmpty() && shouldNotBeEmpty(fieldKey)) {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", fieldDisplayName + " không được để trống.");
+                    styledValueLabel.setText(originalValue); // Khôi phục giá trị gốc
+                    // Cập nhật lại style cho styledValueLabel dựa trên originalValue
+                    updateLabelStyle(styledValueLabel, originalValue);
+                    cellContent.getChildren().set(0, styledValueLabel);
+                    actionButton.setText("Sửa");
+                    return;
+                }
+                saveIndividualFieldUpdate(studentInfo, fieldKey, newValue, originalValue, styledValueLabel, comboBox, actionButton, cellContent, fieldDisplayName, null, null);
+            }
+        });
+        return cellContent;
+    }
+    // Helper để lấy giá trị gốc chính xác từ StudentInfo
+    private String getOriginalValue(StudentInfo studentInfo, String fieldKey, String fallbackInitialValue) {
+        switch (fieldKey) {
+            case "name": return studentInfo.getName();
+            case "birthDate": return studentInfo.getBirthDate();
+            case "parentName": return studentInfo.getParentName();
+            case "parentPhone": return studentInfo.getParentPhone();
+            case "phone": return studentInfo.getPhone();
+            case "className": return studentInfo.getClassName();
+            case "status": return studentInfo.getStatus();
+            default: return fallbackInitialValue; // Hoặc throw exception nếu fieldKey không hợp lệ
+        }
+    }
+    // Helper kiểm tra trường có được phép trống không
+    private boolean shouldNotBeEmpty(String fieldKey) {
+        // Ví dụ: tên, ngày sinh không được trống
+        return fieldKey.equals("name") || fieldKey.equals("birthDate") || fieldKey.equals("phone");
+    }
+    // Helper cập nhật style cho Label (đặc biệt cho Trạng thái)
+    private void updateLabelStyle(Label label, String status) {
+        String bgColor, textColor;
+        switch (status) {
+            case "Đang học": bgColor = GREEN_COLOR + "40"; textColor = GREEN_COLOR; break;
+            case "Nghỉ học": bgColor = RED_COLOR + "40"; textColor = RED_COLOR; break;
+            case "Mới": bgColor = YELLOW_COLOR + "40"; textColor = "#856404"; break; // Giữ màu vàng cho text "Mới"
+            default: bgColor = LIGHT_GRAY + "40"; textColor = TEXT_COLOR; // Màu mặc định
+        }
+        label.setStyle(
+                "-fx-background-color: " + bgColor + ";" +
+                        "-fx-text-fill: " + textColor + ";" +
                         "-fx-padding: 3px 8px;" +
                         "-fx-background-radius: 4px;" +
                         "-fx-font-weight: bold;"
         );
-        statusValueLabel.setMaxWidth(Double.MAX_VALUE);
-        HBox statusBox = new HBox(statusValueLabel);
-        statusBox.setAlignment(Pos.CENTER_LEFT);
-        academicGrid.add(statusBox, 1, 1);
+        label.setMaxWidth(Double.MAX_VALUE);
+    }
 
-        academicInfoSection.getChildren().addAll(academicTitle, createVerticalSpacer(10), academicGrid);
+    private HBox setupEditableDateField(StudentInfo studentInfo, String initialDateString,
+                                        String fieldKey, String fieldDisplayName, Button actionButton) {
+        Label valueLabel = createDetailLabel(initialDateString, false); // Hiển thị giá trị hiện tại
+        DatePicker datePicker = new DatePicker();
 
-        // Thêm các phần vào nội dung chính
-        mainContent.getChildren().addAll(personalInfoSection, contactInfoSection, academicInfoSection);
+        // Định dạng ISO (yyyy-MM-dd) để tương thích với cơ sở dữ liệu
+        DateTimeFormatter dbFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-        // Thiết lập nội dung cho DialogPane
-        DialogPane dialogPane = alert.getDialogPane();
-        dialogPane.setContent(mainContent);
-        dialogPane.setPrefWidth(550); // Điều chỉnh chiều rộng dialog
-        dialogPane.setPrefHeight(Region.USE_COMPUTED_SIZE); // Tự động tính chiều cao
+        try {
+            if (initialDateString != null && !initialDateString.isEmpty()) {
+                datePicker.setValue(LocalDate.parse(initialDateString, dbFormatter)); // Chuyển sang LocalDate
+            }
+        } catch (DateTimeParseException e) {
+            System.err.println("Lỗi parse ngày tháng: " + initialDateString);
+        }
 
-        // Tùy chỉnh nút (nếu muốn)
-        alert.getButtonTypes().setAll(new ButtonType("Đóng", ButtonBar.ButtonData.OK_DONE));
+        HBox cellContent = new HBox(5, valueLabel, actionButton);
+        actionButton.setOnAction(event -> {
+            if (actionButton.getText().equals("Sửa")) {
+                cellContent.getChildren().set(0, datePicker);
+                actionButton.setText("Lưu");
+            } else { // Khi bấm "Lưu"
+                LocalDate newDate = datePicker.getValue(); // Lấy giá trị từ DatePicker
+                String formattedDate = (newDate != null) ? newDate.format(dbFormatter) : ""; // Đảm bảo định dạng yyyy-MM-dd
 
-        alert.showAndWait();
+                if (formattedDate.isEmpty()) {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", "Ngày sinh không được để trống.");
+                    return;
+                }
+
+                // Lưu vào cơ sở dữ liệu qua `saveIndividualFieldUpdate`
+                saveIndividualFieldUpdate(studentInfo, fieldKey, formattedDate, initialDateString,
+                        valueLabel, datePicker, actionButton, cellContent, fieldDisplayName, newDate, null);
+            }
+        });
+
+        return cellContent;
+    }
+    private HBox setupEditableComboBoxField(StudentInfo studentInfo, String initialValue, String fieldKey, String fieldDisplayName, Button actionButton, List<String> options) {
+        Label valueLabel = createDetailLabel(initialValue, false);
+        ComboBox<String> comboBox = new ComboBox<>(FXCollections.observableArrayList(options));
+        comboBox.setPrefWidth(150);
+        comboBox.setValue(initialValue);
+        HBox cellContent = new HBox(5, valueLabel, actionButton);
+        cellContent.setAlignment(Pos.CENTER_LEFT);
+        actionButton.setOnAction(event -> {
+            if (actionButton.getText().equals("Sửa")) {
+                comboBox.setValue(valueLabel.getText());
+                cellContent.getChildren().set(0, comboBox);
+                actionButton.setText("Lưu");
+                comboBox.requestFocus();
+            } else { // "Lưu"
+                String newValue = comboBox.getValue();
+                String originalValue = getOriginalValue(studentInfo, fieldKey, initialValue);
+                if (newValue == null || newValue.isEmpty() && shouldNotBeEmpty(fieldKey)) {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", fieldDisplayName + " không được để trống.");
+                    valueLabel.setText(originalValue);
+                    cellContent.getChildren().set(0, valueLabel);
+                    actionButton.setText("Sửa");
+                    return;
+                }
+                saveIndividualFieldUpdate(studentInfo, fieldKey, newValue, originalValue, valueLabel, comboBox, actionButton, cellContent, fieldDisplayName, null, null);
+            }
+        });
+        return cellContent;
     }
 
 // --- Phương thức phụ trợ (Helper Methods) ---
@@ -1009,6 +1343,22 @@ public class StudentListScreenView extends BaseScreenView {
         }
         return label;
     }
+    private Button createEditButton(String fieldName) {
+        Button editBtn = new Button("Sửa");
+        editBtn.setStyle(
+                "-fx-font-size: 10px;" +
+                        "-fx-background-color: #ffc107;" +
+                        "-fx-text-fill: black;" +
+                        "-fx-padding: 2px 6px;" +
+                        "-fx-background-radius: 4px;"
+        );
+        editBtn.setOnAction(e -> {
+            System.out.println("Sửa trường: " + fieldName);
+            // TODO: mở hộp thoại chỉnh sửa
+        });
+        return editBtn;
+    }
+
 
     private Button createCopyButton(String textToCopy, String buttonText) {
         Button copyButton = new Button("📋"); // Sử dụng icon copy
@@ -1111,76 +1461,259 @@ public class StudentListScreenView extends BaseScreenView {
         private final SimpleStringProperty birthDate;
         private final SimpleStringProperty className;
         private final SimpleStringProperty phone;
-        private final SimpleStringProperty parent;
         private final SimpleStringProperty status;
         private final SimpleStringProperty email;
         private final SimpleStringProperty userId;
+        private final SimpleStringProperty parentName;
+        private final SimpleStringProperty parentPhone;
         private final int stt;
         private boolean selected;
-
         public StudentInfo(int stt, String name, String birthDate, String className, String phone,
-                           String parent, String status, String email, String userId) {
+                           String status, String email, String userId, String parentName, String parentPhone) {
             this.stt = stt;
             this.name = new SimpleStringProperty(name);
             this.birthDate = new SimpleStringProperty(birthDate);
             this.className = new SimpleStringProperty(className);
             this.phone = new SimpleStringProperty(phone);
-            this.parent = new SimpleStringProperty(parent);
             this.status = new SimpleStringProperty(status);
             this.email = new SimpleStringProperty(email);
             this.userId = new SimpleStringProperty(userId);
             this.selected = false;
+            this.parentName = new SimpleStringProperty(parentName);
+            this.parentPhone = new SimpleStringProperty(parentPhone);
         }
-
         public int getStt() {
             return stt;
         }
-
+        // Name
         public String getName() {
             return name.get();
         }
-
+        public void setName(String name) {
+            this.name.set(name);
+        }
+        // BirthDate
         public String getBirthDate() {
             return birthDate.get();
         }
-
+        public void setBirthDate(String birthDate) { // THÊM MỚI
+            this.birthDate.set(birthDate);
+        }
+        // ClassName
         public String getClassName() {
             return className.get();
         }
-
+        public void setClassName(String className) { // THÊM MỚI (nếu cần cho chỉnh sửa sau này)
+            this.className.set(className);
+        }
+        // Phone
         public String getPhone() {
             return phone.get();
         }
-
-        public String getParent() {
-            return parent.get();
+        public void setPhone(String phone) { // THÊM MỚI
+            this.phone.set(phone);
         }
-
+        // ParentName
+        public String getParentName() {
+            return this.parentName.get();
+        }
+        public void setParentName(String parentName) { // THÊM MỚI
+            this.parentName.set(parentName);
+        }
+        // ParentPhone
+        public String getParentPhone() {
+            return this.parentPhone.get();
+        }
+        public void setParentPhone(String parentPhone) { // THÊM MỚI
+            this.parentPhone.set(parentPhone);
+        }
+        // Status
         public String getStatus() {
             return status.get();
         }
-
         public void setStatus(String status) {
             this.status.set(status);
         }
-
-
+        // Email
         public String getEmail() {
             return email.get();
         }
-
+        public void setEmail(String email) { // THÊM MỚI (nếu cần cho chỉnh sửa sau này)
+            this.email.set(email);
+        }
+        // UserId
         public String getUserId() {
             return userId.get();
         }
-
+        // Thông thường ID không nên có setter sau khi đã khởi tạo, nhưng nếu cần:
+        // public void setUserId(String userId) {
+        //     this.userId.set(userId);
+        // }
+        // Selected
         public boolean isSelected() {
             return selected;
         }
-
         public void setSelected(boolean selected) {
             this.selected = selected;
         }
+        // Property accessors for TableView (nếu bạn dùng binding trực tiếp)
+        public SimpleStringProperty nameProperty() {
+            return name;
+        }
+        public SimpleStringProperty birthDateProperty() {
+            return birthDate;
+        }
+        public SimpleStringProperty classNameProperty() {
+            return className;
+        }
+        public SimpleStringProperty phoneProperty() {
+            return phone;
+        }
+        public SimpleStringProperty statusProperty() {
+            return status;
+        }
+        public SimpleStringProperty emailProperty() {
+            return email;
+        }
+        public SimpleStringProperty userIdProperty() {
+            return userId;
+        }
+        public SimpleStringProperty parentNameProperty() {
+            return parentName;
+        }
+        public SimpleStringProperty parentPhoneProperty() {
+            return parentPhone;
+        }
     }
+    private void showAlert(Alert.AlertType alertType, String title, String content) {
+        Alert alert = new Alert(alertType);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(content);
+        alert.showAndWait();
+    }
+    private boolean deleteStudentFromDatabase(String studentId) {
+        StudentDAO studentDAO = new StudentDAO(); // Instantiate DAO
+        return studentDAO.delete(studentId); // Calls the DAO's delete method
+    }
+    private void saveIndividualFieldUpdate(StudentInfo studentInfo, String fieldKey, String newValueString, String originalValue,
+                                           Label valueLabel, Node editControl, Button actionButton, HBox container, String fieldDisplayName,
+                                           LocalDate newDateValue, List<String> newMultiSelectValues) {
+        StudentDAO studentDAO = new StudentDAO(); // Tạo một đối tượng DAO
+        boolean dbSuccess = false;
 
+        try {
+            Student studentToUpdate = new Student();
+            studentToUpdate.setId(studentInfo.getUserId()); // ID của student
+            studentToUpdate.setName(studentInfo.getName());
+            studentToUpdate.setBirthday(studentInfo.getBirthDate());
+            studentToUpdate.setContactNumber(studentInfo.getPhone());
+            studentToUpdate.setParentName(studentInfo.getParentName());
+            studentToUpdate.setParentPhoneNumber(studentInfo.getParentPhone());
+            studentToUpdate.setStatus(studentInfo.getStatus());
 
+            // Cập nhật cột tùy theo fieldKey
+            switch (fieldKey) {
+                case "name":
+                    studentToUpdate.setName(newValueString);
+                    studentInfo.setName(newValueString); // Cập nhật trong UI tạm thời
+                    break;
+                case "birthDate":
+                    studentToUpdate.setBirthday(newValueString);
+                    studentInfo.setBirthDate(newValueString);
+                    break;
+                case "phone":
+                    studentToUpdate.setContactNumber(newValueString);
+                    studentInfo.setPhone(newValueString);
+                    break;
+                case "parentName":
+                    studentToUpdate.setParentName(newValueString);
+                    studentInfo.setParentName(newValueString);
+                    break;
+                case "parentPhone":
+                    studentToUpdate.setParentPhoneNumber(newValueString);
+                    studentInfo.setParentPhone(newValueString);
+                    break;
+                case "status":
+                    studentToUpdate.setStatus(newValueString);
+                    studentInfo.setStatus(newValueString);
+                    break;
+                default:
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", "Cột không xác định: " + fieldKey);
+                    return;
+            }
+
+            // Gửi yêu cầu cập nhật vào cơ sở dữ liệu
+            dbSuccess = studentDAO.update(studentToUpdate);
+
+            if (dbSuccess) {
+                // Cập nhật giao diện nếu thao tác thành công
+                showAlert(Alert.AlertType.INFORMATION, "Thành công", "Đã cập nhật " + fieldDisplayName + " thành công.");
+                valueLabel.setText(newValueString); // Cập nhật Label
+                if ("status".equals(fieldKey)) {
+                    updateLabelStyle(valueLabel, newValueString); // Đặc biệt xử lý style cho cột trạng thái
+                }
+                container.getChildren().set(container.getChildren().indexOf(editControl), valueLabel); // Thay label lại
+                actionButton.setText("Sửa");
+                refreshStudentTable(); // Làm mới bảng dữ liệu
+            } else {
+                throw new SQLException("Cập nhật thất bại tại cơ sở dữ liệu.");
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            showAlert(Alert.AlertType.ERROR, "Lỗi Cơ Sở Dữ Liệu", "Không thể cập nhật " + fieldDisplayName + ": " + e.getMessage());
+            valueLabel.setText(originalValue); // Khôi phục giá trị Label cũ
+            if ("status".equals(fieldKey)) {
+                updateLabelStyle(valueLabel, originalValue); // Khôi phục style trạng thái
+            }
+            container.getChildren().set(container.getChildren().indexOf(editControl), valueLabel); // Đặt lại Label
+            actionButton.setText("Sửa");
+        }
+    }
+    /**
+     * Refreshes the data displayed in the students table.
+     * It re-fetches the student data from the database and updates the TableView.
+     */
+    private void refreshStudentTable() {
+        try {
+            // Clear current items in the table
+            studentsTable.getItems().clear();
+
+            // Re-fetch the latest student data from the database
+            StudentDAO studentDAO = new StudentDAO();
+            List<Student> studentList = studentDAO.getAllStudents(); // Lấy danh sách học viên từ cơ sở dữ liệu
+
+            // Convert Student objects into StudentInfo objects for the TableView
+            ObservableList<StudentInfo> updatedStudentInfos = FXCollections.observableArrayList();
+
+            int stt = 1;
+            for (Student student : studentList) {
+                StudentInfo studentInfo = new StudentInfo(
+                        stt++,
+                        student.getName(),
+                        student.getBirthday(),
+                        "Chưa có lớp", // Hoặc sử dụng student.getClassName() nếu có thông tin lớp
+                        student.getContactNumber(),
+                        student.getStatus() != null ? student.getStatus().toUpperCase() : "Bảo lưu",
+                        student.getEmail(),
+                        student.getId(),
+                        student.getParentName() != null ? student.getParentName() : "Chưa điền",
+                        student.getParentPhoneNumber() != null ? student.getParentPhoneNumber() : "Chưa điền"
+                );
+                updatedStudentInfos.add(studentInfo);
+            }
+
+            // Update the items in the TableView
+            if (studentsTable != null) {
+                studentsTable.setItems(updatedStudentInfos);
+                studentsTable.refresh(); // Explicitly refresh the TableView to reflect new data
+            }
+
+        } catch (Exception e) {
+            // Handle exceptions gracefully
+            System.err.println("Error refreshing student table: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 }
