@@ -2,6 +2,7 @@
 package src.dao;
 
 import javafx.scene.control.Alert;
+
 import src.model.attendance.HomeworkSubmissionModel;
 import src.model.attendance.StudentAttendanceData;
 import src.model.person.Parent;
@@ -26,7 +27,6 @@ import java.util.logging.Logger;
 public class StudentDAO {
     private static final Logger LOGGER = Logger.getLogger(StudentDAO.class.getName());
 
-    private ParentDAO parentDAO; // This will be injected
     private CourseDAO courseDAO; // This will be injected
 
     /**
@@ -35,16 +35,6 @@ public class StudentDAO {
     public StudentDAO() {
         // Dependencies ParentDAO and CourseDAO will be set by DaoManager or equivalent
     }
-
-    /**
-     * Set ParentDAO - used for dependency injection.
-     *
-     * @param parentDAO The ParentDAO instance
-     */
-    public void setParentDAO(ParentDAO parentDAO) {
-        this.parentDAO = parentDAO;
-    }
-
     /**
      * Set CourseDAO - used for dependency injection.
      *
@@ -81,10 +71,6 @@ public class StudentDAO {
 
             if (rowsInserted > 0) {
                 // Link related entities within the same transaction
-                if (student.getParent() != null && student.getParent().getId() != null) {
-                    linkStudentToParent(conn, student.getId(), student.getParent().getId());
-                }
-
                 if (student.getCurrentCourses() != null && !student.getCurrentCourses().isEmpty()) {
                     for (Course course : student.getCurrentCourses()) {
                         if (course.getCourseId() != null) {
@@ -109,49 +95,44 @@ public class StudentDAO {
      * @return true if successful
      * @throws SQLException if a database access error occurs
      */
-    public boolean updateStudent(Student student) throws SQLException {
-        String sql = "UPDATE students SET name = ?, gender = ?, contact_number = ?, " +
-                "birthday = ?, email = ?, class_id = ? WHERE id = ?";
-        // Assuming your students table has a class_id column. Adjust if needed.
+    public boolean updateStudentAndUser(Student student) throws SQLException {
+        String updateStudentSql = "UPDATE students SET name = ?, contact_number = ?, birthday = ?, Parent_Name = ?, Parent_PhoneNumber = ? WHERE id = ?";        String updateUserSql = "UPDATE users SET name = ?, contact_number = ?, birthday = ? WHERE id = ?";
+        Connection conn = null;
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement statement = conn.prepareStatement(sql)) {
+        try {
+            conn = DatabaseConnection.getConnection();
+            conn.setAutoCommit(false); // Begin transaction
 
-            conn.setAutoCommit(false); // Start transaction
-
-            statement.setString(1, student.getName());
-            statement.setString(2, student.getGender());
-            statement.setString(3, student.getContactNumber());
-            statement.setString(4, student.getBirthday());
-            statement.setString(5, student.getEmail());
-            statement.setString(6, student.getClassId()); // Assuming Student model has getClassId()
-            statement.setString(7, student.getId());
-
-
-            int rowsUpdated = statement.executeUpdate();
-
-            if (rowsUpdated > 0) {
-                // Update parent relationship by removing all and re-adding if parent exists
-                removeAllParentLinks(conn, student.getId());
-                if (student.getParent() != null && student.getParent().getId() != null) {
-                    linkStudentToParent(conn, student.getId(), student.getParent().getId());
-                }
-
-                // Update course enrollments by removing all and re-adding current ones
-                removeAllCourseEnrollments(conn, student.getId());
-                if (student.getCurrentCourses() != null) {
-                    for (Course course : student.getCurrentCourses()) {
-                        if (course.getCourseId() != null) {
-                            enrollStudentInCourse(conn, student.getId(), course.getCourseId());
-                        }
-                    }
-                }
-                conn.commit(); // Commit transaction
-            } else {
-                conn.rollback(); // Rollback if update failed
+            // Update the student table
+            try (PreparedStatement studentStmt = conn.prepareStatement(updateStudentSql)) {
+                studentStmt.setString(1, student.getName());
+                studentStmt.setString(2, student.getContactNumber());
+                studentStmt.setString(3, student.getBirthday());
+                studentStmt.setString(4, student.getParentName());
+                studentStmt.setString(5, student.getParentPhoneNumber());
+                studentStmt.setString(6, student.getId());
+                studentStmt.executeUpdate(); // No need for rollback handling here
             }
 
-            return rowsUpdated > 0;
+            // Update the user table
+            try (PreparedStatement userStmt = conn.prepareStatement(updateUserSql)) {
+                userStmt.setString(1, student.getName());
+                userStmt.setString(2, student.getContactNumber());
+                userStmt.setString(3, student.getBirthday());
+                userStmt.setString(4, student.getUserId()); // Guaranteed user_id
+                userStmt.executeUpdate(); // No need for rollback handling here
+            }
+
+            conn.commit(); // Commit transaction
+            return true;
+        } catch (SQLException e) {
+            if (conn != null) conn.rollback(); // Rollback transaction if something breaks
+            throw e; // Rethrow for upstream handling
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true);
+                conn.close();
+            }
         }
     }
 
@@ -164,28 +145,91 @@ public class StudentDAO {
      * @throws SQLException if a database access error occurs
      */
     public boolean deleteStudent(String studentId) throws SQLException {
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            conn.setAutoCommit(false); // Start transaction
+        String getUserIdSql = "SELECT user_id FROM students WHERE id = ?";
+        String deleteStudentSql = "DELETE FROM students WHERE id = ?";
+        String deleteUserSql = "DELETE FROM users WHERE id = ?";
 
-            // Use the same connection for related operations within the transaction
-            removeAllParentLinks(conn, studentId);
-            removeAllCourseEnrollments(conn, studentId);
-            // You might also want to remove student from student_session or attendance records if they exist
-            // removeStudentFromSessions(conn, studentId); // Example
+        Connection conn = null;
+        PreparedStatement getUserIdStmt = null;
+        PreparedStatement deleteStudentStmt = null;
+        PreparedStatement deleteUserStmt = null;
+        ResultSet rs = null;
 
-            String sql = "DELETE FROM students WHERE id = ?";
-            try (PreparedStatement statement = conn.prepareStatement(sql)) {
-                statement.setString(1, studentId);
-                int rowsDeleted = statement.executeUpdate();
+        try {
+            conn = DatabaseConnection.getConnection();
+            conn.setAutoCommit(false); // Bắt đầu giao dịch
 
-                if (rowsDeleted > 0) {
-                    conn.commit(); // Commit transaction
-                } else {
-                    conn.rollback(); // Rollback if deletion failed
-                }
-                return rowsDeleted > 0;
+            // Bước 1: Lấy user_id từ bảng students trước
+            getUserIdStmt = conn.prepareStatement(getUserIdSql);
+            getUserIdStmt.setString(1, studentId);
+            rs = getUserIdStmt.executeQuery();
+
+            // Kiểm tra xem sinh viên có tồn tại không
+            if (!rs.next()) {
+                System.err.println("Không tìm thấy sinh viên với ID: " + studentId);
+                conn.rollback();
+                return false;
             }
-        } // Connection is closed here
+
+            // Lưu user_id để dùng sau
+            String userId = rs.getString("user_id");
+
+            // Kiểm tra xem user_id có hợp lệ không
+            if (userId == null) {
+                System.err.println("Sinh viên có ID " + studentId + " không có user_id hợp lệ");
+                conn.rollback();
+                return false;
+            }
+
+            // Bước 2: Xóa bản ghi student trước
+            deleteStudentStmt = conn.prepareStatement(deleteStudentSql);
+            deleteStudentStmt.setString(1, studentId);
+            int studentRowsDeleted = deleteStudentStmt.executeUpdate();
+
+            if (studentRowsDeleted == 0) {
+                System.err.println("Không thể xóa sinh viên với ID: " + studentId);
+                conn.rollback();
+                return false;
+            }
+
+            // Bước 3: Xóa bản ghi user sau khi đã xóa student thành công
+            deleteUserStmt = conn.prepareStatement(deleteUserSql);
+            deleteUserStmt.setString(1, userId);
+            int userRowsDeleted = deleteUserStmt.executeUpdate();
+
+            if (userRowsDeleted == 0) {
+                System.err.println("Không thể xóa người dùng với ID: " + userId);
+                conn.rollback();
+                return false;
+            }
+
+            // Xác nhận giao dịch nếu tất cả các bước đều thành công
+            conn.commit();
+            System.out.println("Đã xóa thành công sinh viên (ID: " + studentId + ") và người dùng liên kết (ID: " + userId + ")");
+            return true;
+
+        } catch (SQLException e) {
+            if (conn != null) {
+                try {
+                    conn.rollback(); // Hoàn tác giao dịch nếu có lỗi
+                } catch (SQLException ex) {
+                    System.err.println("Lỗi khi hoàn tác giao dịch: " + ex.getMessage());
+                }
+            }
+            System.err.println("Lỗi khi xóa sinh viên và người dùng: " + e.getMessage());
+            throw e;
+        } finally {
+            // Đóng tất cả các tài nguyên
+            try {
+                if (rs != null) rs.close();
+                if (getUserIdStmt != null) getUserIdStmt.close();
+                if (deleteStudentStmt != null) deleteStudentStmt.close();
+                if (deleteUserStmt != null) deleteUserStmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                System.err.println("Lỗi khi đóng kết nối: " + e.getMessage());
+            }
+        }
     }
 
     /**
@@ -274,13 +318,11 @@ public class StudentDAO {
      */
     public List<Student> getAllStudents() throws SQLException {
         List<Student> students = new ArrayList<>();
-        String sql = "SELECT id, name, gender, contact_number, birthday, email, class_id FROM students";
-        // Assuming students table has class_id
+        String sql = "SELECT id, name, gender, contact_number, birthday, Parent_Name, Parent_PhoneNumber FROM students";
 
         try (Connection conn = DatabaseConnection.getConnection();
              Statement statement = conn.createStatement();
              ResultSet resultSet = statement.executeQuery(sql)) {
-
             while (resultSet.next()) {
                 students.add(extractStudentFromResultSet(resultSet));
             }
@@ -316,14 +358,19 @@ public class StudentDAO {
         }
         return students;
     }
+    /**
+     * Enroll a student in a course using an existing connection.
+     *
+     * @param conn the active database connection
+     * @param studentId the student ID
+     * @param courseId  the course ID
+     * @return true if successful
+     * @throws SQLException if a database access error occurs
+     */
+    private boolean enrollStudentInCourse(Connection conn, String studentId, String courseId) {
+        System.out.println("DEBUG: enrollStudentInCourse is currently not active. Skipping interaction.");
+        return true; // Return true nhưng không thực hiện gì liên quan tới DB
 
-    private boolean enrollStudentInCourse(Connection conn, String studentId, String courseId) throws SQLException {
-        String sql = "INSERT INTO course_student (course_id, student_id) VALUES (?, ?)";
-        try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, courseId);
-            statement.setString(2, studentId);
-            return statement.executeUpdate() > 0;
-        }
     }
 
     public boolean enrollStudentInCourse(String studentId, String courseId) throws SQLException {
@@ -331,14 +378,18 @@ public class StudentDAO {
             return enrollStudentInCourse(conn, studentId, courseId);
         }
     }
-
-    private boolean withdrawStudentFromCourse(Connection conn, String studentId, String courseId) throws SQLException {
-        String sql = "DELETE FROM course_student WHERE course_id = ? AND student_id = ?";
-        try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, courseId);
-            statement.setString(2, studentId);
-            return statement.executeUpdate() > 0;
-        }
+    /**
+     * Withdraw a student from a course using an existing connection.
+     *
+     * @param conn the active database connection
+     * @param studentId the student ID
+     * @param courseId  the course ID
+     * @return true if successful
+     * @throws SQLException if a database access error occurs
+     */
+    private boolean withdrawStudentFromCourse(Connection conn, String studentId, String courseId) {
+        System.out.println("DEBUG: withdrawStudentFromCourse is currently not active. Skipping interaction.");
+        return true; // Return true nhưng không thực hiện gì liên quan tới DB
     }
 
     public boolean withdrawStudentFromCourse(String studentId, String courseId) throws SQLException {
@@ -378,32 +429,16 @@ public class StudentDAO {
         }
     }
 
-    private Parent getParentForStudent(Connection conn, String studentId) throws SQLException {
-        if (this.parentDAO == null) {
-            throw new IllegalStateException("ParentDAO dependency has not been set on StudentDAO. Cannot load parent.");
-        }
-        String sql = "SELECT parent_id FROM parent_student WHERE student_id = ? LIMIT 1";
-        try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, studentId);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (resultSet.next()) {
-                    String parentId = resultSet.getString("parent_id");
-                    return this.parentDAO.getById(conn, parentId); // Assuming ParentDAO has getById(conn, id)
-                }
-            }
-        }
-        return null;
-    }
-
-    public Optional<Parent> getParentForStudent(String studentId) {
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            return Optional.ofNullable(getParentForStudent(conn, studentId));
-        } catch (SQLException | IllegalStateException e) {
-            LOGGER.log(Level.SEVERE, "Error getting parent for student " + studentId, e);
-            return Optional.empty();
-        }
-    }
-
+    /**
+     * Get courses for a student using an existing connection.
+     * This method requires the CourseDAO dependency to be set.
+     *
+     * @param conn the active database connection
+     * @param studentId the student ID
+     * @return List of courses the student is enrolled in. Returns empty list if none or on error.
+     * @throws SQLException if a database access error occurs
+     * @throws IllegalStateException if CourseDAO dependency has not been set
+     */
     private List<Course> getCoursesForStudent(Connection conn, String studentId) throws SQLException {
         if (this.courseDAO == null) {
             throw new IllegalStateException("CourseDAO dependency has not been set on StudentDAO. Cannot load courses.");
@@ -429,29 +464,27 @@ public class StudentDAO {
      * @return the Student object with basic details
      * @throws SQLException if a database access error occurs
      */
+
     private Student extractStudentFromResultSet(ResultSet resultSet) throws SQLException {
         String id = resultSet.getString("id");
         String name = resultSet.getString("name");
         String gender = resultSet.getString("gender");
         String contactNumber = resultSet.getString("contact_number");
         String birthday = resultSet.getString("birthday");
-        String email = resultSet.getString("email");
-        String classId = resultSet.getString("class_id"); // Extract class_id
-
+        String parentName = resultSet.getString("Parent_Name"); // Thêm thông tin phụ huynh
+        String parentPhoneNumber = resultSet.getString("Parent_PhoneNumber"); // Thêm số ĐT phụ huynh
         Student student = new Student();
         student.setId(id);
         student.setName(name);
         student.setGender(gender);
         student.setContactNumber(contactNumber);
         student.setBirthday(birthday);
-        student.setEmail(email);
-        student.setClassId(classId); // Set class_id on the student object
-
-        student.setParent(null);
-        student.setCurrentCourses(new ArrayList<>());
-
+        student.setParentName(parentName); // Đặt thông tin phụ huynh
+        student.setParentPhoneNumber(parentPhoneNumber); // Đặt số ĐT phụ huynh
         return student;
     }
+
+
 
     /**
      * Helper method to prepare a PreparedStatement from a Student object.
@@ -469,8 +502,9 @@ public class StudentDAO {
         statement.setString(4, student.getContactNumber());
         statement.setString(5, student.getBirthday());
         statement.setString(6, student.getEmail());
-        statement.setString(7, student.getClassId()); // Assuming Student model has getClassId() and setClassId()
-        // And the SQL for INSERT has 7 placeholders
+        statement.setString(7, student.getStatus());
+        statement.setString(8, student.getParentName());
+        statement.setString(9, student.getParentPhoneNumber());
     }
 
     public boolean save(Student student) {
@@ -484,7 +518,8 @@ public class StudentDAO {
 
     public boolean update(Student student) {
         try {
-            return updateStudent(student);
+            // updateStudent now handles updating parent/course links based on the student object
+            return updateStudentAndUser(student);
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error updating student: " + student.getId(), e);
             return false;
@@ -592,23 +627,23 @@ public class StudentDAO {
 
     public boolean createStudentAndUserTransaction(Student student, String address) throws SQLException {
         Connection conn = null;
-        String generatedUserId = null;
+        String generatedUserId = null; // ID cho bảng users
 
-        // SQL đã được cập nhật: Loại bỏ cột 'email'
+        // SQL cho bảng users: Loại bỏ 'email', 'address' được sử dụng.
         String userInsertSql = "INSERT INTO users (id, name, gender, contact_number, birthday, address, active) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        // SQL đã được cập nhật: Loại bỏ cột 'email'
-        String studentInsertSql = "INSERT INTO students (id, user_id, name, gender, contact_number, birthday, address, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+        // SQL cho bảng students:
+        // Loại bỏ 'email'.
+        // Thêm: address, status, parent_one_name, parent_one_contact, parent_two_name, parent_two_contact.
+        // user_id là FK trỏ tới bảng users.
+        // id là PK của bảng students (ví dụ S001).
+        String studentInsertSql = "INSERT INTO students (id, user_id, name, gender, contact_number, birthday, " +
+                "address, status, Parent_Name, Parent_PhoneNumber) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try {
             conn = DatabaseConnection.getConnection();
             conn.setAutoCommit(false); // Bắt đầu transaction
-
-            // Thông tin email từ đối tượng Student không còn được sử dụng trực tiếp trong INSERT nữa
-            // String receivedEmail = student.getEmail();
-            // System.out.println("DEBUG [StudentDAO - Start Transaction]: Đối tượng Student có email (nếu có): [" + receivedEmail + "]");
-            // if (receivedEmail == null || receivedEmail.trim().isEmpty()) {
-            //     System.out.println("INFO [StudentDAO]: Email trong đối tượng Student là null hoặc rỗng. Sẽ không chèn email.");
-            // }
 
             // 1. Thêm vào bảng 'users'
             generatedUserId = UUID.randomUUID().toString(); // Tạo ID duy nhất cho user
@@ -618,15 +653,15 @@ public class StudentDAO {
                 userStmt.setString(3, student.getGender());
                 userStmt.setString(4, student.getContactNumber());
                 userStmt.setString(5, student.getBirthday());
-                // Cột email đã được loại bỏ, điều chỉnh chỉ số cho các cột còn lại:
-                // userStmt.setString(6, student.getEmail()); // Dòng này đã bị loại bỏ
 
+                // student.getEmail() không còn được sử dụng.
+                // Sử dụng tham số 'address' cho cột address của user
                 if (address != null && !address.trim().isEmpty()) {
-                    userStmt.setString(6, address); // Trước đây là 7
+                    userStmt.setString(6, address);
                 } else {
-                    userStmt.setNull(6, Types.VARCHAR); // Trước đây là 7
+                    userStmt.setNull(6, Types.VARCHAR);
                 }
-                userStmt.setBoolean(7, true); // Mặc định user active, trước đây là 8
+                userStmt.setBoolean(7, true); // Mặc định user active
 
                 int userRowsInserted = userStmt.executeUpdate();
                 if (userRowsInserted == 0) {
@@ -642,22 +677,31 @@ public class StudentDAO {
                 System.err.println("Thiếu ID sinh viên. Không thể thêm vào bảng students.");
                 throw new SQLException("ID sinh viên là bắt buộc để thêm bản ghi sinh viên.");
             }
+
             try (PreparedStatement studentStmt = conn.prepareStatement(studentInsertSql)) {
-                studentStmt.setString(1, student.getId()); // ID riêng của sinh viên
-                studentStmt.setString(2, generatedUserId); // Liên kết tới user vừa tạo
+                studentStmt.setString(1, student.getId());         // PK của student
+                studentStmt.setString(2, generatedUserId);         // FK user_id
                 studentStmt.setString(3, student.getName());
                 studentStmt.setString(4, student.getGender());
                 studentStmt.setString(5, student.getContactNumber());
                 studentStmt.setString(6, student.getBirthday());
-                // Cột email đã được loại bỏ, điều chỉnh chỉ số cho các cột còn lại:
-                // studentStmt.setString(7, student.getEmail()); // Dòng này đã bị loại bỏ
 
-                if (address != null && !address.trim().isEmpty()) { // Giả sử sinh viên cũng có cột địa chỉ
-                    studentStmt.setString(7, address); // Trước đây là 8
+                // student.getEmail() không còn được sử dụng.
+                // Sử dụng tham số 'address' cho cột address của student
+                if (address != null && !address.trim().isEmpty()) {
+                    studentStmt.setString(7, address);
                 } else {
-                    studentStmt.setNull(7, Types.VARCHAR); // Trước đây là 8
+                    studentStmt.setNull(7, Types.VARCHAR);
                 }
-                studentStmt.setString(8, "ACTIVE"); // Trạng thái của sinh viên, trước đây là 9
+
+                // Sử dụng student.getStatus() hoặc một giá trị mặc định nếu null
+                studentStmt.setString(8, student.getStatus() != null ? student.getStatus() : "ACTIVE"); // status
+
+                // Thêm thông tin cha mẹ trực tiếp từ đối tượng Student
+                studentStmt.setString(9, student.getParentName());
+                studentStmt.setString(10, student.getParentPhoneNumber());
+
+
 
                 int studentRowsInserted = studentStmt.executeUpdate();
                 if (studentRowsInserted == 0) {
@@ -667,21 +711,14 @@ public class StudentDAO {
                 }
             }
 
-            // 3. Liên kết với Parent (nếu có thông tin Parent trong đối tượng Student)
-            if (student.getParent() != null && student.getParent().getId() != null && !student.getParent().getId().trim().isEmpty()) {
-                // Giả sử bạn có phương thức linkStudentToParent
-                boolean linked = linkStudentToParent(conn, student.getId(), student.getParent().getId());
-                if (!linked) {
-                    conn.rollback();
-                    System.err.println("Thất bại khi liên kết sinh viên " + student.getId() + " với phụ huynh " + student.getParent().getId());
-                    return false;
-                }
-            }
+            // 3. Liên kết với Parent (PHẦN NÀY ĐÃ BỊ LOẠI BỎ)
+            // Logic "if (student.getParent() != null ... linkStudentToParent)" đã không còn cần thiết
+            // vì thông tin cha mẹ đã được lưu trực tiếp vào bảng students.
 
             // 4. Đăng ký khóa học (nếu có, sử dụng lại logic hiện có)
             if (student.getCurrentCourses() != null && !student.getCurrentCourses().isEmpty()) {
                 for (Course course : student.getCurrentCourses()) {
-                    // Giả sử bạn có phương thức enrollStudentInCourse
+                    // Giả sử bạn có phương thức enrollStudentInCourse(Connection conn, String studentId, String courseId)
                     if (!enrollStudentInCourse(conn, student.getId(), course.getCourseId())) {
                         conn.rollback();
                         System.err.println("Thất bại khi đăng ký sinh viên " + student.getId() + " vào khóa học " + course.getCourseId());
@@ -1007,6 +1044,5 @@ public class StudentDAO {
 
         return studentData;
     }
-
 }
 

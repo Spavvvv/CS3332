@@ -84,7 +84,6 @@ public class DaoManager {
         studentDAO.setCourseDAO(courseDAO);
 
         parentDAO.setStudentDAO(studentDAO);
-
         courseDAO.setStudentDAO(studentDAO);
         courseDAO.setTeacherDAO(teacherDAO);
 

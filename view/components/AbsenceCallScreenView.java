@@ -371,7 +371,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
         parentNameCol.setCellValueFactory(data -> {
             Student student = data.getValue().getStudent();
             return javafx.beans.binding.Bindings.createStringBinding(
-                    () -> student != null && student.getParent() != null ? student.getParent().getName() : ""
+                    () -> student != null && student.getParentName() != null ? student.getParentPhoneNumber() : ""
             );
         });
 
@@ -685,9 +685,8 @@ public class AbsenceCallScreenView extends BaseScreenView {
                 boolean nameMatches = student.getName() != null && student.getName().toLowerCase().contains(lowerSearchText);
 
                 // Check parent existence and then parent name
-                boolean parentMatches = student.getParent() != null &&
-                        student.getParent().getName() != null &&
-                        student.getParent().getName().toLowerCase().contains(lowerSearchText);
+                boolean parentMatches = student.getParentName() != null &&
+                        student.getParentPhoneNumber() != null;
 
                 boolean contactMatches = student.getContactNumber() != null && student.getContactNumber().toLowerCase().contains(lowerSearchText);
 

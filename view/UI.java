@@ -14,7 +14,11 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
-
+import src.model.Notification.Notification; // Model Notification của bạn
+import src.model.Notification.NotificationService; // Service của bạn
+import java.util.Collections; // Để sắp xếp
+import java.time.format.DateTimeFormatter; // Để định dạng ngày giờ
+import javafx.scene.control.ScrollPane;
 /**
  * Lớp quản lý giao diện người dùng chính của ứng dụng
  */
@@ -30,7 +34,7 @@ public class UI {
     private Label pageTitleLabel;
     private Label breadcrumbPathLabel;
     private Label userLabel;
-
+    private NotificationService notificationService;
     // Biến để lưu trạng thái hiển thị submenu
     private VBox sidebar;
     private VBox trainingSubmenu;
@@ -51,9 +55,10 @@ public class UI {
      * @param mainController Controller chính của ứng dụng
      * @param navigationController Controller điều hướng
      */
-    public void setControllers(MainController mainController, NavigationController navigationController) {
+    public void setControllers(MainController mainController, NavigationController navigationController, NotificationService notificationService) { // THÊM notificationService vào tham số
         this.mainController = mainController;
         this.navigationController = navigationController;
+        this.notificationService = notificationService; // GÁN GIÁ TRỊ CHO BIẾN THÀNH VIÊN
     }
 
     /**
@@ -325,9 +330,7 @@ public class UI {
         }
 
         notifButton.setOnAction(e -> {
-            if (navigationController != null) {
-                navigationController.navigateTo("notifications");
-            }
+            showNotificationsPopup();
         });
 
         // Spacer để đẩy các phần tử qua bên phải
@@ -700,6 +703,180 @@ public class UI {
         }
     }
 
+
+
+    private void showNotificationsPopup() {
+        if (this.notificationService == null) {
+            System.err.println("NotificationService chưa được thiết lập trong UI.");
+            Alert alert = new Alert(Alert.AlertType.ERROR, "Không thể tải thông báo: Dịch vụ chưa sẵn sàng.");
+            alert.setHeaderText(null);
+            alert.showAndWait();
+            return;
+        }
+
+        // SỬA ĐỔI Ở ĐÂY: Sử dụng getNotificationsForAdmins()
+        java.util.List<Notification> actualNotifications = new java.util.ArrayList<>(
+                this.notificationService.getNotificationsForAdmins() // Đã sửa tên phương thức
+        );
+        actualNotifications.sort((n1, n2) -> n2.getCreatedAt().compareTo(n1.getCreatedAt()));
+
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Thông báo");
+        if (root != null && root.getScene() != null && root.getScene().getWindow() != null) {
+            dialog.initOwner(root.getScene().getWindow());
+        }
+
+        Label headerLabel = new Label("Thông báo (" + actualNotifications.size() + ")");
+        headerLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        headerLabel.setPadding(new javafx.geometry.Insets(15, 15, 10, 15));
+
+        VBox notificationsContainer = new VBox(0);
+        notificationsContainer.setStyle("-fx-background-color: white;");
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
+
+        for (Notification notification : actualNotifications) {
+            HBox notificationItem = new HBox(12);
+            notificationItem.setPadding(new javafx.geometry.Insets(12, 15, 12, 10));
+            notificationItem.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+            String baseItemStyle = "-fx-border-color: transparent transparent #ecf0f1 transparent; -fx-border-width: 0 0 1 0;";
+            String unreadItemStyle = "-fx-background-color: white; " + baseItemStyle;
+            String readItemStyle = "-fx-background-color: #f9f9f9; " + baseItemStyle;
+
+            notificationItem.setStyle(notification.isRead() ? readItemStyle : unreadItemStyle);
+
+            StackPane iconContainer = new StackPane();
+            javafx.scene.shape.Circle circle = new javafx.scene.shape.Circle(5);
+            circle.setFill(notification.isRead() ? javafx.scene.paint.Color.rgb(189, 195, 199) : javafx.scene.paint.Color.rgb(52, 152, 219));
+            iconContainer.getChildren().add(circle);
+            iconContainer.setPadding(new javafx.geometry.Insets(0, 0, 0, 5));
+            iconContainer.setMinWidth(15);
+
+            VBox messageContentBox = new VBox(3);
+
+            Label messageLabel = new Label(notification.getMessage());
+            String messageStyle = "-fx-text-fill: #2c3e50; -fx-font-size: 13px;";
+            if (!notification.isRead()) {
+                messageStyle += " -fx-font-weight: bold;";
+            }
+            messageLabel.setStyle(messageStyle);
+            messageLabel.setWrapText(true);
+            messageLabel.setPrefWidth(330);
+
+            String senderInfo = (notification.getSenderId() != null && !notification.getSenderId().isEmpty()) ?
+                    " (Gửi bởi: " + notification.getSenderId() + ")" : "";
+            Label timeLabel = new Label(notification.getCreatedAt().format(formatter) + senderInfo);
+            timeLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #7f8c8d;");
+
+            messageContentBox.getChildren().addAll(messageLabel, timeLabel);
+            notificationItem.getChildren().addAll(iconContainer, messageContentBox);
+
+            notificationItem.setOnMouseEntered(e -> {
+                String hoverStyle = (notification.isRead() ? "-fx-background-color: #eef0f1; " : "-fx-background-color: #e8f4fd; ") + baseItemStyle;
+                notificationItem.setStyle(hoverStyle);
+            });
+
+            notificationItem.setOnMouseExited(e -> {
+                notificationItem.setStyle(notification.isRead() ? readItemStyle : unreadItemStyle);
+            });
+
+            notificationItem.setOnMouseClicked(e -> {
+                if (!notification.isRead()) {
+                    this.notificationService.markNotificationAsRead(notification.getNotificationId());
+                    notification.setRead(true);
+
+                    notificationItem.setStyle(readItemStyle);
+                    String newMsgStyle = "-fx-text-fill: #2c3e50; -fx-font-size: 13px;";
+                    messageLabel.setStyle(newMsgStyle);
+                    circle.setFill(javafx.scene.paint.Color.rgb(189, 195, 199));
+                    // Call updateNotificationBadgeCount(); if you have one
+                }
+                System.out.println("Clicked notification ID: " + notification.getNotificationId());
+            });
+
+            notificationsContainer.getChildren().add(notificationItem);
+        }
+
+        if (actualNotifications.isEmpty()) {
+            Label emptyLabel = new Label("Không có thông báo mới");
+            emptyLabel.setStyle("-fx-text-fill: #95a5a6; -fx-font-style: italic; -fx-font-size: 14px;");
+            emptyLabel.setPadding(new javafx.geometry.Insets(20));
+            emptyLabel.setAlignment(javafx.geometry.Pos.CENTER);
+            emptyLabel.setMaxWidth(Double.MAX_VALUE);
+            notificationsContainer.getChildren().add(emptyLabel);
+        }
+
+        ScrollPane scrollPane = new ScrollPane(notificationsContainer);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: white; -fx-background:white;");
+
+        VBox mainDialogContainer = new VBox();
+        mainDialogContainer.getChildren().addAll(headerLabel, scrollPane);
+        mainDialogContainer.setStyle("-fx-background-color: white;");
+
+        double estimatedHeight = 60 + Math.min(actualNotifications.size(), 5) * 65;
+        mainDialogContainer.setPrefSize(420, Math.min(estimatedHeight, 450));
+        if (actualNotifications.isEmpty()) {
+            mainDialogContainer.setPrefHeight(150);
+        }
+
+        dialog.getDialogPane().setContent(mainDialogContainer);
+        dialog.getDialogPane().setStyle("-fx-background-color: white; -fx-padding: 0;");
+
+        ButtonType closeButtonType = new ButtonType("Đóng", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().add(closeButtonType);
+
+        Button closeButtonNode = (Button) dialog.getDialogPane().lookupButton(closeButtonType);
+        if (closeButtonNode != null) {
+            closeButtonNode.setStyle(
+                    "-fx-background-color: #3498db; " +
+                            "-fx-text-fill: white; " +
+                            "-fx-font-weight: bold; " +
+                            "-fx-background-radius: 4px; " +
+                            "-fx-padding: 8px 15px;"
+            );
+
+            closeButtonNode.setOnMouseEntered(e ->
+                    closeButtonNode.setStyle(
+                            "-fx-background-color: #2980b9; " +
+                                    "-fx-text-fill: white; " +
+                                    "-fx-font-weight: bold; " +
+                                    "-fx-background-radius: 4px; " +
+                                    "-fx-padding: 8px 15px;"
+                    )
+            );
+            closeButtonNode.setOnMouseExited(e ->
+                    closeButtonNode.setStyle(
+                            "-fx-background-color: #3498db; " +
+                                    "-fx-text-fill: white; " +
+                                    "-fx-font-weight: bold; " +
+                                    "-fx-background-radius: 4px; " +
+                                    "-fx-padding: 8px 15px;"
+                    )
+            );
+        }
+
+        dialog.getDialogPane().getStylesheets().add(
+                "data:text/css," +
+                        ".dialog-pane > .button-bar > .container { " +
+                        "-fx-padding: 10px 15px 15px 15px; " +
+                        "-fx-alignment: center; " +
+                        "}" +
+                        ".dialog-pane > .content.label { " +
+                        "-fx-padding: 10px;" +
+                        "}"
+        );
+
+        dialog.showAndWait();
+        // if (mainController != null) mainController.updateNotificationBadge();
+    }
+
+
+
+
+
     /**
      * Hiển thị thông báo lỗi
      * @param message Nội dung thông báo lỗi
@@ -778,10 +955,6 @@ public class UI {
      * Lấy email của người dùng hiện tại
      * @return Email người dùng
      */
-    public String getCurrentUserEmail() {
-        return currentUserEmail;
-    }
-
     /**
      * Circle class for avatar placeholder (if image not available)
      */

@@ -23,22 +23,7 @@ public class Parent extends Person {
     }
 
     // Parent-specific methods
-    public void addChild(Student child) {
-        if (children == null) {
-            children = new ArrayList<>();
-        }
-        children.add(child);
-        child.setParent(this); // Link back to parent
-    }
 
-    public void removeChild(Student child) {
-        if (children != null) {
-            children.remove(child);
-            if (child.getParent() == this) {
-                child.setParent(null);
-            }
-        }
-    }
 
     // Getters and Setters
     public List<Student> getChildren() {

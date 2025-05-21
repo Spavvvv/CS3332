@@ -8,6 +8,7 @@ public enum Permission {
     DELETE_CLASS,
     VIEW_STUDENTS_IN_CLASS,
     EXPORT_CLASS_DATA,
-    ADD_STUDENT
+    ADD_STUDENT,
+    ACCEPT_STUDENT
     // Add more permissions as needed
 }
