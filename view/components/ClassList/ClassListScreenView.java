@@ -406,7 +406,6 @@ public class ClassListScreenView extends BaseScreenView {
                         "-fx-border-width: 1;"
         );
 
-
         // Selection column with checkboxes
         TableColumn<ClassInfo, Void> selectCol = new TableColumn<>();
         selectCol.setPrefWidth(30);
@@ -419,7 +418,6 @@ public class ClassListScreenView extends BaseScreenView {
                         data.setSelected(checkBox.isSelected());
                     });
                 }
-
 
                 @Override
                 protected void updateItem(Void item, boolean empty) {
@@ -436,19 +434,16 @@ public class ClassListScreenView extends BaseScreenView {
             return cell;
         });
 
-
         // STT column
         TableColumn<ClassInfo, Integer> sttCol = new TableColumn<>("STT");
         sttCol.setCellValueFactory(new PropertyValueFactory<>("stt"));
         sttCol.setPrefWidth(50);
         sttCol.setStyle("-fx-alignment: CENTER-LEFT;");
 
-
         // Mã column
         TableColumn<ClassInfo, String> codeCol = new TableColumn<>("Mã");
         codeCol.setCellValueFactory(new PropertyValueFactory<>("code"));
         codeCol.setPrefWidth(150);
-
 
         // Tên lớp column
         TableColumn<ClassInfo, String> nameCol = new TableColumn<>("Tên lớp");
@@ -462,15 +457,10 @@ public class ClassListScreenView extends BaseScreenView {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    // Tiêu đề với "Đang học" ở dưới
                     VBox content = new VBox(3);
                     content.setAlignment(Pos.CENTER_LEFT);
-
-                    // Tên lớp
                     Label nameLabel = new Label(item);
                     nameLabel.setStyle("-fx-font-weight: bold;");
-
-                    // Label trạng thái
                     Label statusLabel = new Label("Đang học");
                     statusLabel.setPadding(new Insets(2, 8, 2, 8));
                     statusLabel.setStyle(
@@ -479,14 +469,12 @@ public class ClassListScreenView extends BaseScreenView {
                                     "-fx-background-radius: 4;" +
                                     "-fx-font-size: 12px;"
                     );
-
                     content.getChildren().addAll(nameLabel, statusLabel);
                     setGraphic(content);
                     setText(null);
                 }
             }
         });
-
 
         // Số buổi column
         TableColumn<ClassInfo, String> sessionsCol = new TableColumn<>("Số buổi");
@@ -502,25 +490,14 @@ public class ClassListScreenView extends BaseScreenView {
                 } else {
                     HBox progressBox = new HBox(5);
                     progressBox.setAlignment(Pos.CENTER_LEFT);
-
-
-                    // Split the item to get current and total (format: "0/100")
                     String[] parts = item.split("/");
                     int current = Integer.parseInt(parts[0]);
                     int total = Integer.parseInt(parts[1]);
-
-
-                    // Create the progress bar
                     ProgressBar progressBar = new ProgressBar((double)current/total);
                     progressBar.setPrefWidth(60);
                     progressBar.setStyle("-fx-accent: " + GREEN_COLOR + ";");
-
-
-                    // Create the label
                     Label progressLabel = new Label(item);
                     progressLabel.setStyle("-fx-text-fill: " + TEXT_COLOR + "; -fx-padding: 0 0 0 5;");
-
-
                     progressBox.getChildren().addAll(progressBar, progressLabel);
                     setGraphic(progressBox);
                     setText(null);
@@ -528,30 +505,25 @@ public class ClassListScreenView extends BaseScreenView {
             }
         });
 
-
         // Ngày bắt đầu column
         TableColumn<ClassInfo, String> startDateCol = new TableColumn<>("Ngày bắt đầu");
         startDateCol.setCellValueFactory(new PropertyValueFactory<>("startDate"));
         startDateCol.setPrefWidth(100);
-
 
         // Ngày kết thúc column
         TableColumn<ClassInfo, String> endDateCol = new TableColumn<>("Ngày kết thúc");
         endDateCol.setCellValueFactory(new PropertyValueFactory<>("endDate"));
         endDateCol.setPrefWidth(100);
 
-
         // Giáo viên column
         TableColumn<ClassInfo, String> teacherCol = new TableColumn<>("Giáo viên");
         teacherCol.setCellValueFactory(new PropertyValueFactory<>("teacher"));
         teacherCol.setPrefWidth(120);
 
-
         // Quản lý column
         TableColumn<ClassInfo, String> managerCol = new TableColumn<>("Quản lý");
         managerCol.setCellValueFactory(new PropertyValueFactory<>("manager"));
         managerCol.setPrefWidth(120);
-
 
         // Ngày học column
         TableColumn<ClassInfo, String> classDateCol = new TableColumn<>("Ngày học");
@@ -565,22 +537,18 @@ public class ClassListScreenView extends BaseScreenView {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    // Split by newline to show multiple days
                     String[] days = item.split("\n");
                     VBox daysBox = new VBox(3);
                     daysBox.setAlignment(Pos.CENTER_LEFT);
-
                     for (String day : days) {
                         Label dayLabel = new Label(day);
                         daysBox.getChildren().add(dayLabel);
                     }
-
                     setGraphic(daysBox);
                     setText(null);
                 }
             }
         });
-
 
         // Học viên column with action button
         TableColumn<ClassInfo, Void> studentsCol = new TableColumn<>("Học viên");
@@ -588,7 +556,6 @@ public class ClassListScreenView extends BaseScreenView {
             TableCell<ClassInfo, Void> cell = new TableCell<>() {
                 private final Button btn = new Button();
                 {
-                    // Button styling
                     btn.setStyle(
                             "-fx-background-color: " + PRIMARY_COLOR + ";" +
                                     "-fx-text-fill: white;" +
@@ -596,9 +563,6 @@ public class ClassListScreenView extends BaseScreenView {
                                     "-fx-padding: 5 15;" +
                                     "-fx-cursor: hand;"
                     );
-
-
-                    // Content for button
                     HBox content = new HBox(5);
                     content.setAlignment(Pos.CENTER);
                     Label label = new Label("1/1 học viên");
@@ -607,14 +571,20 @@ public class ClassListScreenView extends BaseScreenView {
                     arrow.setTextFill(Color.WHITE);
                     content.getChildren().addAll(label, arrow);
                     btn.setGraphic(content);
-
-
                     btn.setOnAction(event -> {
-                        ClassInfo data = getTableView().getItems().get(getIndex());
-                        handleViewStudents(data);
+                        ClassInfo selectedClassInfo = getTableView().getItems().get(getIndex());
+                        if (selectedClassInfo != null) {
+                            AddStudentToCourseDialog dialog = new AddStudentToCourseDialog(selectedClassInfo);
+
+                            // Hiển thị dialog và chờ kết quả trả về
+                            dialog.showAndWait().ifPresent(result -> {
+                                System.out.println("Thêm học viên thành công: " + result.getKey() + " - " + result.getValue());
+                                // Làm mới danh sách lớp học sau khi thêm thành công
+                                classesTable.refresh();
+                            });
+                        }
                     });
                 }
-
 
                 @Override
                 protected void updateItem(Void item, boolean empty) {
@@ -630,7 +600,6 @@ public class ClassListScreenView extends BaseScreenView {
         });
         studentsCol.setPrefWidth(120);
 
-
         // Khác column with action button
         TableColumn<ClassInfo, Void> actionsCol = new TableColumn<>("Khác");
         actionsCol.setCellFactory(col -> {
@@ -644,19 +613,14 @@ public class ClassListScreenView extends BaseScreenView {
                                     "-fx-padding: 5 15;" +
                                     "-fx-cursor: hand;"
                     );
-
-
                     Label gearIcon = new Label("⚙");
                     gearIcon.setStyle("-fx-text-fill: " + TEXT_COLOR + ";");
                     btn.setGraphic(gearIcon);
-
-
                     btn.setOnAction(event -> {
                         ClassInfo data = getTableView().getItems().get(getIndex());
                         handleMoreActions(data);
                     });
                 }
-
 
                 @Override
                 protected void updateItem(Void item, boolean empty) {
@@ -672,14 +636,49 @@ public class ClassListScreenView extends BaseScreenView {
         });
         actionsCol.setPrefWidth(80);
 
+        // *** BEGIN MODIFICATION: Add Details Button Column ***
+        TableColumn<ClassInfo, Void> detailsDialogCol = new TableColumn<>("Chi Tiết");
+        detailsDialogCol.setPrefWidth(100); // Adjust width as needed
+        detailsDialogCol.setCellFactory(param -> new TableCell<ClassInfo, Void>() {
+            private final Button btnDetails = new Button("Xem");
+
+            {
+                btnDetails.setStyle(
+                        "-fx-background-color: " + PURPLE_COLOR + ";" + // Or any other color
+                                "-fx-text-fill: white;" +
+                                "-fx-background-radius: 4;" +
+                                "-fx-padding: 5 10;" +
+                                "-fx-cursor: hand;"
+                );
+                btnDetails.setOnAction(event -> {
+                    ClassInfo selectedClassInfo = getTableView().getItems().get(getIndex());
+                    if (selectedClassInfo != null) {
+                        ClassDetailsDialog detailsDialog = new ClassDetailsDialog(selectedClassInfo);
+                        detailsDialog.show();
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    setGraphic(btnDetails);
+                }
+            }
+        });
+        // *** END MODIFICATION ***
 
         // Add all columns to the table
         classesTable.getColumns().addAll(
                 selectCol, sttCol, codeCol, nameCol, sessionsCol,
                 startDateCol, endDateCol, teacherCol, managerCol,
-                classDateCol, studentsCol, actionsCol
+                classDateCol, studentsCol,
+                detailsDialogCol, // *** MODIFICATION: Added new column here ***
+                actionsCol
         );
-
 
         // Customize table header style
         classesTable.setTableMenuButtonVisible(false);

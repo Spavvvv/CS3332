@@ -47,43 +47,33 @@ public class DaoManager {
      * Initializes and wires the DAO dependencies.
      */
     private DaoManager() {
-        // Create instances of all DAOs
-        try {
-            // Existing DAO instances
-            studentDAO = new StudentDAO();
-            parentDAO = new ParentDAO();
-            courseDAO = new CourseDAO();
-            attendanceDAO = new AttendanceDAO();
-            teacherDAO = new TeacherDAO();
-            absenceRecordDAO = new AbsenceRecordDAO();
-            classSessionDAO = new ClassSessionDAO();
-            dashboardDAO = new DashboardDAO();
-            classroomDAO = new ClassroomDAO();
-            detailsDAO = new DetailsDAO();
-            holidayDAO = new HolidayDAO();
-            reportDAO = new ReportDAO();
-            roomScheduleDAO = new RoomScheduleDAO();
-            scheduleDAO = new ScheduleDAO();
-            studentScheduleDAO = new StudentScheduleDAO();
-            teachingStatisticsDAO = new TeachingStatisticsDAO();
-            teacherMonthlyStatisticsDAO = new TeacherMonthlyStatisticsDAO();
-            teacherQuarterlyStatisticsDAO = new TeacherQuarterlyStatisticsDAO();
-            teacherYearlyStatisticsDAO = new TeacherYearlyStatisticsDAO();
-            homeworkDAO = new HomeworkDAO();
-            // Initialize the new HomeworkSubmissionDAO
-            homeworkSubmissionDAO = new HomeworkSubmissionDAO();
+        // 1. Create instances of all DAOs
+        studentDAO = new StudentDAO();
+        parentDAO = new ParentDAO();
+        courseDAO = new CourseDAO();
+        courseDAO.setStudentDAO(studentDAO);
+        attendanceDAO = new AttendanceDAO();
+        teacherDAO = new TeacherDAO();
+        absenceRecordDAO = new AbsenceRecordDAO();
+        classSessionDAO = new ClassSessionDAO();
+        dashboardDAO = new DashboardDAO();
+        classroomDAO = new ClassroomDAO();
+        detailsDAO = new DetailsDAO();
+        holidayDAO = new HolidayDAO();
+        reportDAO = new ReportDAO();
+        roomScheduleDAO = new RoomScheduleDAO();
+        scheduleDAO = new ScheduleDAO();
+        studentScheduleDAO = new StudentScheduleDAO();
+        teachingStatisticsDAO = new TeachingStatisticsDAO();
+        teacherMonthlyStatisticsDAO = new TeacherMonthlyStatisticsDAO();
+        teacherQuarterlyStatisticsDAO = new TeacherQuarterlyStatisticsDAO();
+        teacherYearlyStatisticsDAO = new TeacherYearlyStatisticsDAO(); // Instantiate TeacherYearlyStatisticsDAO
+        studentDAO.setCourseDAO(courseDAO); // If StudentDAO needs CourseDAO (e.g., to list courses student is in)
+        
+        parentDAO.setStudentDAO(studentDAO); // If ParentDAO needs StudentDAO (e.g., to list parent's children)
+        
+        // Setters in CourseDAO
 
-        } catch (Exception e) {
-            // Handle the SQLException that might be thrown by the HomeworkSubmissionDAO constructor
-            e.printStackTrace();
-            throw new RuntimeException("Failed to initialize DAOs: " + e.getMessage());
-        }
-
-        // Existing dependency wiring
-        studentDAO.setParentDAO(parentDAO);
-        studentDAO.setCourseDAO(courseDAO);
-
-        parentDAO.setStudentDAO(studentDAO);
         courseDAO.setStudentDAO(studentDAO);
         courseDAO.setTeacherDAO(teacherDAO);
 

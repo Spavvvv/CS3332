@@ -14,9 +14,13 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import src.dao.ClassSessionDAO;
+import src.model.ClassSession;
 import src.model.system.course.Course;
 import src.dao.CourseDAO; // Đảm bảo import này tồn tại và đúng
+import utils.DatabaseConnection;
 
+import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -41,7 +45,6 @@ public class CreateClassScreenView {
     private DatePicker startDatePicker;
     private DatePicker endDatePicker;
     private TextField roomIdField;
-    private TextArea scheduleField;
     private Button saveButton;
     private Button cancelButton;
 
@@ -125,13 +128,6 @@ public class CreateClassScreenView {
         roomIdField = new TextField();
         roomIdField.setPromptText("Ví dụ: P101");
         setFieldStyle(roomIdField);
-
-        Label scheduleLabel = new Label("Lịch học:");
-        scheduleField = new TextArea();
-        scheduleField.setPromptText("Ví dụ: Thứ 2 - 8:00\nThứ 4 - 8:00");
-        scheduleField.setPrefRowCount(3);
-        setFieldStyle(scheduleField);
-
         int row = 0;
         formGrid.add(courseIdLabel, 0, row);
         formGrid.add(courseIdField, 1, row++);
@@ -150,9 +146,6 @@ public class CreateClassScreenView {
 
         formGrid.add(roomIdLabel, 0, row);
         formGrid.add(roomIdField, 1, row++);
-
-        formGrid.add(scheduleLabel, 0, row);
-        formGrid.add(scheduleField, 1, row);
 
         root.getChildren().add(formGrid);
     }
@@ -220,107 +213,131 @@ public class CreateClassScreenView {
 
     // SỬA ĐỔI 3 (tiếp theo): Phương thức createCourse() giờ sẽ lưu và gọi callback
     private void createCourseAndNotify() {
-        if (validateInputs()) {
+        if (validateInputs()) { // validateInputs() cần được cập nhật để phản ánh ý nghĩa mới của các trường
             try {
+                // 1. LẤY GIÁ TRỊ TỪ UI THEO Ý NGHĨA MỚI
+                // Người dùng nhập MÃ PHÒNG HỌC (room_id) vào trường courseIdField (trường "Mã lớp" trên UI)
+                String actualRoomId = courseIdField.getText().trim();
+
+                // Người dùng nhập MÃ KHÓA HỌC (course_id) vào trường roomIdField (trường "Phòng học" trên UI)
+                String actualCourseId = roomIdField.getText().trim();
+
+                String courseName = courseNameField.getText().trim();
+                String subject = subjectField.getText().trim();
                 LocalDate startDate = startDatePicker.getValue();
                 LocalDate endDate = endDatePicker.getValue();
-                String scheduleText = scheduleField.getText();
-                List<String> daysOfWeek = new ArrayList<>(); // Khởi tạo daysOfWeek là danh sách RỖNG
-                LocalTime startTime = LocalTime.of(8, 0); // Default value
-                LocalTime endTime = startTime.plusMinutes(90);  // Default value, ví dụ 90 phút
-                if (!scheduleText.isEmpty()) {
-                    String[] scheduleLines = scheduleText.split("\n");
-                    for (String line : scheduleLines) {
-                        // BỎ HOÀN TOÀN PHẦN LẤY daysOfWeek TỪ scheduleLine
-                        // if (line.toLowerCase().contains("thứ")) {
-                        //     String day = line.split("-")[0].trim();
-                        //     daysOfWeek.add(day);
-                        // }
-                        // PHẦN XỬ LÝ startTime, endTime VẪN GIỮ NGUYÊN
-                        if (line.contains("-") && line.split("-").length > 1) {
-                            // Kiểm tra kỹ để đảm bảo không lỗi nếu dòng chỉ có "Thứ X" mà không có thời gian
-                            String potentialTimeStrPart = line.substring(line.indexOf("-") + 1).trim();
-                            if (!potentialTimeStrPart.isEmpty()) { // Chỉ xử lý nếu có phần thời gian
-                                try {
-                                    String[] timeParts = potentialTimeStrPart.split(":");
-                                    if (timeParts.length == 2) {
-                                        startTime = LocalTime.of(
-                                                Integer.parseInt(timeParts[0].trim()),
-                                                Integer.parseInt(timeParts[1].trim())
-                                        );
-                                        endTime = startTime.plusMinutes(90); // Cập nhật endTime
-                                    }
-                                } catch (Exception ignored) {
-                                    // Giữ giá trị mặc định nếu parse lỗi
-                                }
-                            }
-                        }
-                    }
-                }
 
-                //tao sua cai nay de no chay duoc thoi, m sua lai sau nhe
+                // Xử lý thông tin từ lịch biểu (giữ nguyên logic này nếu bạn vẫn dùng)
+                List<String> daysOfWeek = new ArrayList<>(); // Ví dụ: ["Thứ 2", "Thứ 4"]
+                LocalTime startTime = LocalTime.of(8, 0);    // Giờ mặc định
+                LocalTime endTime = startTime.plusMinutes(90); // Giờ kết thúc mặc định
+
+                // 2. TẠO ĐỐI TƯỢNG COURSE VỚI GIÁ TRỊ ĐÃ ĐƯỢC GÁN ĐÚNG
                 Course course = new Course(
-                        courseIdField.getText(),
-                        courseNameField.getText(),
-                        subjectField.getText(),
+                        actualCourseId,  // Sử dụng giá trị từ roomIdField (nay là mã khóa học)
+                        courseName,
+                        subject,
                         startDate,
                         endDate
                 );
 
-                if (!roomIdField.getText().isEmpty()) {
-                    course.setRoomId(roomIdField.getText());
+                if (actualRoomId.isEmpty()) {
+                    course.setRoomId(null); // Hoặc giữ nguyên actualRoomId nếu DB và logic cho phép chuỗi rỗng
+                } else {
+                    course.setRoomId(actualRoomId);
                 }
 
-                // Thực hiện lưu course bằng CourseDAO đã được inject
-                boolean success = this.courseDAO.save(course);
 
-                if (success) {
-                    // Nếu lưu thành công, gọi callback để thông báo cho ClassListScreenView
+                // Gán CLASS_ID là NULL theo yêu cầu
+                course.setClassId(null);
+
+                // Gán các thuộc tính khác (giữ nguyên nếu có)
+                course.setDaysOfWeekList(daysOfWeek);
+                course.setCourseSessionStartTime(startTime);
+                course.setCourseSessionEndTime(endTime);
+                // course.setProgress(0f); // Cân nhắc đặt progress mặc định nếu cần
+
+                // 3. LƯU COURSE VÀO DATABASE
+                boolean isSaved = courseDAO.save(course);
+
+                if (isSaved) {
+                    // SỬ DỤNG CLASSSESSIONDAO ĐỂ TẠO BUỔI HỌC (giữ nguyên logic này)
+                    ClassSessionDAO classSessionDAO = new ClassSessionDAO();
+//                    try (Connection conn = DatabaseConnection.getConnection()) {
+//                        List<ClassSession> savedSessions = classSessionDAO.generateAndSaveSessionsForCourse(
+//                                conn,
+//                                course,           // Đối tượng Course vừa tạo
+//                                null,             // Placeholder cho ClassroomDAO
+//                                null,             // Placeholder cho TeacherDAO
+//                                null,             // Placeholder cho HolidayDAO
+//                                null              // Placeholder cho ScheduleDAO
+//                        );
+//
+//                        if (!savedSessions.isEmpty()) {
+//                            showAlert("Lưu lớp học và các buổi học thành công!");
+//                        } else {
+//                            showAlert("Lưu lớp học thành công nhưng không thể tạo buổi học tự động.");
+//                        }
+//                    } catch (java.sql.SQLException sessionEx) {
+//                        showAlert("Lưu lớp học thành công, nhưng có lỗi khi tạo các buổi học: " + sessionEx.getMessage());
+//                        sessionEx.printStackTrace();
+//                    }
+
                     if (callback != null) {
                         callback.onCourseCreated(course);
                     }
-                    stage.close(); // Đóng dialog sau khi lưu thành công
+                    stage.close();
                 } else {
-                    showAlert("Không thể lưu lớp học vào cơ sở dữ liệu.");
-                    // Không đóng dialog nếu lưu thất bại, cho phép người dùng sửa hoặc hủy
+                    // Thông báo lỗi này đã phản ánh đúng ý nghĩa mới của trường và lỗi khóa ngoại bạn gặp
+                    showAlert("Không thể lưu lớp học. Vui lòng kiểm tra lại:\n" +
+                            "- Mã phòng học (nhập ở trường 'Mã lớp') phải là một mã phòng học hợp lệ và đã tồn tại trong hệ thống (nếu không được để trống).\n" +
+                            "- Mã khóa học (nhập ở trường 'Phòng học') có thể đã bị trùng với một khóa học khác.");
                 }
-
             } catch (Exception e) {
                 showAlert("Lỗi khi tạo lớp học: " + e.getMessage());
-                e.printStackTrace(); // In stack trace để debug
+                e.printStackTrace();
             }
         }
     }
 
-
-
     private boolean validateInputs() {
         StringBuilder errorMessage = new StringBuilder();
 
-        if (courseIdField.getText().isEmpty()) {
-            errorMessage.append("- Mã lớp không được để trống\n");
+        // 1. VALIDATE "Mã Khóa Học" (actualCourseId, nhập từ roomIdField - UI là "Phòng học")
+        String actualCourseId = roomIdField.getText().trim();
+        if (actualCourseId.isEmpty()) {
+            errorMessage.append("- Mã khóa học (nhập ở trường 'Phòng học') không được để trống.\n");
+        } else {
+            // Kiểm tra tính duy nhất của Mã Khóa Học
+            if (this.courseDAO.findById(actualCourseId).isPresent()) {
+                errorMessage.append("- Mã khóa học (nhập ở trường 'Phòng học') '" + actualCourseId + "' đã tồn tại. Vui lòng chọn mã khác.\n");
+            }
         }
-        if (courseNameField.getText().isEmpty()) {
-            errorMessage.append("- Tên lớp không được để trống\n");
+
+        // 2. VALIDATE "Mã Phòng Học" (actualRoomId, nhập từ courseIdField - UI là "Mã lớp")
+        // Yêu cầu mới: Chỉ cần không để trống, không kiểm tra sự tồn tại ở client-side.
+        String actualRoomId = courseIdField.getText().trim();
+        if (actualRoomId.isEmpty()) {
+            errorMessage.append("- Mã phòng học (nhập ở trường 'Mã lớp') không được để trống.\n");
         }
-        if (subjectField.getText().isEmpty()) {
-            errorMessage.append("- Môn học không được để trống\n");
+        // KHÔNG còn kiểm tra sự tồn tại của actualRoomId trong bảng 'rooms' ở đây nữa.
+
+        // 3. CÁC VALIDATION KHÁC (Tên lớp, Môn học, Ngày bắt đầu, Ngày kết thúc)
+        if (courseNameField.getText().trim().isEmpty()) {
+            errorMessage.append("- Tên lớp không được để trống.\n");
+        }
+        if (subjectField.getText().trim().isEmpty()) {
+            errorMessage.append("- Môn học không được để trống.\n");
         }
         if (startDatePicker.getValue() == null) {
-            errorMessage.append("- Ngày bắt đầu không được để trống\n");
+            errorMessage.append("- Ngày bắt đầu không được để trống.\n");
         }
         if (endDatePicker.getValue() == null) {
-            errorMessage.append("- Ngày kết thúc không được để trống\n");
+            errorMessage.append("- Ngày kết thúc không được để trống.\n");
         } else if (startDatePicker.getValue() != null &&
                 endDatePicker.getValue().isBefore(startDatePicker.getValue())) {
-            errorMessage.append("- Ngày kết thúc phải sau ngày bắt đầu\n");
+            errorMessage.append("- Ngày kết thúc phải sau ngày bắt đầu.\n");
         }
-
-        // Thêm kiểm tra cho lịch học nếu cần, ví dụ: không được để trống
-        // if (scheduleField.getText().trim().isEmpty()) {
-        //     errorMessage.append("- Lịch học không được để trống\n");
-        // }
-
 
         if (errorMessage.length() > 0) {
             showAlert("Vui lòng sửa các lỗi sau:\n" + errorMessage.toString());
