@@ -261,7 +261,7 @@ public class ClassSessionDAO {
                 // Check if this date is a holiday
                 boolean isHoliday = false;
                 if (holidayDAO != null) {
-                    isHoliday = holidayDAO.isHoliday(conn, currentIterDate);
+                    isHoliday = holidayDAO.isHoliday(currentIterDate);
                 }
 
                 if (!isHoliday) {

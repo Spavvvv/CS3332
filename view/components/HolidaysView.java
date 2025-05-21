@@ -31,13 +31,9 @@ public class HolidaysView extends BaseScreenView {
 
     public HolidaysView() {
         super("Ngày nghỉ", "holidays");
-        // Controller will be set later via setController method
+        controller = new HolidaysController();
     }
 
-    public void setController(HolidaysController controller) {
-        this.controller = controller;
-        refreshView();
-    }
 
     @Override
     public void initializeView() {
@@ -78,51 +74,56 @@ public class HolidaysView extends BaseScreenView {
     }
 
     private HBox createYearSelector() {
-        HBox box = new HBox(10);
+        HBox box = new HBox(15); // Tăng khoảng cách giữa các nút
         box.setAlignment(Pos.CENTER);
-
-        // Previous year button
+        // Previous year button - Cải thiện giao diện
         Button prevYearBtn = new Button("◄");
-        prevYearBtn.setStyle("-fx-background-color: #f0f2f5; -fx-text-fill: #0095f6; -fx-background-radius: 5;");
-        prevYearBtn.setPrefWidth(40);
-        prevYearBtn.setPrefHeight(40);
+        styleNavigationButton(prevYearBtn);
         prevYearBtn.setOnAction(e -> {
             if (controller != null) {
-                controller.changeYear(controller.getCurrentYear() - 1);
+                int prevYear = controller.getCurrentYear() - 1;
+                if (prevYear >= 2020) { // Đảm bảo năm không nhỏ hơn giới hạn
+                    controller.changeYear(prevYear);
+                    refreshView();
+                }
             }
         });
-
-        // Year combobox
+        // Year combobox - Cải thiện giao diện
         yearComboBox = new ComboBox<>();
-        yearComboBox.setStyle("-fx-background-color: #f0f2f5; -fx-font-size: 16px; -fx-font-weight: bold;");
+        yearComboBox.setStyle("-fx-background-color: #f8f9fa; " +
+                "-fx-font-size: 16px; " +
+                "-fx-font-weight: bold; " +
+                "-fx-border-color: #e0e0e0; " +
+                "-fx-border-radius: 5; " +
+                "-fx-background-radius: 5;");
         yearComboBox.setPrefWidth(120);
         yearComboBox.setPrefHeight(40);
-
         // Add years from 2020 to 2030
         for (int year = 2020; year <= 2030; year++) {
             yearComboBox.getItems().add(year);
         }
 
-        // Set current year (will be updated when controller is set)
+        // Set current year
         yearComboBox.setValue(LocalDate.now().getYear());
-
         yearComboBox.setOnAction(e -> {
-            if (controller != null) {
+            if (controller != null && yearComboBox.getValue() != null) {
                 controller.changeYear(yearComboBox.getValue());
+                refreshView();
             }
         });
 
-        // Next year button
+        // Next year button - Cải thiện giao diện
         Button nextYearBtn = new Button("►");
-        nextYearBtn.setStyle("-fx-background-color: #f0f2f5; -fx-text-fill: #0095f6; -fx-background-radius: 5;");
-        nextYearBtn.setPrefWidth(40);
-        nextYearBtn.setPrefHeight(40);
+        styleNavigationButton(nextYearBtn);
         nextYearBtn.setOnAction(e -> {
             if (controller != null) {
-                controller.changeYear(controller.getCurrentYear() + 1);
+                int nextYear = controller.getCurrentYear() + 1;
+                if (nextYear <= 2030) { // Đảm bảo năm không vượt quá giới hạn
+                    controller.changeYear(nextYear);
+                    refreshView();
+                }
             }
         });
-
         box.getChildren().addAll(prevYearBtn, yearComboBox, nextYearBtn);
         return box;
     }
@@ -223,20 +224,39 @@ public class HolidaysView extends BaseScreenView {
             dayLabel.setTextAlignment(TextAlignment.CENTER);
             dayLabel.setTextFill(Color.BLACK);
 
-            // Check if this date is a holiday
+            // Tạo LocalDate để kiểm tra
             LocalDate date = LocalDate.of(controller.getCurrentYear(), month, day);
-            Holiday holiday = controller.getHolidayForDate(date);
 
-            if (holiday != null) {
-                // Add to unique holidays for legend
-                String key = holiday.getName() + holiday.getStartDate() + holiday.getEndDate();
-                uniqueHolidays.put(key, holiday);
+            // Lấy danh sách tất cả kỳ nghỉ để kiểm tra
+            List<Holiday> allHolidays = controller.getAllHolidays();
+            Holiday matchingHoliday = null;
 
+            // Kiểm tra từng kỳ nghỉ xem ngày hiện tại có thuộc kỳ nghỉ nào không
+            for (Holiday holiday : allHolidays) {
+                LocalDate startDate = holiday.getStartDate();
+                LocalDate endDate = holiday.getEndDate();
+
+                // Kiểm tra nếu ngày hiện tại nằm trong khoảng từ startDate đến endDate
+                if ((date.isEqual(startDate) || date.isAfter(startDate))
+                        && (date.isEqual(endDate) || date.isBefore(endDate))) {
+                    matchingHoliday = holiday;
+                    break;
+                }
+            }
+
+            // Nếu tìm thấy kỳ nghỉ, tô màu cho ngày này
+            if (matchingHoliday != null) {
+                // Thêm vào danh sách kỳ nghỉ độc nhất
+                String key = matchingHoliday.getName() + matchingHoliday.getStartDate() + matchingHoliday.getEndDate();
+                uniqueHolidays.put(key, matchingHoliday);
+
+                // Tạo StackPane để hiển thị ngày với nền màu
                 StackPane dayCell = new StackPane();
-                dayCell.setStyle("-fx-background-color: " + holiday.getColorHex() + "; -fx-background-radius: 3;");
+                dayCell.setStyle("-fx-background-color: " + matchingHoliday.getColorHex() + "; -fx-background-radius: 3;");
                 dayCell.getChildren().add(dayLabel);
                 monthPane.add(dayCell, col, row);
             } else {
+                // Nếu không phải ngày nghỉ, hiển thị bình thường
                 monthPane.add(dayLabel, col, row);
             }
 
@@ -392,12 +412,13 @@ public class HolidaysView extends BaseScreenView {
         }
     }
 
+    // Cập nhật lại phương thức refreshView để đảm bảo cập nhật đúng
     @Override
     public void refreshView() {
         if (controller != null) {
-            updateCalendar();
 
-            // Find and update legends box
+            updateCalendar();
+            // Tìm và cập nhật hộp ghi chú
             for (javafx.scene.Node node : root.getChildren()) {
                 if (node instanceof HBox) {
                     HBox contentContainer = (HBox) node;
@@ -412,8 +433,105 @@ public class HolidaysView extends BaseScreenView {
                     }
                 }
             }
-
             updateHistoryItems();
         }
     }
+
+    // Phương thức hỗ trợ để tạo style cho nút
+    private void styleNavigationButton(Button button) {
+        // Style mặc định
+        button.setStyle(
+                "-fx-background-color: #0095f6; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-background-radius: 50%; " + // Bo tròn nút
+                        "-fx-min-width: 40px; " +
+                        "-fx-min-height: 40px; " +
+                        "-fx-max-width: 40px; " +
+                        "-fx-max-height: 40px; " +
+                        "-fx-font-size: 16px; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-cursor: hand;" // Thêm con trỏ là bàn tay khi hover
+        );
+        // Thêm hiệu ứng hover
+        button.setOnMouseEntered(e ->
+                button.setStyle(
+                        "-fx-background-color: #0086e0; " + // Màu đậm hơn khi hover
+                                "-fx-text-fill: white; " +
+                                "-fx-background-radius: 50%; " +
+                                "-fx-min-width: 40px; " +
+                                "-fx-min-height: 40px; " +
+                                "-fx-max-width: 40px; " +
+                                "-fx-max-height: 40px; " +
+                                "-fx-font-size: 16px; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-cursor: hand; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0, 0, 2);" // Thêm đổ bóng
+                )
+        );
+        // Hiệu ứng khi rời chuột khỏi nút
+        button.setOnMouseExited(e ->
+                button.setStyle(
+                        "-fx-background-color: #0095f6; " +
+                                "-fx-text-fill: white; " +
+                                "-fx-background-radius: 50%; " +
+                                "-fx-min-width: 40px; " +
+                                "-fx-min-height: 40px; " +
+                                "-fx-max-width: 40px; " +
+                                "-fx-max-height: 40px; " +
+                                "-fx-font-size: 16px; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-cursor: hand;"
+                )
+        );
+        // Hiệu ứng khi nhấn nút
+        button.setOnMousePressed(e ->
+                button.setStyle(
+                        "-fx-background-color: #007ac1; " + // Màu đậm hơn nữa khi nhấn
+                                "-fx-text-fill: white; " +
+                                "-fx-background-radius: 50%; " +
+                                "-fx-min-width: 40px; " +
+                                "-fx-min-height: 40px; " +
+                                "-fx-max-width: 40px; " +
+                                "-fx-max-height: 40px; " +
+                                "-fx-font-size: 16px; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-cursor: hand; " +
+                                "-fx-translate-y: 1px;" // Dịch xuống một chút khi nhấn
+                )
+        );
+        // Trở về style ban đầu khi nhả nút
+        button.setOnMouseReleased(e -> {
+            if (button.isHover()) {
+                // Nếu vẫn đang hover, trở về style hover
+                button.setStyle(
+                        "-fx-background-color: #0086e0; " +
+                                "-fx-text-fill: white; " +
+                                "-fx-background-radius: 50%; " +
+                                "-fx-min-width: 40px; " +
+                                "-fx-min-height: 40px; " +
+                                "-fx-max-width: 40px; " +
+                                "-fx-max-height: 40px; " +
+                                "-fx-font-size: 16px; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-cursor: hand; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0, 0, 2);"
+                );
+            } else {
+                // Nếu không hover, trở về style mặc định
+                button.setStyle(
+                        "-fx-background-color: #0095f6; " +
+                                "-fx-text-fill: white; " +
+                                "-fx-background-radius: 50%; " +
+                                "-fx-min-width: 40px; " +
+                                "-fx-min-height: 40px; " +
+                                "-fx-max-width: 40px; " +
+                                "-fx-max-height: 40px; " +
+                                "-fx-font-size: 16px; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-cursor: hand;"
+                );
+            }
+        });
+    }
+
 }

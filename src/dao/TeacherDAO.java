@@ -1,16 +1,12 @@
 package src.dao;
 
 import src.model.person.Teacher;
-import utils.DatabaseConnection; // Still needed for the public wrapper methods
-import src.model.person.Student; // Added import just in case for future dependencies or in extract method
-import src.model.system.course.Course; // Added import just in case for future dependencies or in extract method
-
-
+import utils.DatabaseConnection;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional; // Recommended for methods that might return null
+import java.util.Optional;
 
 /**
  * Data Access Object for Teacher entities.
@@ -20,12 +16,10 @@ import java.util.Optional; // Recommended for methods that might return null
 public class TeacherDAO {
 
     // Dependent DAOs - must be set externally by a DaoManager
-    // Add dependencies here if TeacherDAO needs to call methods in other DAOs
-    private CourseDAO courseDAO; // Added dependency placeholder
+    private CourseDAO courseDAO;
 
     /**
      * Constructor. Dependencies are not initialized here; they must be set externally.
-     * The class-level connection is removed to manage connections per operation.
      */
     public TeacherDAO() {
         // Dependencies will be set by DaoManager
@@ -33,8 +27,6 @@ public class TeacherDAO {
 
     /**
      * Set CourseDAO - used for dependency injection.
-     * This method must be called after TeacherDAO is instantiated to provide the dependency.
-     * Add similar setters for any other DAOs TeacherDAO depends on.
      *
      * @param courseDAO The CourseDAO instance
      */
@@ -48,22 +40,14 @@ public class TeacherDAO {
      */
     private void checkCourseDAODependency() {
         if (this.courseDAO == null) {
-            // Customize the message based on what operation needs the dependency
-            // Example: "CourseDAO dependency has not been set on TeacherDAO. Cannot load courses for teacher."
             System.err.println("Warning: CourseDAO dependency not set on TeacherDAO. Functionality requiring it may fail.");
-            // Decide whether to throw an exception or just warn. For critical dependencies, throw is better.
-            // throw new IllegalStateException("CourseDAO dependency has not been set on TeacherDAO.");
         }
     }
 
-
     // --- Internal Methods (Package-private or Private) ---
-    // These methods take a Connection as a parameter and perform the core SQL logic.
-    // They typically throw SQLException and rely on dependencies already being set.
 
     /**
      * Internal method to insert a new teacher into the database using an existing connection.
-     * Handles inserting into persons and teachers tables, and inserting subjects.
      *
      * @param conn   the active database connection
      * @param teacher the teacher to insert
@@ -71,49 +55,33 @@ public class TeacherDAO {
      * @throws SQLException if a database access error occurs
      */
     boolean internalInsert(Connection conn, Teacher teacher) throws SQLException {
-        // Note: We assume the transaction is handled by the calling public method
+        // Insert into the teachers table
+        String teacherSql = "INSERT INTO teachers (id, user_id, name, gender, contact_number, birthday, email, address) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-        // First insert into the persons table
-        String personSql = "INSERT INTO persons (id, name, gender, contact_number, birthday, email, role) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement teacherStatement = conn.prepareStatement(teacherSql)) {
+            teacherStatement.setString(1, teacher.getId());
+            teacherStatement.setString(2, teacher.getUserId());
+            teacherStatement.setString(3, teacher.getName());
+            teacherStatement.setString(4, teacher.getGender());
+            teacherStatement.setString(5, teacher.getContactNumber());
+            teacherStatement.setString(6, teacher.getBirthday());
+            teacherStatement.setString(7, teacher.getEmail());
+            teacherStatement.setString(8, teacher.getAddress());
 
-        try (PreparedStatement personStatement = conn.prepareStatement(personSql)) {
-            personStatement.setString(1, teacher.getId());
-            personStatement.setString(2, teacher.getName());
-            personStatement.setString(3, teacher.getGender());
-            personStatement.setString(4, teacher.getContactNumber());
-            personStatement.setString(5, teacher.getBirthday());
-            personStatement.setString(6, teacher.getEmail());
-            personStatement.setString(7, teacher.getRole().toString());
-            int personRowsInserted = personStatement.executeUpdate();
+            int teacherRowsInserted = teacherStatement.executeUpdate();
 
-            if (personRowsInserted > 0) {
-                // Then insert into the teachers table
-                String teacherSql = "INSERT INTO teachers (person_id, teacher_id, position) VALUES (?, ?, ?)";
-
-                try (PreparedStatement teacherStatement = conn.prepareStatement(teacherSql)) {
-                    teacherStatement.setString(1, teacher.getId());
-                    teacherStatement.setString(2, teacher.getTeacherId());
-                    teacherStatement.setString(3, teacher.getPosition());
-
-                    int teacherRowsInserted = teacherStatement.executeUpdate();
-
-                    if (teacherRowsInserted > 0 && teacher.getSubjects() != null && !teacher.getSubjects().isEmpty()) {
-                        // Insert teacher's subjects using the same connection
-                        return internalInsertTeacherSubjects(conn, teacher.getId(), teacher.getSubjects());
-                    }
-
-                    return teacherRowsInserted > 0;
-                }
+            if (teacherRowsInserted > 0 && teacher.getSubjects() != null && !teacher.getSubjects().isEmpty()) {
+                // Insert teacher's subjects using the same connection
+                return internalInsertTeacherSubjects(conn, teacher.getId(), teacher.getSubjects());
             }
-        }
 
-        return false; // Return false if person insert failed
+            return teacherRowsInserted > 0;
+        }
     }
 
     /**
      * Internal method to update an existing teacher in the database using an existing connection.
-     * Handles updating persons and teachers tables, and updating subjects.
      *
      * @param conn   the active database connection
      * @param teacher the teacher to update
@@ -121,105 +89,71 @@ public class TeacherDAO {
      * @throws SQLException if a database access error occurs
      */
     boolean internalUpdate(Connection conn, Teacher teacher) throws SQLException {
-        // Note: We assume the transaction is handled by the calling public method
+        // Update the teachers table
+        String teacherSql = "UPDATE teachers SET user_id = ?, name = ?, gender = ?, " +
+                "contact_number = ?, birthday = ?, email = ?, address = ? WHERE id = ?";
 
-        // First update the persons table
-        String personSql = "UPDATE persons SET name = ?, gender = ?, contact_number = ?, " +
-                "birthday = ?, email = ? WHERE id = ?";
+        try (PreparedStatement teacherStatement = conn.prepareStatement(teacherSql)) {
+            teacherStatement.setString(1, teacher.getUserId());
+            teacherStatement.setString(2, teacher.getName());
+            teacherStatement.setString(3, teacher.getGender());
+            teacherStatement.setString(4, teacher.getContactNumber());
+            teacherStatement.setString(5, teacher.getBirthday());
+            teacherStatement.setString(6, teacher.getEmail());
+            teacherStatement.setString(7, teacher.getAddress());
+            teacherStatement.setString(8, teacher.getId());
 
-        try (PreparedStatement personStatement = conn.prepareStatement(personSql)) {
-            personStatement.setString(1, teacher.getName());
-            personStatement.setString(2, teacher.getGender());
-            personStatement.setString(3, teacher.getContactNumber());
-            personStatement.setString(4, teacher.getBirthday()); // Corrected variable name from 'statement' to 'personStatement'
-            personStatement.setString(5, teacher.getEmail());
-            personStatement.setString(6, teacher.getId());
+            int teacherRowsUpdated = teacherStatement.executeUpdate();
 
-            int personRowsUpdated = personStatement.executeUpdate();
-
-            if (personRowsUpdated > 0) {
-                // Then update the teachers table
-                String teacherSql = "UPDATE teachers SET teacher_id = ?, position = ? WHERE person_id = ?";
-
-                try (PreparedStatement teacherStatement = conn.prepareStatement(teacherSql)) {
-                    teacherStatement.setString(1, teacher.getTeacherId());
-                    teacherStatement.setString(2, teacher.getPosition());
-                    teacherStatement.setString(3, teacher.getId());
-
-                    int teacherRowsUpdated = teacherStatement.executeUpdate();
-
-                    // If teacher row updated and subjects exist, update subjects
-                    // Note: This logic assumes subjects should always be updated if the teacher row updated.
-                    // Consider if subjects should only be updated if the list is not null and has changes.
-                    if (teacherRowsUpdated > 0 && teacher.getSubjects() != null) {
-                        // Update teacher's subjects using the same connection
-                        internalDeleteTeacherSubjects(conn, teacher.getId()); // Delete existing subjects
-                        // If subjects list is not empty, insert new subjects
-                        if (!teacher.getSubjects().isEmpty()) {
-                            return internalInsertTeacherSubjects(conn, teacher.getId(), teacher.getSubjects());
-                        } else {
-                            // Teacher row updated, and subjects were cleared (empty list provided)
-                            return true;
-                        }
-                    } else if (teacherRowsUpdated > 0 && teacher.getSubjects() == null) {
-                        // Teacher row updated, but no subjects provided in the update, subjects remain as they are.
-                        return true;
-                    }
-
-                    // Return true if teacher row was updated even if subjects weren't explicitly handled (e.g., subjects was null)
-                    return teacherRowsUpdated > 0;
+            // If teacher row updated and subjects exist, update subjects
+            if (teacherRowsUpdated > 0 && teacher.getSubjects() != null) {
+                internalDeleteTeacherSubjects(conn, teacher.getId()); // Delete existing subjects
+                // If subjects list is not empty, insert new subjects
+                if (!teacher.getSubjects().isEmpty()) {
+                    return internalInsertTeacherSubjects(conn, teacher.getId(), teacher.getSubjects());
+                } else {
+                    // Teacher row updated, and subjects were cleared (empty list provided)
+                    return true;
                 }
+            } else if (teacherRowsUpdated > 0 && teacher.getSubjects() == null) {
+                // Teacher row updated, but no subjects provided in the update, subjects remain as they are.
+                return true;
             }
+
+            return teacherRowsUpdated > 0;
         }
-
-        return false; // Return false if person update failed
     }
-
 
     /**
      * Internal method to delete a teacher from the database using an existing connection.
-     * Handles deleting from teacher_subjects, teachers, and persons tables.
      *
      * @param conn the active database connection
-     * @param id the ID of the teacher to delete (person_id)
+     * @param id the ID of the teacher to delete
      * @return true if successful
      * @throws SQLException if a database access error occurs
      */
     boolean internalDelete(Connection conn, String id) throws SQLException {
-        // Note: We assume the transaction is handled by the calling public method
-
         // First delete teacher's subjects using the same connection
         internalDeleteTeacherSubjects(conn, id);
 
         // Then delete from teachers table using the same connection
-        String teacherSql = "DELETE FROM teachers WHERE person_id = ?";
+        String teacherSql = "DELETE FROM teachers WHERE id = ?";
         try (PreparedStatement teacherStatement = conn.prepareStatement(teacherSql)) {
             teacherStatement.setString(1, id);
-            teacherStatement.executeUpdate();
-        }
-
-        // Finally delete from persons table using the same connection
-        String personSql = "DELETE FROM persons WHERE id = ?";
-        try (PreparedStatement personStatement = conn.prepareStatement(personSql)) {
-            personStatement.setString(1, id);
-            return personStatement.executeUpdate() > 0;
+            return teacherStatement.executeUpdate() > 0;
         }
     }
 
     /**
-     * Get a teacher by ID (person_id) using an existing connection.
-     * Use this when called from another DAO that already has a connection open.
+     * Get a teacher by ID using an existing connection.
      *
      * @param conn the active database connection
-     * @param id the teacher ID (person_id)
+     * @param id the teacher ID
      * @return the Teacher object or null if not found
      * @throws SQLException if a database access error occurs
      */
     Teacher getById(Connection conn, String id) throws SQLException {
-        String sql = "SELECT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "WHERE p.id = ?";
+        String sql = "SELECT * FROM teachers WHERE id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, id);
@@ -240,21 +174,18 @@ public class TeacherDAO {
     }
 
     /**
-     * Get a teacher by teacher ID using an existing connection.
+     * Get a teacher by user ID using an existing connection.
      *
      * @param conn the active database connection
-     * @param teacherId the teacher ID
+     * @param userId the user ID
      * @return the Teacher object or null if not found
      * @throws SQLException if a database access error occurs
      */
-    Teacher getByTeacherId(Connection conn, String teacherId) throws SQLException {
-        String sql = "SELECT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "WHERE t.teacher_id = ?";
+    Teacher getByUserId(Connection conn, String userId) throws SQLException {
+        String sql = "SELECT * FROM teachers WHERE user_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, teacherId);
+            statement.setString(1, userId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
@@ -271,10 +202,8 @@ public class TeacherDAO {
         return null;
     }
 
-
     /**
      * Get all teachers from the database using an existing connection.
-     * Primarily for internal use or by other DAOs with an active connection.
      *
      * @param conn the active database connection
      * @return List of all teachers
@@ -282,10 +211,7 @@ public class TeacherDAO {
      */
     List<Teacher> getAll(Connection conn) throws SQLException {
         List<Teacher> teachers = new ArrayList<>();
-        String sql = "SELECT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "WHERE p.role = 'Teacher'";
+        String sql = "SELECT * FROM teachers";
 
         try (Statement statement = conn.createStatement();
              ResultSet resultSet = statement.executeQuery(sql)) {
@@ -313,10 +239,7 @@ public class TeacherDAO {
      */
     List<Teacher> internalSearchTeachers(Connection conn, String searchTerm) throws SQLException {
         List<Teacher> teachers = new ArrayList<>();
-        String sql = "SELECT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "WHERE p.role = 'Teacher' AND (p.name LIKE ? OR p.email LIKE ?)";
+        String sql = "SELECT * FROM teachers WHERE name LIKE ? OR email LIKE ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             String searchPattern = "%" + searchTerm + "%";
@@ -348,10 +271,9 @@ public class TeacherDAO {
      */
     List<Teacher> getTeachersBySubject(Connection conn, String subject) throws SQLException {
         List<Teacher> teachers = new ArrayList<>();
-        String sql = "SELECT DISTINCT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "JOIN teacher_subjects ts ON t.person_id = ts.teacher_id " +
+        String sql = "SELECT DISTINCT t.* " +
+                "FROM teachers t " +
+                "JOIN teacher_subjects ts ON t.id = ts.teacher_id " +
                 "WHERE ts.subject = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -373,36 +295,34 @@ public class TeacherDAO {
     }
 
     /**
-     * Get teachers by position using an existing connection.
+     * Get teachers for a specific class using an existing connection.
      *
      * @param conn the active database connection
-     * @param position the position
-     * @return List of teachers with the given position
+     * @param classId the class ID
+     * @return the Teacher object or null if not found
      * @throws SQLException if a database access error occurs
      */
-    List<Teacher> getTeachersByPosition(Connection conn, String position) throws SQLException {
-        List<Teacher> teachers = new ArrayList<>();
-        String sql = "SELECT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "WHERE t.position = ?";
+    Teacher getTeacherByClassId(Connection conn, String classId) throws SQLException {
+        String sql = "SELECT t.* FROM teachers t " +
+                "JOIN classes c ON t.id = c.teacher_id " +
+                "WHERE c.class_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, position);
+            statement.setString(1, classId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
+                if (resultSet.next()) {
                     Teacher teacher = extractTeacherFromResultSet(resultSet);
 
                     // Load teacher's subjects using the same connection
                     internalLoadSubjectsForTeacher(conn, teacher);
 
-                    teachers.add(teacher);
+                    return teacher;
                 }
             }
         }
 
-        return teachers;
+        return null;
     }
 
     /**
@@ -446,8 +366,7 @@ public class TeacherDAO {
             }
 
             int[] results = statement.executeBatch();
-            // Check if all batch operations were successful (at least one row affected)
-            return results.length == subjects.size() && Arrays.stream(results).allMatch(result -> result >= 0); // >= 0 for Statement.SUCCESS_NO_INFO or row count
+            return results.length == subjects.size() && Arrays.stream(results).allMatch(result -> result >= 0);
         }
     }
 
@@ -507,31 +426,33 @@ public class TeacherDAO {
         }
     }
 
-
     /**
      * Helper method to extract a Teacher object from a ResultSet.
-     * This method does not interact with the database itself, only reads from the provided ResultSet.
      *
-     * @param resultSet ResultSet containing teacher data (from persons and teachers tables)
+     * @param resultSet ResultSet containing teacher data from teachers table
      * @return the Teacher object
      * @throws SQLException if a database access error occurs
      */
     private Teacher extractTeacherFromResultSet(ResultSet resultSet) throws SQLException {
-        return new Teacher(
-                resultSet.getString("id"), // person.id
-                resultSet.getString("name"), // person.name
-                resultSet.getString("gender"), // person.gender
-                resultSet.getString("contact_number"), // person.contact_number
-                resultSet.getString("birthday"), // person.birthday
-                resultSet.getString("email"), // person.email
-                resultSet.getString("teacher_id"), // teachers.teacher_id
-                resultSet.getString("position") // teachers.position
+
+        String dbId = resultSet.getString("id");
+        String dbUserId = resultSet.getString("user_id");
+
+        Teacher teacher = new Teacher(
+                resultSet.getString("id"),
+                resultSet.getString("name"),
+                resultSet.getString("gender"),
+                resultSet.getString("contact_number"),
+                resultSet.getString("birthday"),
+                resultSet.getString("email"),
+                resultSet.getString("user_id"),
+                resultSet.getString("address")
         );
+
+        return teacher;
     }
 
     // --- Public Wrapper Methods ---
-    // These methods manage their own connection and handle exceptions.
-    // They delegate the core database logic to the internal methods.
 
     /**
      * Save a new teacher. Manages its own connection and transaction.
@@ -541,12 +462,12 @@ public class TeacherDAO {
      */
     public boolean save(Teacher teacher) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            conn.setAutoCommit(false); // Start transaction
+            conn.setAutoCommit(false);
             boolean success = internalInsert(conn, teacher);
             if (success) {
-                conn.commit(); // Commit if successful
+                conn.commit();
             } else {
-                conn.rollback(); // Rollback if failed
+                conn.rollback();
             }
             return success;
         } catch (SQLException e) {
@@ -564,12 +485,12 @@ public class TeacherDAO {
      */
     public boolean update(Teacher teacher) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            conn.setAutoCommit(false); // Start transaction
+            conn.setAutoCommit(false);
             boolean success = internalUpdate(conn, teacher);
             if (success) {
-                conn.commit(); // Commit if successful
+                conn.commit();
             } else {
-                conn.rollback(); // Rollback if failed
+                conn.rollback();
             }
             return success;
         } catch (SQLException e) {
@@ -581,19 +502,18 @@ public class TeacherDAO {
 
     /**
      * Delete a teacher. Manages its own connection and transaction.
-     * Deletes related records in teacher_subjects and teachers tables before deleting from persons.
      *
-     * @param id the ID of the teacher to delete (person_id)
+     * @param id the ID of the teacher to delete
      * @return true if the deletion was successful, false otherwise
      */
     public boolean delete(String id) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            conn.setAutoCommit(false); // Start transaction
+            conn.setAutoCommit(false);
             boolean success = internalDelete(conn, id);
             if (success) {
-                conn.commit(); // Commit if successful
+                conn.commit();
             } else {
-                conn.rollback(); // Rollback if failed
+                conn.rollback();
             }
             return success;
         } catch (SQLException e) {
@@ -604,11 +524,10 @@ public class TeacherDAO {
     }
 
     /**
-     * Find a teacher by ID (person_id). Manages its own connection.
-     * Loads the teacher's subjects.
+     * Find a teacher by ID. Manages its own connection.
      *
-     * @param id the teacher ID (person_id)
-     * @return Optional containing the Teacher if found, empty Optional otherwise. Returns empty Optional on database error.
+     * @param id the teacher ID
+     * @return Optional containing the Teacher if found, empty Optional otherwise
      */
     public Optional<Teacher> findById(String id) {
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -621,28 +540,25 @@ public class TeacherDAO {
     }
 
     /**
-     * Find a teacher by teacher ID. Manages its own connection.
-     * Loads the teacher's subjects.
+     * Find a teacher by user ID. Manages its own connection.
      *
-     * @param teacherId the teacher ID
-     * @return Optional containing the Teacher if found, empty Optional otherwise. Returns empty Optional on database error.
+     * @param userId the user ID
+     * @return Optional containing the Teacher if found, empty Optional otherwise
      */
-    public Optional<Teacher> findByTeacherId(String teacherId) {
+    public Optional<Teacher> findByUserId(String userId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            return Optional.ofNullable(getByTeacherId(conn, teacherId));
+            return Optional.ofNullable(getByUserId(conn, userId));
         } catch (SQLException e) {
-            System.err.println("Error finding teacher by teacher ID: " + teacherId + ": " + e.getMessage());
+            System.err.println("Error finding teacher by user ID: " + userId + ": " + e.getMessage());
             e.printStackTrace();
             return Optional.empty();
         }
     }
 
-
     /**
      * Get all teachers. Manages its own connection.
-     * Loads subjects for all teachers.
      *
-     * @return List of all teachers. Returns empty list on database error.
+     * @return List of all teachers
      */
     public List<Teacher> findAll() {
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -656,10 +572,9 @@ public class TeacherDAO {
 
     /**
      * Search teachers by name or email. Manages its own connection.
-     * Loads subjects for matching teachers.
      *
      * @param searchTerm the search term
-     * @return List of matching teachers. Returns empty list on database error.
+     * @return List of matching teachers
      */
     public List<Teacher> search(String searchTerm) {
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -673,10 +588,9 @@ public class TeacherDAO {
 
     /**
      * Get teachers by subject. Manages its own connection.
-     * Loads subjects for matching teachers.
      *
      * @param subject the subject name
-     * @return List of teachers who teach the subject. Returns empty list on database error.
+     * @return List of teachers who teach the subject
      */
     public List<Teacher> findTeachersBySubject(String subject) {
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -689,19 +603,18 @@ public class TeacherDAO {
     }
 
     /**
-     * Get teachers by position. Manages its own connection.
-     * Loads subjects for matching teachers.
+     * Find teacher for a specific class. Manages its own connection.
      *
-     * @param position the position
-     * @return List of teachers with the given position. Returns empty list on database error.
+     * @param classId the class ID
+     * @return Optional containing the Teacher if found, empty Optional otherwise
      */
-    public List<Teacher> findTeachersByPosition(String position) {
+    public Optional<Teacher> findTeacherByClassId(String classId) {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            return getTeachersByPosition(conn, position);
+            return Optional.ofNullable(getTeacherByClassId(conn, classId));
         } catch (SQLException e) {
-            System.err.println("Error finding teachers by position: " + position + ": " + e.getMessage());
+            System.err.println("Error finding teacher for class ID: " + classId + ": " + e.getMessage());
             e.printStackTrace();
-            return new ArrayList<>();
+            return Optional.empty();
         }
     }
 
@@ -710,7 +623,7 @@ public class TeacherDAO {
      *
      * @param teacherId the teacher ID
      * @param subject the subject to add
-     * @return true if successful, false otherwise (including on error)
+     * @return true if successful, false otherwise
      */
     public boolean addSubjectToTeacher(String teacherId, String subject) {
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -727,7 +640,7 @@ public class TeacherDAO {
      *
      * @param teacherId the teacher ID
      * @param subject the subject to remove
-     * @return true if successful, false otherwise (including on error)
+     * @return true if successful, false otherwise
      */
     public boolean removeSubjectFromTeacher(String teacherId, String subject) {
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -738,6 +651,4 @@ public class TeacherDAO {
             return false;
         }
     }
-
-    // The closeConnection method is removed as connections are managed per method call via try-with-resources.
 }

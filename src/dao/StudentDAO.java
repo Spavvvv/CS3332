@@ -2,8 +2,14 @@
 package src.dao;
 
 import javafx.scene.control.Alert;
+
+import src.model.attendance.HomeworkSubmissionModel;
+import src.model.attendance.StudentAttendanceData;
+import src.model.person.Parent;
 import src.model.person.Student;
 import src.model.system.course.Course;
+
+
 import utils.DatabaseConnection;
 import java.util.UUID;
 import java.sql.*;
@@ -746,5 +752,297 @@ public class StudentDAO {
         }
     }
 
+    /**
+     * Lấy điểm đúng giờ và chuyên cần mới nhất cho một học sinh trong một lớp cụ thể
+     * và cập nhật vào đối tượng StudentAttendanceData đã cung cấp.
+     *
+     * @param attendanceData Đối tượng StudentAttendanceData cần cập nhật
+     * @param classId ID của lớp học
+     * @return True nếu tìm thấy và cập nhật điểm, false nếu ngược lại
+     */
+    public boolean populateStudentMetrics(StudentAttendanceData attendanceData, String classId) {
+        String sql = "SELECT punctuality_score, awareness_score FROM student_metrics " +
+                "WHERE student_id = ? AND class_id = ? " +
+                "ORDER BY record_date DESC LIMIT 1";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement statement = conn.prepareStatement(sql)) {
+
+            statement.setString(1, attendanceData.getStudent().getId());
+            statement.setString(2, classId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    int punctualityScore = (int) Math.round(resultSet.getDouble("punctuality_score"));
+                    int awarenessScore = (int) Math.round(resultSet.getDouble("awareness_score"));
+
+                    attendanceData.setPunctualityRating(punctualityScore);
+                    attendanceData.setDiligenceRating(awarenessScore);
+                    return true;
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Lỗi khi lấy thông tin điểm cho học sinh " +
+                    attendanceData.getStudent().getId() + " trong lớp " + classId, e);
+        }
+
+        return false; // Không tìm thấy dữ liệu hoặc có lỗi xảy ra
+    }
+
+    /**
+     * Cập nhật điểm cho danh sách học sinh trong một lớp cụ thể.
+     *
+     * @param attendanceDataList Danh sách đối tượng StudentAttendanceData cần cập nhật
+     * @param classId ID của lớp học
+     */
+    public void populateMetricsForStudentList(List<StudentAttendanceData> attendanceDataList, String classId) {
+        for (StudentAttendanceData data : attendanceDataList) {
+            populateStudentMetrics(data, classId);
+        }
+    }
+
+    /**
+     * Lưu thông tin điểm của học sinh từ đối tượng StudentAttendanceData vào cơ sở dữ liệu.
+     * Tạo bản ghi mới với ngày hiện tại.
+     *
+     * @param attendanceData Đối tượng StudentAttendanceData chứa thông tin điểm
+     * @param classId ID của lớp học
+     * @param notes Ghi chú tùy chọn về thông tin điểm
+     * @return True nếu lưu thành công, false nếu ngược lại
+     */
+    public boolean saveStudentMetrics(StudentAttendanceData attendanceData, String classId, String notes) {
+        String sql = "INSERT INTO student_metrics (metric_id, student_id, class_id, record_date, " +
+                "awareness_score, punctuality_score, notes) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement statement = conn.prepareStatement(sql)) {
+
+            // Tạo ID duy nhất cho bản ghi metric
+            String metricId = UUID.randomUUID().toString();
+
+            statement.setString(1, metricId);
+            statement.setString(2, attendanceData.getStudent().getId());
+            statement.setString(3, classId);
+            statement.setDate(4, java.sql.Date.valueOf(java.time.LocalDate.now()));
+            statement.setDouble(5, attendanceData.getDiligenceRating()); // Awareness score tương ứng với diligence
+            statement.setDouble(6, attendanceData.getPunctualityRating());
+            statement.setString(7, notes != null ? notes : attendanceData.getStudentSessionNotes());
+
+            int rowsInserted = statement.executeUpdate();
+            return rowsInserted > 0;
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Lỗi khi lưu thông tin điểm cho học sinh " +
+                    attendanceData.getStudent().getId(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Cập nhật thông tin điểm của học sinh trong cơ sở dữ liệu từ đối tượng StudentAttendanceData.
+     *
+     * @param metricId ID của bản ghi metric cần cập nhật
+     * @param attendanceData Đối tượng StudentAttendanceData chứa thông tin điểm đã cập nhật
+     * @param notes Ghi chú tùy chọn về thông tin điểm
+     * @return True nếu cập nhật thành công, false nếu ngược lại
+     */
+    public boolean updateStudentMetrics(String metricId, StudentAttendanceData attendanceData, String notes) {
+        String sql = "UPDATE student_metrics SET awareness_score = ?, punctuality_score = ?, " +
+                "notes = ? WHERE metric_id = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement statement = conn.prepareStatement(sql)) {
+
+            statement.setDouble(1, attendanceData.getDiligenceRating()); // Awareness score tương ứng với diligence
+            statement.setDouble(2, attendanceData.getPunctualityRating());
+            statement.setString(3, notes != null ? notes : attendanceData.getStudentSessionNotes());
+            statement.setString(4, metricId);
+
+            int rowsUpdated = statement.executeUpdate();
+            return rowsUpdated > 0;
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Lỗi khi cập nhật thông tin điểm với ID " + metricId, e);
+            return false;
+        }
+    }
+
+    /**
+     * Lọc học sinh dựa trên điểm đúng giờ và chuyên cần tối thiểu.
+     *
+     * @param students Danh sách học sinh cần lọc
+     * @param classId ID của lớp học để tra cứu thông tin điểm
+     * @param minPunctuality Điểm đúng giờ tối thiểu (-1 để không áp dụng bộ lọc)
+     * @param minDiligence Điểm chuyên cần tối thiểu (-1 để không áp dụng bộ lọc)
+     * @return Danh sách đối tượng StudentAttendanceData đạt tiêu chí
+     */
+    public List<StudentAttendanceData> filterStudentsByMetrics(List<Student> students, String classId,
+                                                               int minPunctuality, int minDiligence) {
+        List<StudentAttendanceData> filteredData = new ArrayList<>();
+
+        for (Student student : students) {
+            StudentAttendanceData data = new StudentAttendanceData(student);
+
+            // Cập nhật với thông tin điểm mới nhất
+            populateStudentMetrics(data, classId);
+
+            // Áp dụng bộ lọc
+            boolean matchesPunctuality = (minPunctuality == -1) || (data.getPunctualityRating() >= minPunctuality);
+            boolean matchesDiligence = (minDiligence == -1) || (data.getDiligenceRating() >= minDiligence);
+
+            if (matchesPunctuality && matchesDiligence) {
+                filteredData.add(data);
+            }
+        }
+
+        return filteredData;
+    }
+
+    /**
+     * Lấy điểm đúng giờ và chuyên cần trung bình của học sinh qua tất cả các lớp học.
+     *
+     * @param studentId ID của học sinh
+     * @return Đối tượng StudentAttendanceData với điểm trung bình
+     */
+    public StudentAttendanceData getAverageStudentMetrics(String studentId) {
+        String sql = "SELECT AVG(punctuality_score) as avg_punctuality, " +
+                "AVG(awareness_score) as avg_awareness " +
+                "FROM student_metrics WHERE student_id = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement statement = conn.prepareStatement(sql)) {
+
+            statement.setString(1, studentId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    // Lấy học sinh bằng ID
+                    return findById(studentId)
+                            .map(student -> {
+                                StudentAttendanceData data = new StudentAttendanceData(student);
+                                try {
+                                    int avgPunctuality = (int) Math.round(resultSet.getDouble("avg_punctuality"));
+                                    int avgAwareness = (int) Math.round(resultSet.getDouble("avg_awareness"));
+
+                                    data.setPunctualityRating(avgPunctuality);
+                                    data.setDiligenceRating(avgAwareness);
+                                } catch (SQLException e) {
+                                    LOGGER.log(Level.SEVERE, "Lỗi khi đọc dữ liệu từ ResultSet", e);
+                                }
+                                return data;
+                            })
+                            .orElse(null);
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Lỗi khi lấy điểm trung bình cho học sinh " + studentId, e);
+        }
+
+        return null;
+    }
+
+    /**
+     * Lấy lịch sử điểm của học sinh trong một lớp cụ thể.
+     *
+     * @param studentId ID của học sinh
+     * @param classId ID của lớp học
+     * @return Danh sách các đối tượng StudentAttendanceData chứa dữ liệu lịch sử
+     */
+    public List<StudentAttendanceData> getStudentMetricsHistory(String studentId, String classId) {
+        List<StudentAttendanceData> metricsHistory = new ArrayList<>();
+
+        // Đầu tiên kiểm tra xem học sinh có tồn tại không
+        Optional<Student> studentOptional = findById(studentId);
+        if (!studentOptional.isPresent()) {
+            return metricsHistory; // Trả về danh sách rỗng nếu không tìm thấy học sinh
+        }
+
+        Student student = studentOptional.get();
+        String sql = "SELECT student_id, record_date, awareness_score, punctuality_score, notes " +
+                "FROM student_metrics " +
+                "WHERE student_id = ? AND class_id = ? " +
+                "ORDER BY record_date DESC";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement statement = conn.prepareStatement(sql)) {
+
+            statement.setString(1, studentId);
+            statement.setString(2, classId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    StudentAttendanceData data = new StudentAttendanceData(student);
+
+                    data.setPunctualityRating((int) Math.round(resultSet.getDouble("punctuality_score")));
+                    data.setDiligenceRating((int) Math.round(resultSet.getDouble("awareness_score")));
+                    data.setStudentSessionNotes(resultSet.getString("notes"));
+
+                    metricsHistory.add(data);
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Lỗi khi lấy lịch sử điểm cho học sinh " +
+                    studentId + " trong lớp " + classId, e);
+        }
+
+        return metricsHistory;
+    }
+
+    /**
+     * Lấy danh sách nộp bài tập về nhà của học sinh cho một buổi học cụ thể.
+     *
+     * @param sessionId ID của buổi học cần lấy dữ liệu
+     * @return Danh sách HomeworkSubmissionModel chứa thông tin nộp bài tập
+     * @throws SQLException nếu có lỗi truy cập cơ sở dữ liệu
+     */
+    public List<HomeworkSubmissionModel> getAttendanceForSession(String sessionId) throws SQLException {
+        List<HomeworkSubmissionModel> studentData = new ArrayList<>();
+
+        String sql = "SELECT s.student_submission_id, s.student_id, s.homework_id, s.submitted, " +
+                "s.grade, s.submission_timestamp, s.evaluator_notes, s.checked_in_session_id, " +
+                "s.punctuality_rating, s.diligence_rating, s.final_score " +
+                "FROM student_homework_submissions s " +
+                "WHERE s.checked_in_session_id = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement statement = conn.prepareStatement(sql)) {
+
+            statement.setString(1, sessionId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    HomeworkSubmissionModel submission = new HomeworkSubmissionModel(
+                            resultSet.getString("student_submission_id"),
+                            resultSet.getString("student_id"),
+                            resultSet.getString("homework_id"),
+                            resultSet.getBoolean("submitted"),
+                            resultSet.getDouble("grade"),
+                            resultSet.getTimestamp("submission_timestamp") != null ?
+                                    resultSet.getTimestamp("submission_timestamp").toLocalDateTime() : null,
+                            resultSet.getString("evaluator_notes"),
+                            resultSet.getString("checked_in_session_id")
+                    );
+
+                    // Đặt các giá trị đánh giá bổ sung
+                    Integer punctualityRating = resultSet.getObject("punctuality_rating") != null ?
+                            resultSet.getInt("punctuality_rating") : null;
+                    submission.setPunctualityRating(punctualityRating);
+
+                    Integer diligenceRating = resultSet.getObject("diligence_rating") != null ?
+                            resultSet.getInt("diligence_rating") : null;
+                    submission.setDiligenceRating(diligenceRating);
+
+                    Integer finalScore = resultSet.getObject("final_score") != null ?
+                            resultSet.getInt("final_score") : null;
+                    submission.setFinalScore(finalScore);
+
+                    studentData.add(submission);
+                }
+            }
+        }
+
+        return studentData;
+    }
 }
 
