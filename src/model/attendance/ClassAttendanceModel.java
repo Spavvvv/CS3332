@@ -178,58 +178,6 @@ public class ClassAttendanceModel {
     }
 
     /**
-     * Sends notifications to parents about attendance and homework
-     */
-    public void sendNotifications() {
-        // Notification sending logic would be implemented here
-        // This could involve email APIs, SMS gateways, or other notification services
-        System.out.println("Sending notifications to parents...");
-
-        for(StudentAttendanceData data : attendanceList) {
-            Student student = data.getStudent();
-            if (student == null) continue; // Skip if student data is missing
-
-            Parent parent = student.getParent();
-            if(parent != null && parent.getEmail() != null && !parent.getEmail().isEmpty()) {
-                StringBuilder message = new StringBuilder();
-                message.append("Kính gửi phụ huynh ").append(parent.getName()).append(",\n\n");
-                message.append("Con của quý phụ huynh, ").append(student.getName()).append(", ");
-
-                boolean attended = data.getPunctualityRating() > 0; // Simple assumption for attendance
-
-                if(!attended) {
-                    message.append("đã vắng mặt trong buổi học ngày ").append(sessionDate).append(" của lớp ").append(className).append(".\n");
-                } else {
-                    message.append("đã tham dự buổi học ngày ").append(sessionDate).append(" của lớp ").append(className).append(".\n");
-
-                    if(homeworkId != null && !homeworkId.isEmpty()) { // Check if homework was assigned for this session
-                        if (!data.isHomeworkSubmitted()) {
-                            message.append("Lưu ý: Học viên chưa nộp bài tập về nhà (ID: ").append(homeworkId).append(").\n");
-                        } else {
-                            message.append("Học viên đã nộp bài tập về nhà (ID: ").append(homeworkId).append(").\n");
-                            if (data.getHomeworkGrade() > 0) {
-                                message.append("Điểm bài tập về nhà: ").append(data.getHomeworkGrade()).append(".\n");
-                            }
-                        }
-                    }
-
-                    if(!data.getStudentSessionNotes().isEmpty()) {
-                        message.append("Ghi chú trong buổi học: ").append(data.getStudentSessionNotes()).append(".\n");
-                    }
-                }
-
-                message.append("\nTrân trọng,\nTrung tâm [Tên Trung Tâm]"); // Replace with actual center name
-
-                // In a real app, you'd use an email service here:
-                // emailService.send(parent.getEmail(), "Thông báo tình hình học tập của " + student.getName(), message.toString());
-                System.out.println("Message to " + parent.getEmail() + ":\n" + message.toString());
-            } else {
-                System.out.println("Không thể gửi thông báo cho phụ huynh của " + student.getName() + " do thiếu thông tin email hoặc phụ huynh.");
-            }
-        }
-    }
-
-    /**
      * Loads real attendance and homework data from the database
      * This would replace the dummy data with actual data for the specified session
      */

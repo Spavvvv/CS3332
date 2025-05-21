@@ -498,6 +498,7 @@ public class StudentDAO {
         String birthday = resultSet.getString("birthday");
         String parentName = resultSet.getString("Parent_Name"); // Thêm thông tin phụ huynh
         String parentPhoneNumber = resultSet.getString("Parent_PhoneNumber"); // Thêm số ĐT phụ huynh
+
         Student student = new Student();
         student.setId(id);
         student.setName(name);
@@ -625,7 +626,7 @@ public class StudentDAO {
     public List<Student> findByClassId(String classId) {
         List<Student> students = new ArrayList<>();
         // Ensure your 'students' table has a 'class_id' column or similar foreign key to the 'classes' table.
-        String sql = "SELECT id, name, gender, contact_number, birthday, email, class_id FROM students WHERE class_id = ?";
+        String sql = "SELECT id, name, gender, contact_number, birthday, email, class_id, Parent_Name, Parent_PhoneNumber FROM students WHERE class_id = ?";
 
         if (classId == null || classId.trim().isEmpty()) {
             LOGGER.log(Level.WARNING, "findByClassId called with null or empty classId.");

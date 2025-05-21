@@ -50,7 +50,6 @@ public class AttendanceScreenView extends BaseScreenView {
     private Button searchButton;
     private Button exportExcelButton;
     private Button attendanceListButton;
-    private VBox classesContainer; // Not used in the current layout
     private FlowPane cardsPane;
 
     // Day filter buttons
