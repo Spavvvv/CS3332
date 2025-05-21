@@ -77,15 +77,15 @@ public class ClassroomAttendanceView extends BaseScreenView {
         Parent parent1 = new Parent("P001", "Phụ huynh Trần", "Nữ", "0900000001", "1980-01-01", "parent.tran@example.com", "Mẹ");
         Parent parent2 = new Parent("P002", "Phụ huynh Ngô", "Nam", "0900000002", "1975-05-10", "parent.ngo@example.com", "Cha");
 
-        Student student1 = new Student("HV000069", "Trần Châu Hiếu", "Nam", "0912345678", "2005-03-15", "hieu.tc@example.com", parent1,"1");
-        Student student2 = new Student("HV000075", "Ngô Việt Hoàng", "Nam", "0987654321", "2006-07-20", "hoang.nv@example.com", parent2, "1");
-        Student student3 = new Student("HV000268", "Lê Ngọc Hoàng", "Nữ", "0911223344", "2005-11-01", "hoang.ln@example.com", parent1, "1");
-
-        attendanceList.addAll(
-                new StudentAttendanceData(1, student1, false, 2, 0.0, 3, "", 9),
-                new StudentAttendanceData(2, student2, true, 5, 8.5, 5, "Tích cực", 10),
-                new StudentAttendanceData(3, student3, false, 1, 0.0, 2, "", 6)
-        );
+//        Student student1 = new Student("HV000069", "Trần Châu Hiếu", "Nam", "0912345678", "2005-03-15", "hieu.tc@example.com", parent1,"1");
+//        Student student2 = new Student("HV000075", "Ngô Việt Hoàng", "Nam", "0987654321", "2006-07-20", "hoang.nv@example.com", parent2, "1");
+//        Student student3 = new Student("HV000268", "Lê Ngọc Hoàng", "Nữ", "0911223344", "2005-11-01", "hoang.ln@example.com", parent1, "1");
+//
+//        attendanceList.addAll(
+//                new StudentAttendanceData(1, student1, false, 2, 0.0, 3, "", 9),
+//                new StudentAttendanceData(2, student2, true, 5, 8.5, 5, "Tích cực", 10),
+//                new StudentAttendanceData(3, student3, false, 1, 0.0, 2, "", 6)
+//        );
     }
 
     private Node createTopBar() {

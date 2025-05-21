@@ -65,6 +65,7 @@ public class DaoManager {
         studentDAO = new StudentDAO();
         parentDAO = new ParentDAO();
         courseDAO = new CourseDAO();
+        courseDAO.setStudentDAO(studentDAO);
         attendanceDAO = new AttendanceDAO();
         teacherDAO = new TeacherDAO();
         absenceRecordDAO = new AbsenceRecordDAO();

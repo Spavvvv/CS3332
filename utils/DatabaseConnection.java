@@ -12,8 +12,8 @@ import java.util.logging.Logger; // Import Logger
 public class DatabaseConnection {
     private static final String URL = "jdbc:mysql://localhost:3306/education_management";
     private static final String USERNAME = "root";
-    //private static final String PASSWORD = "120804";
-    private static final String PASSWORD = "123456";
+    private static final String PASSWORD = "120804";
+    //private static final String PASSWORD = "123456";
 
     // Logger for this class
     private static final Logger LOGGER = Logger.getLogger(DatabaseConnection.class.getName());

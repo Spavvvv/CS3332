@@ -78,7 +78,6 @@ public class Student extends Person {
     public String toString() {
         return super.toString() +
                 ", Role: " + getRole() +
-                ", Class ID: " + (classId != null ? classId : "N/A") + // Added classId to toString
                 ", Number of Current Courses: " + (currentCourses != null ? currentCourses.size() : 0) +
                 ", Parent Name: " + (parentName != null ? parentName : "None") +
                 ", Parent Phone: " + (parentPhoneNumber != null ? parentPhoneNumber : "None");

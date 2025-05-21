@@ -237,7 +237,7 @@ public class StudentDAO {
      * @throws SQLException if a database access error occurs
      */
     public Student getStudentById(Connection conn, String studentId) throws SQLException {
-        String sql = "SELECT id, name, gender, contact_number, birthday, email, class_id FROM students WHERE id = ?";
+        String sql = "SELECT id, name, gender, contact_number, birthday, email, class_id, Parent_Name, Parent_PhoneNumber FROM students WHERE id = ?";
         // Assuming students table has class_id
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -265,6 +265,31 @@ public class StudentDAO {
         try (Connection conn = DatabaseConnection.getConnection()) {
             return getStudentById(conn, studentId);
         }
+    }
+    public List<Student> getStudentsByIds(Connection conn, List<String> studentIds) throws SQLException {
+        List<Student> students = new ArrayList<>();
+        if (studentIds == null || studentIds.isEmpty()) {
+            return students;
+        }
+
+        String placeholders = String.join(",", studentIds.stream().map(id -> "?").toList());
+        String sql = "SELECT id, name, birthday, contact_number FROM students WHERE id IN (" + placeholders + ")";
+        try (PreparedStatement statement = conn.prepareStatement(sql)) {
+            for (int i = 0; i < studentIds.size(); i++) {
+                statement.setString(i + 1, studentIds.get(i));
+            }
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    Student student = new Student();
+                    student.setId(resultSet.getString("id"));
+                    student.setName(resultSet.getString("name"));
+                    student.setBirthday(resultSet.getString("birthday"));
+                    student.setContactNumber(resultSet.getString("contact_number"));
+                    students.add(student);
+                }
+            }
+        }
+        return students;
     }
 
     /**
