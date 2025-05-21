@@ -81,16 +81,6 @@ public class YearlyStatisticsController {
     }
 
     /**
-     * Handle print action
-     */
-    public void handlePrint() {
-        // In a real app, this would use a print service with data from DAO
-        // You would likely pass currentYear and currentStatus to the print service
-        view.showPrintingMessage();
-        // Example: printService.printYearlyStatistics(currentYear, currentStatus);
-    }
-
-    /**
      * Handle period type change (day/month/quarter/year)
      * Note: This method logic depends on how your overall navigation/view switching
      * is implemented in the application. The navigateToView calls are placeholders.

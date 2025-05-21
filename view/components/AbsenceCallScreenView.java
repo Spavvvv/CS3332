@@ -30,10 +30,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.stream.Collectors;
-import java.util.Optional; // Import Optional
 
 /**
  * Màn hình Danh sách vắng học
@@ -178,7 +175,6 @@ public class AbsenceCallScreenView extends BaseScreenView {
         filterSection.setAlignment(Pos.CENTER_LEFT);
         filterSection.setSpacing(15);
         filterSection.setPadding(new Insets(0, 0, 10, 0)); // Add some bottom padding
-
         DatePicker datePicker = new DatePicker(selectedDate);
         datePicker.setPromptText("Chọn ngày");
         datePicker.setOnAction(e -> {
@@ -187,40 +183,35 @@ public class AbsenceCallScreenView extends BaseScreenView {
         });
         // Change date text color to black
         datePicker.setStyle("-fx-text-fill: #000000;");
-
         Label dayFilterLabel = new Label("Ngày:");
         dayFilterLabel.setFont(Font.font("System", FontWeight.BOLD, 12)); // Smaller font for label
         dayFilterLabel.setTextFill(Color.BLACK); // Change to black
-
         dayFilterComboBox = new ComboBox<>();
         dayFilterComboBox.getItems().addAll("Tất cả", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật");
         dayFilterComboBox.setValue("Tất cả");
         dayFilterComboBox.setOnAction(e -> {
             currentDayFilter = dayFilterComboBox.getValue();
             applyFilters();
+            absenceTable.refresh(); // Force table refresh after filter change
         });
         // Set text color to black
         dayFilterComboBox.setStyle("-fx-text-fill: #000000;");
-
         Label callStatusLabel = new Label("Trạng thái gọi:");
         callStatusLabel.setFont(Font.font("System", FontWeight.BOLD, 12)); // Smaller font for label
         callStatusLabel.setTextFill(Color.BLACK); // Change to black
-
         callStatusComboBox = new ComboBox<>();
         callStatusComboBox.getItems().addAll("Tất cả", "Đã gọi", "Chưa gọi");
         callStatusComboBox.setValue("Tất cả");
         callStatusComboBox.setOnAction(e -> {
             currentCallStatusFilter = callStatusComboBox.getValue();
             applyFilters();
+            absenceTable.refresh(); // Force table refresh after filter change
         });
         // Set text color to black
         callStatusComboBox.setStyle("-fx-text-fill: #000000;");
-
         // Spacer to push search to the right
         Region filterSpacer = new Region();
         HBox.setHgrow(filterSpacer, Priority.ALWAYS);
-
-
         searchField = new TextField();
         searchField.setPromptText("Tìm kiếm học sinh");
         searchField.setPrefWidth(200);
@@ -228,52 +219,111 @@ public class AbsenceCallScreenView extends BaseScreenView {
         searchField.setStyle(
                 "-fx-background-color: #f0f0f0; -fx-background-radius: 5; -fx-padding: 0 10;" // Added padding
         );
-
         searchButton = new Button("Tìm");
         searchButton.setPrefHeight(30); // Match ComboBox height
         searchButton.setStyle("-fx-background-color: " + PRIMARY_COLOR + "; -fx-text-fill: white; -fx-background-radius: 5;");
         searchButton.setOnAction(e -> {
             currentSearchText = searchField.getText().trim().toLowerCase();
             applyFilters();
+            absenceTable.refresh(); // Force table refresh after search
         });
-
+        // Add listener for Enter key in search field
+        searchField.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                currentSearchText = searchField.getText().trim().toLowerCase();
+                applyFilters();
+                absenceTable.refresh(); // Force table refresh after search
+            }
+        });
         filterSection.getChildren().addAll(datePicker, dayFilterLabel, dayFilterComboBox,
                 callStatusLabel, callStatusComboBox, filterSpacer, searchField, searchButton); // Added spacer
-
         return filterSection;
     }
 
     private HBox createProgressSection() {
         HBox progressSection = new HBox();
         progressSection.setAlignment(Pos.CENTER_LEFT);
-        progressSection.setSpacing(25); // Increased spacing
-        progressSection.setPadding(new Insets(10, 0, 15, 0)); // Adjusted padding
+        progressSection.setSpacing(25);
+        progressSection.setPadding(new Insets(10, 0, 15, 0));
+        progressSection.setStyle("-fx-background-color: #f9f9f9; -fx-background-radius: 8px; -fx-padding: 12px;");
 
         totalAbsencesLabel = new Label("Tổng số vắng: 0");
         totalAbsencesLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
         totalAbsencesLabel.setTextFill(Color.valueOf("#000000"));
 
-        VBox progressBox = new VBox(3); // Reduced spacing
+        VBox progressBox = new VBox(5);
         progressBox.setAlignment(Pos.CENTER_LEFT);
 
         Label progressTitle = new Label("Tiến độ gọi điện:");
-        progressTitle.setFont(Font.font("System", 12)); // Smaller font
-        progressTitle.setTextFill(Color.valueOf("#000000")); // Changed to black
+        progressTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
+        progressTitle.setTextFill(Color.valueOf("#000000"));
+
+        HBox progressBarContainer = new HBox(10);
+        progressBarContainer.setAlignment(Pos.CENTER_LEFT);
 
         callProgressBar = new ProgressBar(0);
-        callProgressBar.setPrefWidth(250); // Increased width
-        callProgressBar.setPrefHeight(8); // Reduced height
-        callProgressBar.setStyle("-fx-accent: " + GREEN_COLOR + "; -fx-control-inner-background: " + "#e0e0e0" + ";"); // Added background color
+        callProgressBar.setPrefWidth(250);
+        callProgressBar.setPrefHeight(10);
+        callProgressBar.setStyle("-fx-accent: " + GREEN_COLOR + "; -fx-control-inner-background: #e0e0e0;");
 
         callProgressLabel = new Label("0/0 (0%)");
-        callProgressLabel.setFont(Font.font("System", 12)); // Smaller font
-        callProgressLabel.setTextFill(Color.valueOf("#000000")); // Changed to black
+        callProgressLabel.setFont(Font.font("System", 12));
+        callProgressLabel.setTextFill(Color.valueOf("#000000"));
 
+        progressBarContainer.getChildren().addAll(callProgressBar, callProgressLabel);
 
-        progressBox.getChildren().addAll(progressTitle, callProgressBar, callProgressLabel);
+        // Thêm nút chức năng để đánh dấu tất cả
+        Button markAllButton = new Button("Đánh dấu tất cả");
+        markAllButton.setStyle("-fx-background-color: " + PRIMARY_COLOR + "; -fx-text-fill: white; -fx-background-radius: 5;");
+        markAllButton.setOnAction(e -> markAllCalled(true));
+
+        Button unmarkAllButton = new Button("Bỏ đánh dấu tất cả");
+        unmarkAllButton.setStyle("-fx-background-color: #E57373; -fx-text-fill: white; -fx-background-radius: 5;");
+        unmarkAllButton.setOnAction(e -> markAllCalled(false));
+
+        HBox actionButtons = new HBox(10);
+        actionButtons.getChildren().addAll(markAllButton, unmarkAllButton);
+
+        progressBox.getChildren().addAll(progressTitle, progressBarContainer, actionButtons);
 
         progressSection.getChildren().addAll(totalAbsencesLabel, progressBox);
         return progressSection;
+    }
+
+    // Thêm phương thức để đánh dấu tất cả các dòng đã gọi hoặc chưa gọi
+    private void markAllCalled(boolean called) {
+        if (filteredData == null || filteredData.isEmpty()) {
+            showInfo("Không có dữ liệu để cập nhật.");
+            return;
+        }
+
+        int successCount = 0;
+        int failCount = 0;
+
+        for (Attendance attendance : filteredData) {
+            // Chỉ cập nhật những dòng có trạng thái khác với trạng thái đích
+            if (attendance.isCalled() != called) {
+                try {
+                    attendanceController.markAttendanceCalled(attendance.getId(), called);
+                    attendance.setCalled(called);
+                    successCount++;
+                } catch (SQLException e) {
+                    failCount++;
+                    System.err.println("Lỗi khi cập nhật trạng thái gọi cho ID " + attendance.getId() + ": " + e.getMessage());
+                }
+            }
+        }
+
+        // Cập nhật giao diện
+        absenceTable.refresh();
+        updateProgressBar();
+
+        // Hiển thị thông báo kết quả
+        if (failCount == 0) {
+            showSuccess("Đã cập nhật thành công " + successCount + " bản ghi.");
+        } else {
+            showInfo("Đã cập nhật " + successCount + " bản ghi thành công và " + failCount + " bản ghi thất bại.");
+        }
     }
 
     private VBox createTableSection() {
@@ -405,6 +455,8 @@ public class AbsenceCallScreenView extends BaseScreenView {
      * and AttendanceController methods accepting and returning objects with String IDs.
      * Assumes mainController.getTeacherClassIds() now returns List<String>.
      */
+    // Modified loadAbsenceData method with debug logging
+
     public void loadAbsenceData() {
         if (attendanceController == null) {
             System.err.println("AttendanceController is not initialized.");
@@ -421,6 +473,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
         if (mainController != null) {
             // Assuming mainController.getTeacherClassIds() might return List<Object> and contains String IDs
             List<?> ids = mainController.getTeacherClassIds();
+
             if (ids != null) {
                 for (Object id : ids) {
                     if (id instanceof String) {
@@ -430,8 +483,8 @@ public class AbsenceCallScreenView extends BaseScreenView {
                     }
                 }
             }
+            System.out.println("DEBUG - Processed teacher class IDs: " + teacherClassIds);
         } else {
-            System.err.println("mainController is null. Cannot get teacher class IDs.");
             showError("Lỗi hệ thống: Không thể lấy danh sách lớp học.");
             absenceData = FXCollections.observableArrayList();
             filteredData = new FilteredList<>(absenceData);
@@ -444,19 +497,25 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
         List<Attendance> allAbsences = new ArrayList<>();
         try {
+            System.out.println("DEBUG - Selected date for absence data: " + selectedDate);
+
             // Get all class sessions for the date range we're interested in
             // Iterate over String class IDs
             for (String classId : teacherClassIds) {
                 if (classId == null || classId.trim().isEmpty()) continue; // Skip invalid IDs
 
+                System.out.println("DEBUG - Fetching sessions for class ID: " + classId);
+
                 // attendanceController.getClassSessionsByClassId must accept String and return List<ClassSession>
                 List<ClassSession> classSessions = attendanceController.getClassSessionsByClassId(classId);
+                System.out.println("DEBUG - Found " + (classSessions != null ? classSessions.size() : "null") + " class sessions");
 
                 // Filter sessions to match the selected date (exact date match)
                 List<ClassSession> sessionsOnSelectedDate = classSessions.stream()
                         .filter(session -> session.getDate() != null && session.getDate().isEqual(selectedDate))
                         .collect(Collectors.toList());
 
+                System.out.println("DEBUG - Sessions on selected date " + selectedDate + ": " + sessionsOnSelectedDate.size());
 
                 // Get attendance for each session on the selected date
                 for (ClassSession session : sessionsOnSelectedDate) {
@@ -466,43 +525,71 @@ public class AbsenceCallScreenView extends BaseScreenView {
                         continue; // Skip sessions with no ID
                     }
 
+                    System.out.println("DEBUG - Processing session: " + session.getId() + ", " + session.getCourseName() + ", date: " + session.getDate());
+
                     // Get all attendance records for this session
                     // attendanceController.getAttendanceBySessionId must accept String and return List<Attendance>
                     List<Attendance> sessionAttendance = attendanceController.getAttendanceBySessionId(session.getId());
+                    System.out.println("DEBUG - Total attendance records for session " + session.getId() + ": " + (sessionAttendance != null ? sessionAttendance.size() : "null"));
 
                     // Filter to only include absences (where isPresent is false)
                     List<Attendance> absences = sessionAttendance.stream()
                             .filter(a -> !a.isPresent()) // Requires isPresent() method in Attendance model
                             .collect(Collectors.toList());
 
+                    System.out.println("DEBUG - Absence records for session " + session.getId() + ": " + absences.size());
+
                     // Populate ClassSession and Student details for each attendance record if they are not already populated by the DAO
                     // This is crucial for the table view to display names and other details
-                    absences.forEach(a -> {
+                    for (Attendance a : absences) {
                         // Check if student and session are already populated
                         if (a.getStudent() == null || a.getSession() == null) {
                             try {
                                 // Attempt to fetch and set Student and ClassSession if IDs are available
                                 if (a.getStudentId() != null && a.getStudent() == null) {
+                                    System.out.println("DEBUG - Fetching student for attendance " + a.getId() + ", student ID: " + a.getStudentId());
                                     Student student = attendanceController.getStudentById(a.getStudentId()); // Requires getStudentId() on Attendance and getStudentById(String) on Controller
+                                    System.out.println("DEBUG - Fetched student: " + (student != null ? student.getName() : "null"));
                                     a.setStudent(student); // Requires setStudent() on Attendance
                                 }
                                 if (a.getSessionId() != null && a.getSession() == null) {
+                                    System.out.println("DEBUG - Fetching session for attendance " + a.getId() + ", session ID: " + a.getSessionId());
                                     ClassSession sessionObj = attendanceController.getClassSessionById(a.getSessionId()); // Requires getSessionId() on Attendance and getClassSessionById(String) on Controller
+                                    System.out.println("DEBUG - Fetched session: " + (sessionObj != null ? sessionObj.getCourseName() : "null"));
                                     a.setSession(sessionObj); // Requires setSession() on Attendance
                                 }
                             } catch (SQLException e) {
                                 System.err.println("Failed to populate student or session for attendance " + a.getId() + ": " + e.getMessage());
+                                e.printStackTrace();
                                 // Optionally log this or show an error, but don't stop loading other data
                             }
+                        } else {
+                            System.out.println("DEBUG - Student and session already populated for attendance " + a.getId());
+                            if (a.getStudent() != null) {
+                                System.out.println("DEBUG - Student: " + a.getStudent().getName());
+                            }
+                            if (a.getSession() != null) {
+                                System.out.println("DEBUG - Session: " + a.getSession().getCourseName() + ", date: " + a.getSession().getDate());
+                            }
                         }
-                    });
-
+                    }
 
                     allAbsences.addAll(absences);
                 }
             }
+
+            System.out.println("DEBUG - Total absences found across all sessions: " + allAbsences.size());
+            for (Attendance a : allAbsences) {
+                Student student = a.getStudent();
+                ClassSession session = a.getSession();
+                System.out.println("DEBUG - Absence: " + a.getId() +
+                        ", Student: " + (student != null ? student.getName() : "null") +
+                        ", Session: " + (session != null ? session.getCourseName() + " on " + session.getDate() : "null") +
+                        ", Called: " + a.isCalled());
+            }
+
         } catch (SQLException e) {
-            showError("Lỗi khi tải dữ liệu vắng học từ cơ sở dữ liệu: " + e.getMessage());
+            System.err.println("ERROR - SQL Exception when loading absence data: " + e.getMessage());
             e.printStackTrace(); // Print stack trace for debugging
             // Initialize empty lists on error
             absenceData = FXCollections.observableArrayList();
@@ -512,7 +599,7 @@ public class AbsenceCallScreenView extends BaseScreenView {
             applyFilters();
             return;
         } catch (Exception e) {
-            showError("Lỗi không xác định khi tải dữ liệu vắng học: " + e.getMessage());
+            System.err.println("ERROR - Unexpected exception when loading absence data: " + e.getMessage());
             e.printStackTrace();
             // Initialize empty lists on error
             absenceData = FXCollections.observableArrayList();
@@ -527,8 +614,25 @@ public class AbsenceCallScreenView extends BaseScreenView {
         absenceData = FXCollections.observableArrayList(allAbsences);
         filteredData = new FilteredList<>(absenceData);
         absenceTable.setItems(filteredData);
+        System.out.println("DEBUG - Setting table items with " + absenceData.size() + " records");
+
         // Apply filters after loading initial data
         applyFilters();
+        System.out.println("DEBUG - After applying filters: " + filteredData.size() + " records visible");
+
+        // Đảm bảo cập nhật thanh tiến độ sau khi tải dữ liệu
+        absenceData = FXCollections.observableArrayList(allAbsences);
+        filteredData = new FilteredList<>(absenceData);
+        absenceTable.setItems(filteredData);
+
+        // Áp dụng bộ lọc và cập nhật thanh tiến độ
+        applyFilters();
+        updateProgressBar(); // Đảm bảo cập nhật ngay cả khi không có bộ lọc nào được áp dụng
+
+        System.out.println("DEBUG - Loaded " + absenceData.size() + " records, showing " + filteredData.size() + " after filtering");
+        System.out.println("DEBUG - Progress: " + callProgressBar.getProgress() + " (" +
+                (int)(callProgressBar.getProgress() * 100) + "%)");
+
     }
 
 
@@ -551,7 +655,6 @@ public class AbsenceCallScreenView extends BaseScreenView {
                 // System.err.println("Skipping attendance record " + attendance.getId() + " due to unpopulated student or session.");
                 return false;
             }
-
 
             boolean matchesDayFilter = true;
             boolean matchesCallStatusFilter = true;
@@ -587,7 +690,6 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
                 boolean contactMatches = student.getContactNumber() != null && student.getContactNumber().toLowerCase().contains(lowerSearchText);
 
-
                 boolean classMatches = session.getCourseName() != null && session.getCourseName().toLowerCase().contains(lowerSearchText);
 
                 // Match if any of the conditions are true
@@ -598,6 +700,11 @@ public class AbsenceCallScreenView extends BaseScreenView {
         });
 
         updateProgressBar(); // Update progress bar based on filtered data
+
+        // Force refresh the table to reflect filter changes
+        if (absenceTable != null) {
+            absenceTable.refresh();
+        }
     }
 
     private String getDayNameFromDayOfWeek(int dayOfWeek) {
@@ -622,13 +729,26 @@ public class AbsenceCallScreenView extends BaseScreenView {
         }
 
         int total = filteredData.size();
-        int called = (int) filteredData.stream().filter(Attendance::isCalled).count(); // Requires isCalled()
+        int called = (int) filteredData.stream().filter(Attendance::isCalled).count();
 
         double progress = total > 0 ? (double) called / total : 0;
         int percentage = (int) (progress * 100);
 
+        // Cập nhật trực quan cho thanh tiến độ
         callProgressBar.setProgress(progress);
+
+        // Cập nhật nhãn với định dạng rõ ràng
         callProgressLabel.setText(called + "/" + total + " (" + percentage + "%)");
+
+        // Thay đổi màu sắc dựa trên tiến độ
+        if (progress < 0.3) {
+            callProgressBar.setStyle("-fx-accent: #FF5252; -fx-control-inner-background: #e0e0e0;"); // Đỏ khi tiến độ thấp
+        } else if (progress < 0.7) {
+            callProgressBar.setStyle("-fx-accent: #FFC107; -fx-control-inner-background: #e0e0e0;"); // Vàng khi tiến độ trung bình
+        } else {
+            callProgressBar.setStyle("-fx-accent: " + GREEN_COLOR + "; -fx-control-inner-background: #e0e0e0;"); // Xanh khi tiến độ cao
+        }
+
         totalAbsencesLabel.setText("Tổng số vắng: " + total);
     }
 
@@ -672,6 +792,17 @@ public class AbsenceCallScreenView extends BaseScreenView {
 
     public void setupActionHandlers() {
         exportExcelButton.setOnAction(e -> handleExportToExcel());
+
+        callProgressBar.progressProperty().addListener((obs, oldVal, newVal) -> {
+            double progress = newVal.doubleValue();
+            if (progress < 0.3) {
+                callProgressBar.setStyle("-fx-accent: #FF5252; -fx-control-inner-background: #e0e0e0;"); // Đỏ
+            } else if (progress < 0.7) {
+                callProgressBar.setStyle("-fx-accent: #FFC107; -fx-control-inner-background: #e0e0e0;"); // Vàng
+            } else {
+                callProgressBar.setStyle("-fx-accent: " + GREEN_COLOR + "; -fx-control-inner-background: #e0e0e0;"); // Xanh
+            }
+        });
 
         // The searchButton handler is already set up in createFilterSection
     }

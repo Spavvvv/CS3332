@@ -65,18 +65,10 @@ public class ClassDetailsView extends BaseScreenView {
             }
         });
 
-        editButton = new Button("Chỉnh sửa");
-        editButton.setStyle("-fx-text-fill: black;");
-        editButton.setOnAction(e -> handleAction("edit_class", null));
-
-        deleteButton = new Button("Xóa");
-        deleteButton.setStyle("-fx-text-fill: black;");
-        deleteButton.setOnAction(e -> handleAction("delete_class", null));
-
         // Box chứa các nút hành động
         actionBox = new HBox(10);
         actionBox.setAlignment(Pos.CENTER);
-        actionBox.getChildren().addAll(backButton, editButton, deleteButton);
+        actionBox.getChildren().addAll(backButton);
 
         // Thêm các thành phần vào layout chính
         root.getChildren().addAll(titleLabel, errorLabel, detailsGrid, actionBox);

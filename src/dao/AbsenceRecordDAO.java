@@ -19,54 +19,29 @@ import java.util.logging.Logger;
 public class AbsenceRecordDAO {
     private static final Logger LOGGER = Logger.getLogger(AbsenceRecordDAO.class.getName());
 
-    /**
-     * Retrieves a list of available class sessions. (Original method largely unchanged)
-     * @return A list of ClassSession objects.
-     * @throws SQLException if a database access error occurs.
-     */
-    public List<ClassSession> getAvailableSessions() throws SQLException {
-        List<ClassSession> sessions = new ArrayList<>();
-        String sql = "SELECT cs.session_id, cs.class_id, cs.session_date, cs.course_name, cs.teacher_name, " +
-                "cs.start_time, cs.end_time, cs.room, cl.class_name, cl.session_number AS actual_class_name " +
-                "FROM class_sessions cs " +
-                "JOIN classes cl ON cs.class_id = cl.class_id " +
-                "ORDER BY cs.session_date DESC, cs.start_time DESC";
+
+
+    public List<String> getClassIdsByTeacherId(String teacherId) throws SQLException {
+        List<String> classIds = new ArrayList<>();
+        String sql = "SELECT DISTINCT cl.class_id " +
+                "FROM classes cl " +
+                "WHERE cl.teacher_id = ?";
 
         try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql);
-             ResultSet rs = pstmt.executeQuery()) {
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            while (rs.next()) {
-                String sessionId = rs.getString("session_id");
-                String sessionSpecificClassId = rs.getString("class_id");
-                LocalDate sessionDate = rs.getDate("session_date").toLocalDate();
-                String courseSubjectName = rs.getString("course_name");
-                String teacherName = rs.getString("teacher_name");
-                String room = rs.getString("room");
+            pstmt.setString(1, teacherId);
 
-                Time startTimeSql = rs.getTime("start_time");
-                LocalDateTime sessionStartTime = (startTimeSql != null) ? LocalDateTime.from(startTimeSql.toLocalTime()) : null;
-
-                Time endTimeSql = rs.getTime("end_time");
-                LocalDateTime sessionEndTime = (endTimeSql != null) ? LocalDateTime.from(endTimeSql.toLocalTime()) : null;
-
-                int sessionNumber = rs.getInt("session_number");
-
-                Course tempCourse = new Course(); // Assuming Course has a default constructor
-                tempCourse.setCourseName(courseSubjectName); // Assuming setCourseName exists
-
-                ClassSession session = new ClassSession(
-                        sessionId, tempCourse, teacherName, room,
-                        sessionDate, sessionStartTime, sessionEndTime,
-                        sessionSpecificClassId, sessionNumber
-                );
-                sessions.add(session);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    classIds.add(rs.getString("class_id"));
+                }
             }
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error fetching available class sessions.", e);
+            LOGGER.log(Level.SEVERE, "Error fetching class IDs for teacher: " + teacherId, e);
             throw e;
         }
-        return sessions;
+        return classIds;
     }
 
     /**

@@ -4,7 +4,6 @@ package src.controller; // Hoặc package tương ứng của bạn
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-// Import ReportModel và ClassReportData từ package model.report
 import src.model.report.ReportModel;
 import src.model.report.ReportModel.ClassReportData;
 // Import ReportView để controller có thể tương tác

@@ -1,4 +1,5 @@
 package src.controller;
+
 import src.model.ClassSession;
 import view.*;
 import view.components.*;
@@ -14,8 +15,10 @@ import src.model.person.Teacher;
 import src.model.person.Parent;
 import javafx.scene.control.Alert;
 import view.components.ClassList.ClassListScreenView;
-import view.components.ClassList.CreateClassScreenView;
 import view.components.StudentList.StudentListScreenView;
+
+import utils.DaoManager;
+import src.dao.AbsenceRecordDAO;
 
 /**
  Controller chính của ứng dụng, quản lý logic nghiệp vụ
@@ -30,6 +33,7 @@ public class MainController {
     // Field to store attendance records for the current session
     private List<Attendance> currentSessionAttendances;
     private AttendanceController attendanceController;
+
     /**
      Constructor với UI và NavigationController
      @param ui Interface người dùng
@@ -62,11 +66,11 @@ public class MainController {
      Đăng ký các view với NavigationController
      */
     private void registerViews() throws SQLException {
-// Đăng ký các views với NavigationController
+        // Đăng ký các views với NavigationController
         navigationController.registerView("dashboard", new DashboardView());
-// TODO: Đăng ký thêm các views khác
-// Ví dụ:
-// navigationController.registerView("student/list", new StudentListView());
+        // TODO: Đăng ký thêm các views khác
+        // Ví dụ:
+        // navigationController.registerView("student/list", new StudentListView());
         navigationController.registerView("schedule", new ScheduleView());
         navigationController.registerView("classDetails", new ClassDetailsView());
         navigationController.registerView("attendance", new AttendanceScreenView());
@@ -145,7 +149,7 @@ public class MainController {
      @return true nếu đăng nhập thành công
      */
     public boolean login(String username, String password) {
-// TODO: Implement login logic
+        // TODO: Implement login logic
         return true;
     }
     /**
@@ -177,8 +181,8 @@ public class MainController {
      @return Thông tin buổi học hoặc null nếu không tìm thấy
      */
     public ClassSession getClassSessionById(String id) {
-// TODO: Implement - Truy vấn dữ liệu từ database dựa vào ID
-// Giả lập: Nếu ID trùng với currentSessionDetail thì trả về
+        // TODO: Implement - Truy vấn dữ liệu từ database dựa vào ID
+        // Giả lập: Nếu ID trùng với currentSessionDetail thì trả về
         if (currentSessionDetail != null && id == currentSessionDetail.getId()) {
             return currentSessionDetail;
         }
@@ -237,23 +241,37 @@ public class MainController {
     public AttendanceController getAttendanceController() {
         return this.attendanceController;
     }
+
     /**
      Lấy danh sách các ID lớp học mà giáo viên hiện tại phụ trách
      @return Danh sách các ID lớp học
      */
     public List<Object> getTeacherClassIds() {
-        // Kiểm tra nếu người dùng hiện tại là giáo viên
         if (currentUser instanceof Teacher) {
-            // TODO: Truy vấn cơ sở dữ liệu để lấy danh sách các lớp của giáo viên
-            List<Object> teacherClassIds = new ArrayList<>();
-            //take data by using DAO
-            return teacherClassIds;
+            Teacher teacher = (Teacher) currentUser;
 
+            String teacherId = teacher.getId();
 
+            try {
+                // Lấy AbsenceRecordDAO thông qua DaoManager
+                AbsenceRecordDAO absenceRecordDAO = DaoManager.getInstance().getAbsenceRecordDAO();
+                List<String> classIds = absenceRecordDAO.getClassIdsByTeacherId(teacherId);
+
+                // Convert List<String> thành List<Object>
+                List<Object> teacherClassIds = new ArrayList<>(classIds);
+                System.out.println("DEBUG - Lấy được " + teacherClassIds.size() + " lớp học cho giáo viên ID: " + teacherId);
+                return teacherClassIds;
+            } catch (SQLException e) {
+                System.err.println("ERROR - Không thể lấy danh sách lớp học của giáo viên: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
-        // Trả về danh sách trống nếu không phải giáo viên
+
+        System.out.println("DEBUG - Trả về danh sách lớp trống cho người dùng hiện tại");
         return new ArrayList<>();
     }
+
+
     /**
      Thiết lập đối tượng AttendanceController
      @param attendanceController Đối tượng AttendanceController cần thiết lập

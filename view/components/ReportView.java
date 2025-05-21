@@ -1,6 +1,4 @@
-
-// File: view/components/ReportView.java
-package view.components; // Hoặc package tương ứng của bạn
+package view.components;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -87,17 +85,6 @@ public class ReportView extends BaseScreenView {
 
         System.out.println("ReportView constructor: END");
     }
-
-    // ... (Phần còn lại của ReportView.java không thay đổi)
-    // initializeView(), createFilterPanel(), createMetricsPanel(), createProgressCircleBox(),
-    // createCriteriaMetricsBox(), createReportTable(), refreshView(), setClassStatusOptions(),
-    // updateOverallMetrics(), replacePanelChild(), updateReportTable(), showError(),
-    // các getters, setBlackHeaderText() vẫn giữ nguyên như phiên bản trước.
-    // Để cho ngắn gọn, tôi sẽ không lặp lại toàn bộ file ở đây.
-    // Bạn chỉ cần đảm bảo hàm dựng được cập nhật như trên.
-
-    // QUAN TRỌNG: Dưới đây là các phương thức còn lại của ReportView để bạn tiện tham khảo
-    // và đảm bảo không có gì bị sót. Hãy copy phần này vào file ReportView.java của bạn.
 
     @Override
     public void initializeView() {
@@ -253,17 +240,28 @@ public class ReportView extends BaseScreenView {
         criteriaBox.setPadding(new Insets(15));
         criteriaBox.setStyle("-fx-background-color: white; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 10, 0, 0, 5); -fx-background-radius: 5;");
         criteriaBox.setPrefWidth(300); criteriaBox.setPrefHeight(180);
+
         Label criteriaHeading = new Label("Tiêu chí đánh giá trung bình");
         criteriaHeading.setFont(Font.font("System", FontWeight.BOLD, 16));
         criteriaHeading.setTextFill(Color.BLACK);
         criteriaHeading.setPrefWidth(Double.MAX_VALUE);
         criteriaHeading.setAlignment(Pos.CENTER);
-        HBox awarenessBox = new HBox(5, new Label("Ý thức học:"), awarenessVal);
+
+        Label awarenessLabel = new Label("Ý thức học:");
+        awarenessLabel.setStyle("-fx-text-fill: black;");
+        HBox awarenessBox = new HBox(5, awarenessLabel, awarenessVal);
         awarenessBox.setAlignment(Pos.CENTER_LEFT);
-        HBox punctualityBox = new HBox(5, new Label("Đúng giờ:"), punctualityVal);
+
+        Label punctualityLabel = new Label("Đúng giờ:");
+        punctualityLabel.setStyle("-fx-text-fill: black;");
+        HBox punctualityBox = new HBox(5, punctualityLabel, punctualityVal);
         punctualityBox.setAlignment(Pos.CENTER_LEFT);
-        HBox homeworkScoreBox = new HBox(5, new Label("Kết quả BTVN:"), homeworkScoreVal);
+
+        Label homeworkScoreLabel = new Label("Kết quả BTVN:");
+        homeworkScoreLabel.setStyle("-fx-text-fill: black;");
+        HBox homeworkScoreBox = new HBox(5, homeworkScoreLabel, homeworkScoreVal);
         homeworkScoreBox.setAlignment(Pos.CENTER_LEFT);
+
         ((Label)awarenessBox.getChildren().get(0)).setPrefWidth(100);
         ((Label)punctualityBox.getChildren().get(0)).setPrefWidth(100);
         ((Label)homeworkScoreBox.getChildren().get(0)).setPrefWidth(100);
@@ -288,15 +286,19 @@ public class ReportView extends BaseScreenView {
         TableColumn<ClassReportData, Integer> sttCol = new TableColumn<>(); setBlackHeaderText(sttCol, "STT");
         sttCol.setCellValueFactory(new PropertyValueFactory<>("stt"));
         sttCol.setStyle("-fx-alignment: CENTER;"); sttCol.setPrefWidth(50); sttCol.setMinWidth(50); sttCol.setMaxWidth(70);
+
         TableColumn<ClassReportData, String> classNameCol = new TableColumn<>(); setBlackHeaderText(classNameCol, "Tên lớp");
         classNameCol.setCellValueFactory(new PropertyValueFactory<>("className"));
         classNameCol.setPrefWidth(180); classNameCol.setMinWidth(150);
+
         TableColumn<ClassReportData, String> attendanceCol = new TableColumn<>(); setBlackHeaderText(attendanceCol, "Số buổi học (Học/Tổng)");
         attendanceCol.setCellValueFactory(new PropertyValueFactory<>("attendance"));
         attendanceCol.setStyle("-fx-alignment: CENTER;"); attendanceCol.setPrefWidth(180); attendanceCol.setMinWidth(150);
+
         TableColumn<ClassReportData, String> homeworkCol = new TableColumn<>(); setBlackHeaderText(homeworkCol, "Số bài tập về nhà (Làm/Tổng)");
         homeworkCol.setCellValueFactory(new PropertyValueFactory<>("homework"));
         homeworkCol.setStyle("-fx-alignment: CENTER;"); homeworkCol.setPrefWidth(200); homeworkCol.setMinWidth(180);
+
         TableColumn<ClassReportData, Double> awarenessCol = new TableColumn<>(); setBlackHeaderText(awarenessCol, "Ý thức học");
         awarenessCol.setCellValueFactory(new PropertyValueFactory<>("awareness"));
         awarenessCol.setCellFactory(tc -> new TableCell<>() {
@@ -310,10 +312,12 @@ public class ReportView extends BaseScreenView {
             }
         });
         awarenessCol.setStyle("-fx-alignment: CENTER;"); awarenessCol.setPrefWidth(120); awarenessCol.setMinWidth(100);
+
         TableColumn<ClassReportData, Double> punctualityCol = new TableColumn<>(); setBlackHeaderText(punctualityCol, "Đúng giờ (điểm)");
         punctualityCol.setCellValueFactory(new PropertyValueFactory<>("punctuality"));
         punctualityCol.setCellFactory(tc -> new TableCell<>() { @Override protected void updateItem(Double item, boolean empty) { super.updateItem(item, empty); if (empty || item == null) { setText(null); } else { setText(String.format("%.2f", item)); setTextFill(Color.BLACK); } } });
         punctualityCol.setStyle("-fx-alignment: CENTER;"); punctualityCol.setPrefWidth(120); punctualityCol.setMinWidth(100);
+
         TableColumn<ClassReportData, String> homeworkScoreCol = new TableColumn<>(); setBlackHeaderText(homeworkScoreCol, "Điểm BTVN (TB)");
         // homeworkScore trong ClassReportData là String, ví dụ "8.5/10" hoặc "7"
         homeworkScoreCol.setCellValueFactory(new PropertyValueFactory<>("homeworkScore"));
