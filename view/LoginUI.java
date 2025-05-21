@@ -499,7 +499,7 @@ public class LoginUI {
 
 
             // Liên kết UI với các controller
-            ui.setControllers(mainController1, navigationController1, notificationService);
+            ui.setControllers(mainController, navigationController, notificationService);
 
             // Truyền thông tin người dùng vào controller
             mainController.setCurrentUser(user);

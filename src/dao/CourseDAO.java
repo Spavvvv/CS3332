@@ -12,6 +12,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List; // Removed Arrays import as it's unused
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Data Access Object for Course entities.
@@ -47,8 +48,10 @@ public class CourseDAO {
     private boolean internalInsert(Connection conn, Course course) throws SQLException {
         // Added class_id to the SQL query and parameter setting
         String sql = "INSERT INTO courses (course_id, course_name, subject, start_date, end_date, " +
-                "days_of_week, start_time, end_time, teacher_id, room_id, class_id, progress) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "start_time, end_time, teacher_id, room_id, class_id, progress) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+// Không gọi statement.setString(6, ...) cho days_of_week
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, course.getCourseId());
@@ -56,19 +59,18 @@ public class CourseDAO {
             statement.setString(3, course.getSubject());
             statement.setDate(4, course.getStartDate() != null ? Date.valueOf(course.getStartDate()) : null);
             statement.setDate(5, course.getEndDate() != null ? Date.valueOf(course.getEndDate()) : null);
-            statement.setString(6, course.getDaysOfWeekAsString());
 
             // Use renamed getters from Course model
             Time startTimeSql = course.getCourseStartTime() != null ? Time.valueOf(course.getCourseStartTime()) : null;
             Time endTimeSql = course.getCourseEndTime() != null ? Time.valueOf(course.getCourseEndTime()) : null;
 
-            statement.setTime(7, startTimeSql);
-            statement.setTime(8, endTimeSql);
+            statement.setTime(6, startTimeSql);
+            statement.setTime(7, endTimeSql);
 
-            statement.setString(9, course.getTeacher() != null ? course.getTeacher().getId() : null);
-            statement.setString(10, course.getRoomId());
-            statement.setString(11, course.getClassId()); // Set class_id
-            statement.setFloat(12, course.getProgress());
+            statement.setString(8, course.getTeacher() != null ? course.getTeacher().getId() : null);
+            statement.setString(9, course.getRoomId());
+            statement.setString(10, course.getClassId()); // Set class_id
+            statement.setFloat(11, course.getProgress());
 
             int rowsInserted = statement.executeUpdate();
 
@@ -89,7 +91,7 @@ public class CourseDAO {
     private boolean internalUpdate(Connection conn, Course course) throws SQLException {
         // Added class_id to the SQL query and parameter setting
         String sql = "UPDATE courses SET course_name = ?, subject = ?, start_date = ?, end_date = ?, " +
-                "days_of_week = ?, start_time = ?, end_time = ?, teacher_id = ?, room_id = ?, " +
+                "start_time = ?, end_time = ?, teacher_id = ?, room_id = ?, " + // Đã loại bỏ days_of_week
                 "class_id = ?, progress = ? WHERE course_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -97,20 +99,19 @@ public class CourseDAO {
             statement.setString(2, course.getSubject());
             statement.setDate(3, course.getStartDate() != null ? Date.valueOf(course.getStartDate()) : null);
             statement.setDate(4, course.getEndDate() != null ? Date.valueOf(course.getEndDate()) : null);
-            statement.setString(5, course.getDaysOfWeekAsString());
 
             // Use renamed getters from Course model
             Time startTimeSql = course.getCourseStartTime() != null ? Time.valueOf(course.getCourseStartTime()) : null;
             Time endTimeSql = course.getCourseEndTime() != null ? Time.valueOf(course.getCourseEndTime()) : null;
 
-            statement.setTime(6, startTimeSql);
-            statement.setTime(7, endTimeSql);
+            statement.setTime(5, startTimeSql);
+            statement.setTime(6, endTimeSql);
 
-            statement.setString(8, course.getTeacher() != null ? course.getTeacher().getId() : null);
-            statement.setString(9, course.getRoomId());
-            statement.setString(10, course.getClassId()); // Set class_id
-            statement.setFloat(11, course.getProgress());
-            statement.setString(12, course.getCourseId());
+            statement.setString(7, course.getTeacher() != null ? course.getTeacher().getId() : null);
+            statement.setString(8, course.getRoomId());
+            statement.setString(9, course.getClassId()); // Set class_id
+            statement.setFloat(10, course.getProgress());
+            statement.setString(11, course.getCourseId());
 
             int rowsUpdated = statement.executeUpdate();
 
@@ -144,8 +145,8 @@ public class CourseDAO {
 
     Course getById(Connection conn, String courseId) throws SQLException {
         // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
-                "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE course_id = ?";
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, "
+                + "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE course_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, courseId);
@@ -160,8 +161,8 @@ public class CourseDAO {
 
     List<Course> getAll(Connection conn) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
+        // Loại bỏ days_of_week khỏi SELECT query
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, " + // Đã loại bỏ days_of_week
                 "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses";
 
         try (Statement statement = conn.createStatement();
@@ -172,43 +173,103 @@ public class CourseDAO {
         }
         return courses;
     }
-
-    private boolean addStudentToCourse(Connection conn, String keyForEnrollment, String studentId) throws SQLException {
-        // This method assumes 'keyForEnrollment' is the value to be inserted into enrollment.class_id
-        // In internalInsert/Update, course.getCourseId() is passed as keyForEnrollment.
-        String sql = "INSERT INTO enrollment (student_id, class_id, enrollment_date, status) VALUES (?, ?, ?, ?)";
+    // Phương thức thực sự thực hiện thêm dữ liệu vào bảng enrollment
+    private boolean addStudentToCourse(Connection conn, String idForEnrollmentTableClassColumn, String studentId) throws SQLException {
+        System.out.println("[CourseDAO Private] addStudentToCourse được gọi. idForEnrollmentTableClassColumn: " + idForEnrollmentTableClassColumn + ", studentId: " + studentId);
+        // **QUAN TRỌNG: Thêm kiểm tra trùng lặp học viên trong lớp/khóa học**
+        String checkDuplicateSql = "SELECT COUNT(*) FROM enrollment WHERE student_id = ? AND course_id = ?";
+        try (PreparedStatement checkStmt = conn.prepareStatement(checkDuplicateSql)) {
+            checkStmt.setString(1, studentId);
+            checkStmt.setString(2, idForEnrollmentTableClassColumn); // Sử dụng ID dùng cho cột class_id
+            try (ResultSet rs = checkStmt.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    System.err.println("[CourseDAO Private] Lỗi: Sinh viên ID: " + studentId + " đã tồn tại trong khóa học/lớp ID: " + idForEnrollmentTableClassColumn);
+                    return false; // Sinh viên đã tồn tại
+                }
+            }
+        }
+        System.out.println("[CourseDAO Private] Kiểm tra trùng lặp hoàn tất (sinh viên chưa có trong khóa học/lớp này).");
+        String sql = "INSERT INTO enrollment (enrollment_id, student_id, course_id, enrollment_date, status) VALUES (?, ?, ?, ?, ?)";
+        System.out.println("[CourseDAO Private] SQL để INSERT: " + sql);
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, studentId);
-            statement.setString(2, keyForEnrollment); // keyForEnrollment is used as enrollment.class_id
-            statement.setDate(3, Date.valueOf(LocalDate.now()));
-            statement.setString(4, "Active");
-            return statement.executeUpdate() > 0;
+            statement.setString(1, UUID.randomUUID().toString());
+            statement.setString(2, studentId);
+            statement.setString(3, idForEnrollmentTableClassColumn); // Ghi idForEnrollmentTableClassColumn vào cột class_id
+            statement.setDate(4, Date.valueOf(LocalDate.now()));
+            statement.setString(5, "Active");
+            System.out.println("[CourseDAO Private] Đang thực thi INSERT...");
+            int rowsAffected = statement.executeUpdate();
+            System.out.println("[CourseDAO Private] Số dòng bị ảnh hưởng bởi INSERT: " + rowsAffected);
+            return rowsAffected > 0;
         }
     }
+    public boolean addStudentToCourse(String courseIdForEnrollment, String studentId) {
+        System.out.println("[CourseDAO Public] addStudentToCourse được gọi. courseIdForEnrollment: " + courseIdForEnrollment + ", studentId: " + studentId);
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            System.out.println("[CourseDAO Public] Đã lấy được kết nối.");
 
+            // Bước 1: Kiểm tra xem khóa học có tồn tại không
+            Course course = getById(conn, courseIdForEnrollment); // Sử dụng courseIdForEnrollment để tìm trong bảng 'courses'
+            if (course == null) {
+                System.err.println("[CourseDAO Public] Lỗi: Không tìm thấy Khóa học với ID " + courseIdForEnrollment + " trong bảng 'courses'.");
+                return false;
+            }
+            System.out.println("[CourseDAO Public] Khóa học " + courseIdForEnrollment + " đã được xác nhận tồn tại.");
+
+            // Bước 2: Kiểm tra dependency StudentDAO
+            checkStudentDAODependency();
+            System.out.println("[CourseDAO Public] StudentDAO dependency OK.");
+
+            // Bước 3: Kiểm tra sinh viên có tồn tại không
+            System.out.println("[CourseDAO Public] Đang kiểm tra tính hợp lệ của studentId: " + studentId);
+            Student student = studentDAO.getStudentById(conn, studentId);
+            if(student.getParentName() == null)
+            {
+                System.out.println("toang");
+            } else {System.out.println(student.getParentName());}
+
+            if (student == null) {
+                System.err.println("[CourseDAO Public] Lỗi: Không tìm thấy sinh viên với ID: " + studentId + " trong bảng 'students'.");
+                return false; // Sinh viên không tồn tại
+            }
+            System.out.println("[CourseDAO Public] Đã xác nhận sinh viên tồn tại: " + student.getName());
+
+            // Bước 4: Gọi phương thức private để thêm vào bảng enrollment
+            System.out.println("[CourseDAO Public] Đang gọi private addStudentToCourse với enrollment.course_id: " + courseIdForEnrollment);
+            return addStudentToCourse(conn, courseIdForEnrollment, studentId);
+        } catch (SQLException e) {
+            System.err.println("[CourseDAO Public] Gặp SQLException: " + e.getMessage());
+            e.printStackTrace(System.err); // Log chi tiết lỗi
+            return false;
+        } catch (IllegalStateException e) {
+            System.err.println("[CourseDAO Public] Gặp IllegalStateException (dependency): " + e.getMessage());
+            e.printStackTrace(System.err);
+            return false;
+        }
+    }
     private boolean removeStudentFromCourse(Connection conn, String keyForEnrollment, String studentId) throws SQLException {
         // This method assumes 'keyForEnrollment' is the value used in enrollment.class_id
-        String sql = "DELETE FROM enrollment WHERE class_id = ? AND student_id = ?";
+        String sql = "DELETE FROM enrollment WHERE course_id = ? AND student_id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, keyForEnrollment); // keyForEnrollment is used as enrollment.class_id
+            statement.setString(1, keyForEnrollment); // keyForEnrollment is used as enrollment.course_id
             statement.setString(2, studentId);
             return statement.executeUpdate() > 0;
         }
     }
 
     private void removeAllStudentsFromCourse(Connection conn, String keyForEnrollment) throws SQLException {
-        // This method assumes 'keyForEnrollment' is the value used in enrollment.class_id
-        String sql = "DELETE FROM enrollment WHERE class_id = ?";
+        // This method assumes 'keyForEnrollment' is the value used in enrollment.course_id
+        String sql = "DELETE FROM enrollment WHERE course_id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, keyForEnrollment); // keyForEnrollment is used as enrollment.class_id
+            statement.setString(1, keyForEnrollment); // keyForEnrollment is used as enrollment.course_id
             statement.executeUpdate();
         }
     }
 
     List<Course> getCoursesByTeacherId(Connection conn, String teacherId) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
+        // Loại bỏ days_of_week khỏi SELECT query
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, " + // Đã loại bỏ days_of_week
                 "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE teacher_id = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -221,12 +282,10 @@ public class CourseDAO {
         }
         return courses;
     }
-
     List<Course> getCoursesByStudentId(Connection conn, String studentId) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        // Added c.class_id to the SELECT query
-        // The JOIN c.course_id = e.class_id assumes enrollment.class_id stores courses.course_id
-        String sql = "SELECT c.course_id, c.course_name, c.subject, c.start_date, c.end_date, c.days_of_week, " +
+        // Loại bỏ c.days_of_week khỏi SELECT query
+        String sql = "SELECT c.course_id, c.course_name, c.subject, c.start_date, c.end_date, " + // Đã loại bỏ c.days_of_week
                 "c.start_time, c.end_time, c.teacher_id, c.room_id, c.class_id, c.progress FROM courses c " +
                 "JOIN enrollment e ON c.course_id = e.class_id " + // This join condition might need review based on true meaning of enrollment.class_id
                 "WHERE e.student_id = ?";
@@ -244,8 +303,8 @@ public class CourseDAO {
 
     List<Course> searchCourses(Connection conn, String searchTerm) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
+        // Loại bỏ days_of_week khỏi SELECT query
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, " + // Đã loại bỏ days_of_week
                 "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE course_name LIKE ? OR subject LIKE ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -260,11 +319,10 @@ public class CourseDAO {
         }
         return courses;
     }
-
     List<Course> getCoursesBySubject(Connection conn, String subject) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
+        // Loại bỏ days_of_week khỏi SELECT query
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, " + // Đã loại bỏ days_of_week
                 "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE subject = ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -280,8 +338,8 @@ public class CourseDAO {
 
     List<Course> getCoursesByDateRange(Connection conn, LocalDate startDate, LocalDate endDate) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
+        // Loại bỏ days_of_week khỏi SELECT query
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, " + // Đã loại bỏ days_of_week
                 "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE " +
                 "NOT (end_date < ? OR start_date > ?)";
 
@@ -300,8 +358,8 @@ public class CourseDAO {
     List<Course> getActiveCourses(Connection conn) throws SQLException {
         List<Course> courses = new ArrayList<>();
         LocalDate today = LocalDate.now();
-        // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
+        // Loại bỏ days_of_week khỏi SELECT query
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, " + // Đã loại bỏ days_of_week
                 "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE " +
                 "start_date <= ? AND end_date >= ?";
 
@@ -320,8 +378,8 @@ public class CourseDAO {
     List<Course> getUpcomingCourses(Connection conn) throws SQLException {
         List<Course> courses = new ArrayList<>();
         LocalDate today = LocalDate.now();
-        // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
+        // Loại bỏ days_of_week khỏi SELECT query
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, " + // Đã loại bỏ days_of_week
                 "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE start_date > ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -337,8 +395,8 @@ public class CourseDAO {
 
     List<Course> getCompletedCourses(Connection conn, LocalDate referenceDate) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        // Added class_id to the SELECT query
-        String sql = "SELECT course_id, course_name, subject, start_date, end_date, days_of_week, " +
+        // Loại bỏ days_of_week khỏi SELECT query
+        String sql = "SELECT course_id, course_name, subject, start_date, end_date, " + // Đã loại bỏ days_of_week
                 "start_time, end_time, teacher_id, room_id, class_id, progress FROM courses WHERE end_date < ?";
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -366,18 +424,55 @@ public class CourseDAO {
             return statement.executeUpdate() > 0;
         }
     }
-
-    List<Student> getStudentsByCourseId(Connection conn, String courseIdForEnrollmentKey) throws SQLException {
-        checkStudentDAODependency();
-        List<Student> students = new ArrayList<>();
-        // This query assumes enrollment.class_id stores the 'courseIdForEnrollmentKey' (which is courses.course_id).
-        String sql = "SELECT student_id FROM enrollment WHERE class_id = ?";
+    public List<String> getStudentIdsByCourseId(Connection conn, String courseId) throws SQLException {
+        List<String> studentIds = new ArrayList<>();
+        String sql = "SELECT student_id FROM enrollment WHERE course_id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, courseIdForEnrollmentKey);
+            statement.setString(1, courseId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    studentIds.add(resultSet.getString("student_id"));
+                }
+            }
+        }
+        return studentIds;
+    }
+
+    // Hàm này được gọi từ extractCourseFromResultSet với courseIdFromCoursesTable là courses.course_id
+    public List<Student> getStudentsByCourseId(Connection conn, String courseIdFromCoursesTable) throws SQLException {
+        checkStudentDAODependency(); // Quan trọng: Kiểm tra dependency trước
+
+        List<Student> students = new ArrayList<>();
+        String actualClassIdForQuery = null;
+
+        // Bước 1: Lấy class_id từ bảng 'courses' dựa trên courseIdFromCoursesTable (là courses.course_id)
+        String fetchClassIdSql = "SELECT class_id FROM courses WHERE course_id = ?";
+        try (PreparedStatement fetchStmt = conn.prepareStatement(fetchClassIdSql)) {
+            fetchStmt.setString(1, courseIdFromCoursesTable);
+            try (ResultSet rs = fetchStmt.executeQuery()) {
+                if (rs.next()) {
+                    actualClassIdForQuery = rs.getString("class_id");
+                } else {
+                    // LOGGER.log(Level.WARNING, "Course not found: " + courseIdFromCoursesTable);
+                    return students; // Course không tồn tại, trả về rỗng
+                }
+            }
+        }
+
+        if (actualClassIdForQuery == null || actualClassIdForQuery.trim().isEmpty()) {
+            // LOGGER.log(Level.WARNING, "Course " + courseIdFromCoursesTable + " has no valid class_id.");
+            return students; // class_id không hợp lệ, trả về rỗng
+        }
+
+        // Bước 2: Sử dụng actualClassIdForQuery (là courses.class_id) để truy vấn bảng 'enrollment'
+        String sql = "SELECT e.student_id FROM enrollment e WHERE e.class_id = ?";
+        try (PreparedStatement statement = conn.prepareStatement(sql)) {
+            statement.setString(1, actualClassIdForQuery); // Dùng class_id đã lấy được
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     String studentId = resultSet.getString("student_id");
-                    Student student = this.studentDAO.getStudentById(conn, studentId);
+                    // Gọi StudentDAO để lấy thông tin chi tiết của sinh viên
+                    Student student = this.studentDAO.getStudentById(conn, studentId); // Phải có conn
                     if (student != null) {
                         students.add(student);
                     }
@@ -386,6 +481,7 @@ public class CourseDAO {
         }
         return students;
     }
+
 
     private Course extractCourseFromResultSet(Connection conn, ResultSet resultSet) throws SQLException {
         String courseId = resultSet.getString("course_id");
@@ -401,9 +497,6 @@ public class CourseDAO {
         if (endDateSql != null) endDate = endDateSql.toLocalDate();
 
         Course course = new Course(courseId, courseName, subject, startDate, endDate);
-
-        course.setDaysOfWeekFromString(resultSet.getString("days_of_week"));
-
         Time startTimeSql = resultSet.getTime("start_time");
         course.setCourseSessionStartTime(startTimeSql != null ? startTimeSql.toLocalTime() : null); // Use renamed setter
 
@@ -492,23 +585,22 @@ public class CourseDAO {
         }
     }
 
-    public boolean addStudentToCourse(String courseId, String studentId) {
-        // This public method uses 'courseId' (courses.course_id) as the key for enrollment.
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            // Auto-commit is usually default, explicit transaction not strictly needed for single op.
-            return addStudentToCourse(conn, courseId, studentId);
-        } catch (SQLException e) {
-            System.err.println("Error adding student " + studentId + " to course " + courseId + ": " + e.getMessage());
-            return false;
-        }
-    }
-
     public boolean removeStudentFromCourse(String courseId, String studentId) {
-        // This public method uses 'courseId' (courses.course_id) as the key for enrollment.
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            return removeStudentFromCourse(conn, courseId, studentId);
+        String sql = "DELETE FROM enrollment WHERE course_id = ? AND student_id = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement statement = conn.prepareStatement(sql)) {
+
+            statement.setString(1, courseId);  // Truyền course_id
+            statement.setString(2, studentId); // Truyền student_id
+
+            int rowsAffected = statement.executeUpdate();
+            System.out.println("DEBUG: Rows affected by delete: " + rowsAffected);
+            return rowsAffected > 0;
+
         } catch (SQLException e) {
-            System.err.println("Error removing student " + studentId + " from course " + courseId + ": " + e.getMessage());
+            System.err.println("ERROR: Không thể xóa học viên " + studentId + " khỏi khóa học " + courseId);
+            e.printStackTrace();
             return false;
         }
     }
@@ -628,38 +720,34 @@ public class CourseDAO {
     }
 
     public boolean hasTimeConflict(Course course1, Course course2) {
-        if (course1 == null || course2 == null) return false;
-        if (!course1.overlapsDateRange(course2)) return false;
+        if (course1 == null || course2 == null) {
+            return false;
+        }
 
-        // Use renamed getters for start/end times and daysOfWeek list
+        // 1. Check if the date ranges of the two courses overlap.
+        if (!course1.overlapsDateRange(course2)) {
+            return false;
+        }
+
+        // 2. Get the start and end times of each course.
         LocalTime start1 = course1.getCourseStartTime();
         LocalTime end1 = course1.getCourseEndTime();
         LocalTime start2 = course2.getCourseStartTime();
         LocalTime end2 = course2.getCourseEndTime();
 
-        List<String> days1 = course1.getDaysOfWeekList(); // Use renamed getter
-        List<String> days2 = course2.getDaysOfWeekList(); // Use renamed getter
-
-        boolean hasDayIntersection = false;
-        if (days1 != null && !days1.isEmpty() && days2 != null && !days2.isEmpty()) {
-            for (String day1Str : days1) {
-                if (day1Str != null && !day1Str.trim().isEmpty()) {
-                    for (String day2Str : days2) {
-                        if (day1Str.trim().equalsIgnoreCase(day2Str != null ? day2Str.trim() : "")) {
-                            hasDayIntersection = true;
-                            break;
-                        }
-                    }
-                }
-                if (hasDayIntersection) break;
-            }
-        }
-        if (!hasDayIntersection) return false;
-
+        // 3. Check for time conflict within the day if times are defined for both.
         if (start1 != null && end1 != null && start2 != null && end2 != null) {
-            return !(end1.isBefore(start2) || start1.isAfter(end2) || end1.equals(start2) || start1.equals(end2));
+            // Times overlap if (start1 < end2) AND (start2 < end1).
+            // This means one course starts before the other ends, and vice-versa.
+            boolean timesOverlap = start1.isBefore(end2) && start2.isBefore(end1);
+            return timesOverlap;
         }
-        return false; // No specific time slot conflict if times are not defined
+
+        // 4. If time information is incomplete for one or both courses,
+        // assume no specific time conflict for this method's purpose.
+        // A broader "potential conflict" due to date overlap might be handled elsewhere.
+        return false;
     }
+
 }
 
