@@ -27,6 +27,8 @@ import src.controller.MainController;
 import src.controller.NavigationController;
 import src.dao.RegisterDAO;
 import utils.DatabaseConnection;
+
+
 public class RegisterUI {
     private Stage primaryStage;
     private StackPane root;

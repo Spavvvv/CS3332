@@ -35,6 +35,8 @@ public class ClassSession {
     private transient Course course; // Reference to the academic Course object
     private transient List<Student> students; // List of students attending the session
 
+    private String sessionNotes; // Ghi chú chung cho buổi học
+
     // Default constructor
     public ClassSession() {
         this.students = new ArrayList<>();
@@ -101,6 +103,14 @@ public class ClassSession {
     }
 
     // --- Getters and Setters ---
+
+    public String getSessionNotes() {
+        return sessionNotes;
+    }
+
+    public void setSessionNotes(String sessionNotes) {
+        this.sessionNotes = sessionNotes;
+    }
 
     public String getId() {
         return id;
@@ -340,19 +350,6 @@ public class ClassSession {
         return currentSessionDate.format(formatter);
     }
 
-    /**
-     * Provides a summary string. Note: `courseName` here refers to the cohort name.
-     * To get the academic course name, use `getCourse().getCourseName()`.
-     * @return Summary string.
-     */
-    public String getSummary() {
-        // If you want academic course name: (course != null ? course.getCourseName() : "N/A Course")
-        return (this.courseName != null ? this.courseName : "N/A Cohort") // Clarified this is cohort name
-                + " - " + (teacherName != null ? teacherName : "N/A Teacher")
-                + " - " + (roomName != null ? roomName : "N/A Room")
-                + " - " + getTimeSlot();
-    }
-
     public String getDetailedInfo() {
         StringBuilder sb = new StringBuilder();
         // Displaying academic course name if available from the Course object
@@ -363,6 +360,7 @@ public class ClassSession {
         sb.append("Date: ").append(getFormattedDate()).append("\n");
         sb.append("Time: ").append(getTimeSlot()).append("\n");
         sb.append("Session Number: ").append(sessionNumber > 0 ? sessionNumber : "N/A").append("\n");
+        sb.append("Session Notes: ").append(sessionNotes != null ? sessionNotes : "N/A").append("\n");
         if (students != null) {
             sb.append("Student Count: ").append(students.size()).append("\n");
         }
@@ -419,6 +417,7 @@ public class ClassSession {
         copy.setCourseName(this.courseName); // Copies the cohort name
         copy.setTeacher(this.teacherName);
         copy.setRoom(this.roomName);
+        copy.setSessionNotes(this.sessionNotes);
         // Use the public setDate to ensure consistent date part updates for startTime/endTime
         if (this.sessionDate != null) {
             copy.setDate(this.sessionDate);

@@ -73,6 +73,10 @@ public class AttendanceScreenView extends BaseScreenView {
     private String currentDayFilter = null;
     private String currentSearchKeyword = "";
 
+
+    private DatePicker datePicker;
+    private LocalDate currentDateFilter = LocalDate.now(); // Mặc định là ngày hiện tại
+
     // Controller
     private AttendanceController attendanceController;
 
@@ -616,7 +620,7 @@ public class AttendanceScreenView extends BaseScreenView {
                         "-fx-padding: 8 15;"
         );
         // Pass String sessionId to handler
-        attendanceButton.setOnAction(e -> handleClassSelection(sessionId));
+        attendanceButton.setOnAction(e -> handleClassSelection(session));
 
 
         // Add components to the card
@@ -715,7 +719,7 @@ public class AttendanceScreenView extends BaseScreenView {
      * Uses controller to navigate to attendance entry screen
      * Accepts String sessionId now.
      */
-    private void handleClassSelection(String sessionId) {
+    private void handleClassSelection(ClassSession session) {
         if (navigationController == null) {
             showError("Bộ điều khiển điều hướng chưa được khởi tạo.");
             return;
@@ -729,9 +733,10 @@ public class AttendanceScreenView extends BaseScreenView {
             // will load data based on some state or a different mechanism.
             // If the target view needs the session ID, modify navigationController.navigateTo
             // or pass the ClassSession object itself.
-            showSuccess("Navigating to Attendance Entry for Session ID: " + sessionId);
+            showSuccess("Navigating to Attendance Entry for Session ID: " + session.getId());
             // Example if navigation accepts parameters:
             // navigationController.navigateTo("absence-call-view", Map.of("sessionId", sessionId));
+            mainController.setSessionDetail(session);
             navigationController.navigateTo("absence-call-view"); // Placeholder navigation
         } catch (Exception e) {
             showError("Lỗi khi chọn buổi học: " + e.getMessage());

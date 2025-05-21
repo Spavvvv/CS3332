@@ -55,6 +55,7 @@ public class HolidaysModel {
 
     public void setCurrentYear(int year) {
         currentYear.set(year);
+        System.out.println("Year changed to " + year);
     }
 
     public Holiday getHolidayForDate(LocalDate date) {
@@ -88,7 +89,6 @@ public class HolidaysModel {
         history.setUser(user);
         history.setAction(action);
         history.setTimestamp(LocalDateTime.now());
-        holidayDAO.saveHistory(history);
     }
 
     // Calendar utility method

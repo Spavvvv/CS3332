@@ -30,25 +30,20 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
     private ComboBox<Integer> fromYearComboBox;
     private ComboBox<Month> toMonthComboBox;
     private ComboBox<Integer> toYearComboBox;
-    private ToggleGroup periodToggleGroup;
+    private Button dayButton;
+    private Button monthButton;
+    private Button quarterButton;
+    private Button yearButton;
     private ComboBox<String> statusComboBox;
     private TableView<TeacherMonthlyStatistics> statisticsTable;
     private HBox filterBar;
     private HBox actionButtonsBar;
     private Button searchButton;
     private Button exportExcelButton;
-    private Button exportPdfButton;
-    private Button printButton;
     private Label sessionTotal;
     private Label hoursTotal;
     private Label totalSessionTotal;
     private Label totalHoursTotal;
-
-    // Toggle buttons
-    private ToggleButton dayToggle;
-    private ToggleButton monthToggle;
-    private ToggleButton quarterToggle;
-    private ToggleButton yearToggle;
 
     // Controller reference
     private final MonthlyTeachingStatisticsController controller;
@@ -72,7 +67,7 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
     private final int END_YEAR = Year.now().getValue() + 5; // Show current year + 5 years
 
     public MonthlyTeachingStatisticsView() {
-        super("Thống kê giờ giảng", "monthly-teaching"); // Ensure base view handles screen ID
+        super("Thống kê giảng dạy", "monthly-teaching"); // Ensure base view handles screen ID
         this.controller = new MonthlyTeachingStatisticsController();
     }
 
@@ -95,20 +90,7 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         // Create the table
         createStatisticsTable();
 
-        // Action buttons bar (placed after filter bar in the VBox)
-        actionButtonsBar = new HBox(10);
-        actionButtonsBar.setAlignment(Pos.CENTER_RIGHT);
-        exportExcelButton = createActionButton("Excel"); // Simplified action button creation
-        exportPdfButton = createActionButton("PDF");
-        printButton = createActionButton("Print");
-        actionButtonsBar.getChildren().addAll(exportExcelButton, exportPdfButton, printButton);
-
-        // Add filter and action bars to a container
-        VBox topContainer = new VBox(10);
-        topContainer.getChildren().addAll(filterBar, actionButtonsBar);
-        root.getChildren().add(topContainer);
-
-        // Add the table container after the filter/action bars
+        // Add the table container after the filter bar
         VBox tableContainer = new VBox();
         tableContainer.getChildren().add(statisticsTable);
 
@@ -122,34 +104,101 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
     }
 
     private void createHeader() {
-        Label titleLabel = new Label("Thống kê giờ giảng");
+        HBox headerContainer = new HBox();
+        headerContainer.setAlignment(Pos.CENTER);
+        headerContainer.setPadding(new Insets(0, 0, 20, 0));
+
+        VBox headerContent = new VBox(10);
+        headerContent.setAlignment(Pos.CENTER);
+
+        Label titleLabel = new Label("THỐNG KÊ GIẢNG DẠY");
         titleLabel.setFont(Font.font("System", FontWeight.BOLD, 24));
-        titleLabel.setTextFill(Color.web("#0099FF"));
+        titleLabel.setTextFill(Color.BLACK);
 
-        HBox titleBox = new HBox(titleLabel);
-        titleBox.setPadding(new Insets(0, 0, 20, 0));
+        Label subtitleLabel = new Label("BÁO CÁO THEO THÁNG");
+        subtitleLabel.setFont(Font.font("System", FontWeight.NORMAL, 16));
+        subtitleLabel.setTextFill(Color.BLACK);
 
-        root.getChildren().add(titleBox);
+        headerContent.getChildren().addAll(titleLabel, subtitleLabel);
+        headerContainer.getChildren().add(headerContent);
+
+        if (!root.getChildren().isEmpty()) {
+            root.getChildren().add(0, headerContainer);
+        } else {
+            root.getChildren().add(headerContainer);
+        }
+    }
+
+    private Button createPeriodButton(String text, String periodType) {
+        Button button = new Button(text);
+        button.setPrefHeight(30);
+        button.setPrefWidth(70);
+
+        // Apply styling based on period type
+        if (periodType.equals("month")) {
+            button.setStyle("-fx-background-color: #1976D2; -fx-text-fill: white;");
+        } else {
+            button.setStyle("-fx-background-color: #E0E0E0; -fx-text-fill: black;");
+        }
+
+        return button;
+    }
+
+    private void handlePeriodButtonClick(String periodType) {
+        // Reset all buttons to default style
+        dayButton.setStyle("-fx-background-color: #E0E0E0; -fx-text-fill: black;");
+        monthButton.setStyle("-fx-background-color: #E0E0E0; -fx-text-fill: black;");
+        quarterButton.setStyle("-fx-background-color: #E0E0E0; -fx-text-fill: black;");
+        yearButton.setStyle("-fx-background-color: #E0E0E0; -fx-text-fill: black;");
+
+        // Highlight the selected button
+        switch (periodType) {
+            case "day":
+                dayButton.setStyle("-fx-background-color: #1976D2; -fx-text-fill: white;");
+                navigationController.navigateTo("teaching-statistics");
+                break;
+            case "month":
+                monthButton.setStyle("-fx-background-color: #1976D2; -fx-text-fill: white;");
+                break;
+            case "quarter":
+                quarterButton.setStyle("-fx-background-color: #1976D2; -fx-text-fill: white;");
+                navigationController.navigateTo("quarterly-teaching");
+                break;
+            case "year":
+                yearButton.setStyle("-fx-background-color: #1976D2; -fx-text-fill: white;");
+                navigationController.navigateTo("yearly-teaching");
+                break;
+        }
     }
 
     private void createFilterBar() {
-        // Period selection toggle group
-        periodToggleGroup = new ToggleGroup();
+        // Main filter container
+        VBox filterContainer = new VBox(10);
 
-        HBox periodTypeBox = new HBox(10);
+        // Top filter row - contains all controls
+        HBox topFilterRow = new HBox(20);
+        topFilterRow.setAlignment(Pos.CENTER_LEFT);
+
+        // Period type selection
+        HBox periodTypeBox = new HBox(5);
         periodTypeBox.setAlignment(Pos.CENTER_LEFT);
 
-        Label typeLabel = new Label("Loại:");
-        typeLabel.setTextFill(Color.BLACK);
-        typeLabel.setPrefWidth(50);
+        Label periodLabel = new Label("Chu kỳ:");
+        periodLabel.setTextFill(Color.BLACK);
 
-        // Create toggle buttons - initial selection handled in onActivate
-        dayToggle = createToggleButton("Ngày", false);
-        monthToggle = createToggleButton("Tháng", false);
-        quarterToggle = createToggleButton("Quý", false);
-        yearToggle = createToggleButton("Năm", false);
+        // Create standard Buttons
+        dayButton = createPeriodButton("Ngày", "day");
+        monthButton = createPeriodButton("Tháng", "month");
+        quarterButton = createPeriodButton("Quý", "quarter");
+        yearButton = createPeriodButton("Năm", "year");
 
-        periodTypeBox.getChildren().addAll(typeLabel, dayToggle, monthToggle, quarterToggle, yearToggle);
+        // Add action handlers to buttons
+        dayButton.setOnAction(e -> handlePeriodButtonClick("day"));
+        monthButton.setOnAction(e -> handlePeriodButtonClick("month"));
+        quarterButton.setOnAction(e -> handlePeriodButtonClick("quarter"));
+        yearButton.setOnAction(e -> handlePeriodButtonClick("year"));
+
+        periodTypeBox.getChildren().addAll(periodLabel, dayButton, monthButton, quarterButton, yearButton);
 
         // Month/Year selection for date range
         HBox dateRangeBox = new HBox(10);
@@ -161,7 +210,7 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         // From month/year selector
         HBox fromDateBox = new HBox(5);
         fromMonthComboBox = new ComboBox<>();
-        fromMonthComboBox.setPrefWidth(65);
+        fromMonthComboBox.setPrefWidth(80);
         fromMonthComboBox.setItems(FXCollections.observableArrayList(Month.values())); // All months
         fromMonthComboBox.setConverter(monthStringConverter);
 
@@ -178,7 +227,7 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         // To month/year selector
         HBox toDateBox = new HBox(5);
         toMonthComboBox = new ComboBox<>();
-        toMonthComboBox.setPrefWidth(65);
+        toMonthComboBox.setPrefWidth(80);
         toMonthComboBox.setItems(FXCollections.observableArrayList(Month.values())); // All months
         toMonthComboBox.setConverter(monthStringConverter);
 
@@ -206,17 +255,37 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
 
         statusBox.getChildren().addAll(statusLabel, statusComboBox);
 
-        // Search button
+        // Search button and action buttons
+        HBox actionButtonsBox = new HBox(10);
+        actionButtonsBox.setAlignment(Pos.CENTER_RIGHT);
+
         searchButton = new Button("Tìm kiếm");
         searchButton.setPrefSize(100, 30);
         searchButton.setStyle("-fx-background-color: #1976D2; -fx-text-fill: white;");
 
-        // Creating top horizontal bar for filters
-        filterBar = new HBox(20);
+        exportExcelButton = new Button("Excel");
+        exportExcelButton.setPrefSize(80, 30);
+        exportExcelButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
+
+        actionButtonsBox.getChildren().addAll(searchButton, exportExcelButton);
+
+        // Add all components to the top filter row
+        topFilterRow.getChildren().addAll(periodTypeBox, dateRangeBox, statusBox, actionButtonsBox);
+
+        // Set up the filter bar
+        filterBar = new HBox();
+        filterBar.getChildren().add(filterContainer);
         filterBar.setPadding(new Insets(10));
-        filterBar.setAlignment(Pos.CENTER_LEFT);
-        filterBar.getChildren().addAll(periodTypeBox, dateRangeBox, statusBox, searchButton);
-        filterBar.setStyle("-fx-background-color: #F5F5F5; -fx-border-color: #E0E0E0; -fx-border-width: 1px;");
+        filterBar.setBackground(new Background(new BackgroundFill(Color.web("#f5f5f5"), new CornerRadii(5), Insets.EMPTY)));
+        filterBar.setPrefWidth(Double.MAX_VALUE);
+
+        // Add top filter row to the filter container
+        filterContainer.getChildren().add(topFilterRow);
+
+        root.getChildren().add(filterBar);
+
+        // Update actionButtonsBar reference for use in other methods
+        actionButtonsBar = actionButtonsBox;
     }
 
     private void createStatisticsTable() {
@@ -413,36 +482,6 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         }
     }
 
-    private ToggleButton createToggleButton(String text, boolean selected) {
-        ToggleButton toggleButton = new ToggleButton(text);
-        toggleButton.setToggleGroup(periodToggleGroup);
-        toggleButton.setSelected(selected);
-        toggleButton.setPrefHeight(30);
-        toggleButton.setPrefWidth(80);
-        // Basic styling for toggle buttons
-        toggleButton.setStyle("-fx-base: #E0E0E0;"); // Default color
-        toggleButton.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
-            if (isSelected) {
-                toggleButton.setStyle("-fx-base: #1976D2; -fx-text-fill: white;"); // Selected color
-            } else {
-                toggleButton.setStyle("-fx-base: #E0E0E0; -fx-text-fill: black;"); // Unselected color
-            }
-        });
-        return toggleButton;
-    }
-
-    private Button createActionButton(String text) { // Simplified, icon handling would be added here
-        Button button = new Button(text);
-        button.setPrefSize(60, 30); // Adjust size as needed
-        // Basic styling
-        button.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;"); // Example green
-        // Change style on hover for feedback
-        button.setOnMouseEntered(e -> button.setStyle("-fx-background-color: #66BB6A; -fx-text-fill: white;"));
-        button.setOnMouseExited(e -> button.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;"));
-        return button;
-    }
-
-
     @Override
     public void refreshView() {
         // This might be called when the view becomes active again
@@ -456,8 +495,8 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         // Load initial data (current month) and update table
         controller.loadInitialData();
         updateTableWithModelData();
-        // Ensure "Tháng" toggle is selected when the monthly view is refreshed
-        monthToggle.setSelected(true);
+        // Update button styles
+        handlePeriodButtonClick("month");
     }
 
     // Event handlers
@@ -490,16 +529,6 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         // Implement actual export logic here
     }
 
-    private void handleExportPdf() {
-        showSuccess("Đang xuất file PDF...");
-        // Implement actual export logic here
-    }
-
-    private void handlePrint() {
-        showSuccess("Đang chuẩn bị in...");
-        // Implement actual print logic here
-    }
-
     // Helper method to show a success notification (replace with actual UI feedback)
     public void showSuccess(String message) {
         System.out.println("INFO: " + message); // Placeholder for actual UI notification
@@ -516,68 +545,26 @@ public class MonthlyTeachingStatisticsView extends BaseScreenView {
         alert.showAndWait();
     }
 
-
-    private void handlePeriodChange(ToggleButton selected) {
-        if (selected != null) {
-            String viewType = selected.getText();
-            navigationController.saveToggleState("view_type", viewType);
-
-            // Navigate to the corresponding view based on the selected toggle
-            if (viewType.equals("Ngày")) {
-                navigationController.navigateTo("teaching-statistics"); // Assuming this is the Daily view ID
-            } else if (viewType.equals("Quý")) {
-                navigationController.navigateTo("quarterly-teaching"); // Assuming this is the Quarterly view ID
-            } else if (viewType.equals("Năm")) {
-                navigationController.navigateTo("yearly-teaching"); // Assuming this is the Yearly view ID
-            }
-            // If "Tháng" is selected, stay on this view
-        }
-    }
-
-
     @Override
     public void onActivate() {
         super.onActivate();
 
-        // Set up event handlers - only do this once when the view is activated
+        // Set up event handlers
         searchButton.setOnAction(e -> handleSearch());
         exportExcelButton.setOnAction(e -> handleExportExcel());
-        exportPdfButton.setOnAction(e -> handleExportPdf());
-        printButton.setOnAction(e -> handlePrint());
 
-        // Check saved view type or default to "Tháng"
-        String savedViewType = navigationController.getSavedToggleState("view_type");
-
-        if (savedViewType != null && !savedViewType.equals("Tháng")) {
-            // If a different view type was saved, navigate to that view
-            handlePeriodChange(periodToggleGroup.getToggles().stream()
-                    .filter(toggle -> ((ToggleButton)toggle).getText().equals(savedViewType))
-                    .map(toggle -> (ToggleButton)toggle)
-                    .findFirst().orElse(monthToggle)); // Default to month toggle if not found
-            return; // Exit onActivate as we're navigating away
-        }
-
-        // If saved type is "Tháng" or no type saved, ensure "Tháng" is selected and load data
-        monthToggle.setSelected(true);
-        navigationController.saveToggleState("view_type", "Tháng"); // Ensure "Tháng" is the saved state
-
-        // Set initial date selectors to the current month and year
+        // Set initial values for month/year selectors
         YearMonth currentYearMonth = YearMonth.now();
         fromMonthComboBox.setValue(currentYearMonth.getMonth());
         fromYearComboBox.setValue(currentYearMonth.getYear());
         toMonthComboBox.setValue(currentYearMonth.getMonth());
         toYearComboBox.setValue(currentYearMonth.getYear());
 
+        // Ensure the monthly button is highlighted
+        handlePeriodButtonClick("month");
+
         // Load data for the current month and update the table
         controller.loadInitialData();
         updateTableWithModelData();
-
-
-        // Set up listeners for period toggles
-        periodToggleGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
-            if (newToggle != null && newToggle instanceof ToggleButton) {
-                handlePeriodChange((ToggleButton) newToggle);
-            }
-        });
     }
 }

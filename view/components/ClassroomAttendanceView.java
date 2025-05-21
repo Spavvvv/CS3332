@@ -1,9 +1,6 @@
-
 package view.components;
 
-// JavaFX Imports
 import javafx.beans.property.IntegerProperty;
-import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -19,39 +16,52 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.StringConverter;
-
-// Application-specific imports
 import view.BaseScreenView;
 import src.model.attendance.StudentAttendanceData;
-// import view.components.StarRatingControl; // In same package
-
-// Domain model imports
-import src.model.person.Student;
-import src.model.person.Parent;
+import src.controller.ClassroomAttendanceController;
 
 import java.time.LocalDate;
 import java.util.function.Consumer;
+import java.util.function.Function; // Sửa lỗi import Function
 
 public class ClassroomAttendanceView extends BaseScreenView {
-
     private TableView<StudentAttendanceData> tableView;
-    private ObservableList<StudentAttendanceData> attendanceList = FXCollections.observableArrayList();
-    private FilteredList<StudentAttendanceData> filteredAttendanceList;
+    // filteredAttendanceList sẽ được cung cấp bởi Controller
+    // private FilteredList<StudentAttendanceData> filteredAttendanceList;
+    private final ClassroomAttendanceController controller;
 
-    // Filters
+    // UI Controls
     private ComboBox<String> punctualityFilterCombo;
     private ComboBox<String> diligenceFilterCombo;
+    private CheckBox homeworkHeaderCheckbox;
+    private DatePicker datePicker;
+    private TextArea notesTextArea;
+    private ComboBox<Integer> sessionSelector;
 
-    // Style for black text labels/headers
     private final String blackTextStyle = "-fx-text-fill: black;";
     private final String blackBoldTextStyle = "-fx-text-fill: black; -fx-font-weight: bold;";
 
-    private CheckBox homeworkHeaderCheckbox; // For "Select All" functionality
-
-
     public ClassroomAttendanceView() {
         super("Điểm danh và đánh giá buổi học", "classroom-attendance-view");
+        this.controller = new ClassroomAttendanceController(this);
+        // initializeView() được gọi bởi BaseScreenView
     }
+
+    /**
+     * Phương thức này sẽ được gọi bởi một lớp quản lý (ví dụ: NavigationManager)
+     * để cung cấp context (classId) cho màn hình này và kích hoạt tải dữ liệu.
+     * @param classId ID của lớp học để hiển thị.
+     */
+    public void activateWithContext(String classId) {
+        System.out.println("View: activateWithContext called with ClassID: " + classId);
+        if (controller != null) {
+            // Yêu cầu Controller tải dữ liệu với classId mới
+            controller.loadContextForClass(classId);
+        } else {
+            showError("Lỗi nghiêm trọng: Controller chưa được khởi tạo.");
+        }
+    }
+
 
     @Override
     public void initializeView() {
@@ -59,85 +69,134 @@ public class ClassroomAttendanceView extends BaseScreenView {
         this.root.setPadding(new Insets(20));
         this.root.setStyle("-fx-background-color: #f0f2f5;");
 
-        loadDummyData();
-        filteredAttendanceList = new FilteredList<>(attendanceList, p -> true);
+        // TableView sẽ được tạo, nhưng danh sách sẽ được đặt bởi Controller
+        Node tableNode = createStudentTable();
 
         this.root.getChildren().addAll(
                 createTopBar(),
                 createNotesSection(),
-                createStudentTable()
+                tableNode,
+                createBottomBar()
         );
 
+        activateWithContext(mainController.getCurrentClassId());
+    }
+
+    /**
+     * Được gọi bởi Controller để cung cấp danh sách dữ liệu (đã được lọc) cho TableView.
+     */
+    public void setFilteredAttendanceList(FilteredList<StudentAttendanceData> filteredList) {
+        // this.filteredAttendanceList = filteredList; // Không cần lưu trữ tham chiếu này nữa
         if (tableView != null) {
-            tableView.setItems(filteredAttendanceList);
+            tableView.setItems(filteredList);
+            tableView.refresh();
+        } else {
+            System.err.println("View: tableView is null when trying to setFilteredAttendanceList.");
         }
     }
 
-    private void loadDummyData() {
-        Parent parent1 = new Parent("P001", "Phụ huynh Trần", "Nữ", "0900000001", "1980-01-01", "parent.tran@example.com", "Mẹ");
-        Parent parent2 = new Parent("P002", "Phụ huynh Ngô", "Nam", "0900000002", "1975-05-10", "parent.ngo@example.com", "Cha");
+    /**
+     * Được gọi bởi Controller để cập nhật ComboBox chọn buổi học.
+     */
+    public void setAvailableSessions(ObservableList<Integer> availableSessions, Integer currentSessionToSelect) {
+        System.out.println("View: setAvailableSessions called. Sessions: " + availableSessions + ", CurrentToSelect: " + currentSessionToSelect);
+        if (sessionSelector == null) {
+            System.err.println("View: CRITICAL - sessionSelector is NULL in setAvailableSessions.");
+            return;
+        }
 
-        Student student1 = new Student("HV000069", "Trần Châu Hiếu", "Nam", "0912345678", "2005-03-15", "hieu.tc@example.com", parent1,"1");
-        Student student2 = new Student("HV000075", "Ngô Việt Hoàng", "Nam", "0987654321", "2006-07-20", "hoang.nv@example.com", parent2, "1");
-        Student student3 = new Student("HV000268", "Lê Ngọc Hoàng", "Nữ", "0911223344", "2005-11-01", "hoang.ln@example.com", parent1, "1");
-
-        attendanceList.addAll(
-                new StudentAttendanceData(1, student1, false, 2, 0.0, 3, "", 9),
-                new StudentAttendanceData(2, student2, true, 5, 8.5, 5, "Tích cực", 10),
-                new StudentAttendanceData(3, student3, false, 1, 0.0, 2, "", 6)
-        );
+        if (availableSessions == null || availableSessions.isEmpty()) {
+            sessionSelector.setItems(FXCollections.observableArrayList());
+            sessionSelector.setPromptText("Không có buổi");
+            sessionSelector.setValue(null);
+        } else {
+            sessionSelector.setItems(availableSessions);
+            if (currentSessionToSelect != null && availableSessions.contains(currentSessionToSelect)) {
+                sessionSelector.setValue(currentSessionToSelect);
+            } else if (!availableSessions.isEmpty()) {
+                sessionSelector.setValue(availableSessions.get(0));
+            } else {
+                sessionSelector.setValue(null);
+            }
+        }
     }
+
 
     private Node createTopBar() {
         HBox topBar = new HBox(10);
         topBar.setAlignment(Pos.CENTER_LEFT);
 
-        Label sessionLabel = new Label("Buổi 33 (11/05)");
+        sessionSelector = new ComboBox<>();
+        sessionSelector.setPromptText("Chọn buổi");
+        sessionSelector.setOnAction(e -> {
+            if (controller != null) controller.handleSessionChange();
+        });
+
+        Label sessionLabel = new Label("Buổi:");
         sessionLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
         sessionLabel.setStyle(blackTextStyle);
 
-        ComboBox<String> sessionSelector = new ComboBox<>(FXCollections.observableArrayList("13/20", "14/20", "15/20"));
-        sessionSelector.setValue("13/20");
-
         Label dateLabelPrefix = new Label("Ngày");
         dateLabelPrefix.setStyle(blackTextStyle);
-        DatePicker datePicker = new DatePicker(LocalDate.of(2025, 5, 11));
+
+        datePicker = new DatePicker(LocalDate.now());
         datePicker.setPrefWidth(120);
+        datePicker.setOnAction(e -> {
+            if (controller != null) controller.updateSessionDate();
+        });
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        Button backButton = new Button("← Quay lại");
+        backButton.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold;");
+        backButton.setOnAction(e -> {
+            navigationController.goBack();
+        });
+
         Button saveInfoButton = new Button("💾 Lưu thông tin");
         saveInfoButton.setStyle("-fx-background-color: #177bff; -fx-text-fill: white; -fx-font-weight: bold;");
-        saveInfoButton.setOnAction(e -> saveInformation());
-
-        Button sendNotificationButton = new Button("➤ Gửi thông báo");
-        sendNotificationButton.setStyle("-fx-background-color: #6f42c1; -fx-text-fill: white; -fx-font-weight: bold;");
-        sendNotificationButton.setOnAction(e -> sendNotification());
+        saveInfoButton.setOnAction(e -> {
+            if (controller != null) controller.saveInformation();
+        });
 
         Button exportExcelButton = new Button("📋 Xuất excel");
         exportExcelButton.setStyle("-fx-background-color: #5832a0; -fx-text-fill: white; -fx-font-weight: bold;");
-        exportExcelButton.setOnAction(e -> exportToExcel());
+        exportExcelButton.setOnAction(e -> {
+            if (controller != null) controller.exportToExcel();
+        });
 
-        topBar.getChildren().addAll(sessionLabel, sessionSelector, dateLabelPrefix, datePicker, spacer,
-                saveInfoButton, sendNotificationButton, exportExcelButton);
+        topBar.getChildren().addAll(backButton, sessionLabel, sessionSelector, dateLabelPrefix, datePicker, spacer,
+                saveInfoButton, exportExcelButton);
         return topBar;
+    }
+
+    private Node createBottomBar() {
+        HBox bottomBar = new HBox(10);
+        bottomBar.setAlignment(Pos.CENTER_RIGHT);
+        bottomBar.setPadding(new Insets(5, 0, 0, 0));
+
+        Button saveHomeworkButton = new Button("Lưu điểm bài tập");
+        saveHomeworkButton.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+        saveHomeworkButton.setOnAction(e -> {
+            if (controller != null) controller.saveHomeworkSubmissions();
+        });
+
+        bottomBar.getChildren().add(saveHomeworkButton);
+        return bottomBar;
     }
 
     private Node createNotesSection() {
         VBox notesBox = new VBox(5);
         notesBox.setPadding(new Insets(10));
         notesBox.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-radius: 5;");
-
-        Label notesTitleLabel = new Label("Ghi chú:");
+        Label notesTitleLabel = new Label("Ghi chú buổi học:");
         notesTitleLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
         notesTitleLabel.setStyle(blackTextStyle);
-
-        TextArea notesTextArea = new TextArea();
-        notesTextArea.setPromptText("Chủ đề:\nNội dung:\nBài tập về nhà:");
+        notesTextArea = new TextArea();
+        notesTextArea.setPromptText("Chủ đề buổi học...\nNội dung chính...\nBài tập về nhà (nếu có)...");
         notesTextArea.setPrefRowCount(4);
         notesTextArea.setWrapText(true);
-
         notesBox.getChildren().addAll(notesTitleLabel, notesTextArea);
         return notesBox;
     }
@@ -152,16 +211,12 @@ public class ClassroomAttendanceView extends BaseScreenView {
         tableView = new TableView<>();
         tableView.setEditable(true);
         tableView.setPrefHeight(500);
-
-        TableColumn<StudentAttendanceData, Integer> sttCol = new TableColumn<>();
-        sttCol.setGraphic(createStyledHeaderLabel("STT"));
-        sttCol.setCellValueFactory(new PropertyValueFactory<>("stt"));
-        sttCol.setPrefWidth(40);
-        sttCol.setStyle("-fx-alignment: CENTER;");
+        // Controller sẽ cung cấp danh sách dữ liệu cho TableView sau
+        // tableView.setItems(this.filteredAttendanceList); // Không set ở đây nữa
 
         TableColumn<StudentAttendanceData, StudentAttendanceData> nameCol = new TableColumn<>();
         nameCol.setGraphic(createStyledHeaderLabel("Họ và tên"));
-        nameCol.setCellValueFactory(cellData -> new ReadOnlyObjectWrapper<>(cellData.getValue()));
+        nameCol.setCellValueFactory(cellData -> new javafx.beans.property.ReadOnlyObjectWrapper<>(cellData.getValue()));
         nameCol.setCellFactory(param -> new TableCell<>() {
             private final VBox contentBox = new VBox(2);
             private final Label nameLabel = new Label();
@@ -179,7 +234,7 @@ public class ClassroomAttendanceView extends BaseScreenView {
                     setGraphic(null);
                 } else {
                     nameLabel.setText(attendanceData.getStudent().getName());
-                    idLabel.setText(attendanceData.getStudent().getId());
+                    idLabel.setText("ID: " + attendanceData.getStudent().getId());
                     setGraphic(contentBox);
                 }
             }
@@ -189,28 +244,29 @@ public class ClassroomAttendanceView extends BaseScreenView {
         TableColumn<StudentAttendanceData, Boolean> homeworkCol = new TableColumn<>();
         Label btvnLabel = new Label("BTVN");
         btvnLabel.setStyle(blackBoldTextStyle);
-        homeworkHeaderCheckbox = new CheckBox(); // Initialize here
-        homeworkHeaderCheckbox.setOnAction(event -> { // Add "Select All" action
-            boolean isSelected = homeworkHeaderCheckbox.isSelected();
-            for (StudentAttendanceData item : filteredAttendanceList) { // Iterate over filtered list
-                item.setHomeworkSubmitted(isSelected);
-            }
-            tableView.refresh(); // Refresh table to show changes in CheckBoxTableCell
+        homeworkHeaderCheckbox = new CheckBox();
+        homeworkHeaderCheckbox.setOnAction(e -> {
+            if (controller != null) controller.updateAllHomeworkStatus();
         });
         VBox homeworkHeader = new VBox(5, homeworkHeaderCheckbox, btvnLabel);
         homeworkHeader.setAlignment(Pos.CENTER);
         homeworkCol.setGraphic(homeworkHeader);
-        homeworkCol.setCellValueFactory(new PropertyValueFactory<>("homeworkSubmitted"));
-        homeworkCol.setCellFactory(CheckBoxTableCell.forTableColumn(homeworkCol));
+
+        // Thay đổi: Sửa cách thiết lập cellValueFactory để sử dụng BooleanProperty
+        homeworkCol.setCellValueFactory(cellData ->
+                cellData.getValue().homeworkSubmittedProperty());
+
+        // Thay đổi: Sử dụng cách khởi tạo CheckBoxTableCell đúng
+        homeworkCol.setCellFactory(CheckBoxTableCell.forTableColumn(index ->
+                tableView.getItems().get(index).homeworkSubmittedProperty()));
+
         homeworkCol.setEditable(true);
         homeworkCol.setPrefWidth(100);
         homeworkCol.setStyle("-fx-alignment: CENTER;");
 
         TableColumn<StudentAttendanceData, Integer> punctualityCol = createStarRatingColumn(
-                "Đi học đúng giờ",
-                StudentAttendanceData::punctualityRatingProperty,
-                combo -> this.punctualityFilterCombo = combo
-        );
+                "Đúng giờ", StudentAttendanceData::punctualityRatingProperty,
+                combo -> this.punctualityFilterCombo = combo);
         punctualityCol.setPrefWidth(140);
 
         TableColumn<StudentAttendanceData, Double> homeworkGradeCol = new TableColumn<>();
@@ -226,7 +282,7 @@ public class ClassroomAttendanceView extends BaseScreenView {
             @Override public String toString(Double object) { return object == null ? "" : String.format("%.1f", object); }
             @Override public Double fromString(String string) {
                 try {
-                    double val = Double.parseDouble(string);
+                    double val = Double.parseDouble(string.replace(",", "."));
                     return Math.max(0.0, Math.min(10.0, val));
                 } catch (NumberFormatException e) { return 0.0; }
             }
@@ -236,14 +292,12 @@ public class ClassroomAttendanceView extends BaseScreenView {
         homeworkGradeCol.setStyle("-fx-alignment: CENTER;");
 
         TableColumn<StudentAttendanceData, Integer> diligenceCol = createStarRatingColumn(
-                "Chuyên cần",
-                StudentAttendanceData::diligenceRatingProperty,
-                combo -> this.diligenceFilterCombo = combo
-        );
+                "Chuyên cần", StudentAttendanceData::diligenceRatingProperty,
+                combo -> this.diligenceFilterCombo = combo);
         diligenceCol.setPrefWidth(140);
 
         TableColumn<StudentAttendanceData, String> studentNotesCol = new TableColumn<>();
-        studentNotesCol.setGraphic(createStyledHeaderLabel("Ghi chú"));
+        studentNotesCol.setGraphic(createStyledHeaderLabel("Ghi chú HV"));
         studentNotesCol.setCellValueFactory(new PropertyValueFactory<>("studentSessionNotes"));
         studentNotesCol.setCellFactory(TextFieldTableCell.forTableColumn());
         studentNotesCol.setEditable(true);
@@ -262,73 +316,43 @@ public class ClassroomAttendanceView extends BaseScreenView {
         finalScoreCol.setPrefWidth(80);
         finalScoreCol.setStyle("-fx-alignment: CENTER;");
 
-        tableView.getColumns().addAll(sttCol, nameCol, homeworkCol, punctualityCol, homeworkGradeCol, diligenceCol, studentNotesCol, finalScoreCol);
-
-        try {
-            String cssPath = getClass().getResource("table-styles.css").toExternalForm();
-            if (cssPath != null && !cssPath.isEmpty()) tableView.getStylesheets().add(cssPath);
-            else System.err.println("Warning: table-styles.css not found or path is empty in package view.components.");
-        } catch (NullPointerException e) {
-            System.err.println("Warning: table-styles.css not found or error loading. Ensure it's in the classpath relative to this class.");
-        }
+        tableView.getColumns().addAll(nameCol, homeworkCol, punctualityCol, homeworkGradeCol, diligenceCol, studentNotesCol, finalScoreCol);
         return tableView;
     }
 
-    private int parseStarFilterValue(String filterValue) {
-        if (filterValue == null || "Tất cả".equals(filterValue)) {
-            return -1;
-        }
-        try {
-            return Integer.parseInt(filterValue.split(" ")[0]);
-        } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
-            System.err.println("Error parsing star filter value: " + filterValue);
-            return -1;
-        }
+    public int getPunctualityFilterValue() {
+        if (punctualityFilterCombo == null || punctualityFilterCombo.getValue() == null) return -1;
+        return parseStarFilterValue(punctualityFilterCombo.getValue());
     }
 
-    private void applyFilters() {
-        if (filteredAttendanceList == null || punctualityFilterCombo == null || diligenceFilterCombo == null) {
-            return;
-        }
+    public int getDiligenceFilterValue() {
+        if (diligenceFilterCombo == null || diligenceFilterCombo.getValue() == null) return -1;
+        return parseStarFilterValue(diligenceFilterCombo.getValue());
+    }
 
-        int punctualityStars = parseStarFilterValue(punctualityFilterCombo.getValue());
-        int diligenceStars = parseStarFilterValue(diligenceFilterCombo.getValue());
-
-        filteredAttendanceList.setPredicate(data -> {
-            boolean punctualityMatch = true;
-            if (punctualityStars != -1) {
-                punctualityMatch = data.getPunctualityRating() == punctualityStars;
-            }
-
-            boolean diligenceMatch = true;
-            if (diligenceStars != -1) {
-                diligenceMatch = data.getDiligenceRating() == diligenceStars;
-            }
-            return punctualityMatch && diligenceMatch;
-        });
+    private int parseStarFilterValue(String filterValue) {
+        if (filterValue == null || "Tất cả".equals(filterValue)) return -1;
+        try { return Integer.parseInt(filterValue.split(" ")[0]); }
+        catch (Exception e) { System.err.println("Error parsing star filter: " + filterValue); return -1; }
     }
 
     private TableColumn<StudentAttendanceData, Integer> createStarRatingColumn(
             String headerText,
-            java.util.function.Function<StudentAttendanceData, IntegerProperty> propertyExtractor,
-            Consumer<ComboBox<String>> filterComboConsumer
-    ) {
+            Function<StudentAttendanceData, IntegerProperty> propertyExtractor, // Sửa import
+            Consumer<ComboBox<String>> filterComboConsumer) {
         TableColumn<StudentAttendanceData, Integer> column = new TableColumn<>();
         Label headerLabel = new Label(headerText);
         headerLabel.setStyle(blackBoldTextStyle);
-
         ComboBox<String> filterCombo = new ComboBox<>(FXCollections.observableArrayList("Tất cả", "5 Sao", "4 Sao", "3 Sao", "2 Sao", "1 Sao"));
         filterCombo.setValue("Tất cả");
-        filterCombo.setOnAction(event -> applyFilters());
-
         filterComboConsumer.accept(filterCombo);
-
+        filterCombo.setOnAction(e -> {
+            if (controller != null) controller.applyFilters();
+        });
         VBox headerVBox = new VBox(5, headerLabel, filterCombo);
         headerVBox.setAlignment(Pos.CENTER);
         column.setGraphic(headerVBox);
-
         column.setCellValueFactory(cellData -> propertyExtractor.apply(cellData.getValue()).asObject());
-
         column.setCellFactory(param -> new TableCell<>() {
             @Override
             protected void updateItem(Integer itemValue, boolean empty) {
@@ -336,7 +360,7 @@ public class ClassroomAttendanceView extends BaseScreenView {
                 if (empty || getTableRow() == null || getTableRow().getItem() == null) {
                     setGraphic(null);
                 } else {
-                    StudentAttendanceData attendanceData = (StudentAttendanceData) getTableRow().getItem();
+                    StudentAttendanceData attendanceData = getTableRow().getItem();
                     IntegerProperty currentActualRatingProperty = propertyExtractor.apply(attendanceData);
                     StarRatingControl newStarRating = new StarRatingControl(currentActualRatingProperty, 5, true);
                     setGraphic(newStarRating);
@@ -348,53 +372,31 @@ public class ClassroomAttendanceView extends BaseScreenView {
         return column;
     }
 
-    private void saveInformation() {
-        ObservableList<StudentAttendanceData> listToSave = attendanceList;
+    public LocalDate getSelectedDate() { return datePicker != null ? datePicker.getValue() : LocalDate.now(); }
+    public String getSessionNotes() { return notesTextArea != null ? notesTextArea.getText() : ""; }
+    public boolean isHomeworkSelectAllChecked() { return homeworkHeaderCheckbox != null && homeworkHeaderCheckbox.isSelected(); }
+    public Integer getSelectedSessionNumber() { return sessionSelector != null ? sessionSelector.getValue() : null; }
 
-        if (confirm("Bạn có chắc muốn lưu thông tin cho " + listToSave.size() + " học viên?")) {
-            for(StudentAttendanceData sad : listToSave) {
-                System.out.println("Saving data for: " + sad.getStudent().getName() +
-                        ", Homework: " + sad.isHomeworkSubmitted() +
-                        ", Punctuality: " + sad.getPunctualityRating() +
-                        ", Diligence: " + sad.getDiligenceRating()
-                );
-            }
-            showSuccess("Thông tin đã được lưu (mô phỏng).");
-        }
+    public void refreshTable() { if (tableView != null) tableView.refresh(); }
+    @Override public void refreshView() { super.refreshView(); refreshTable(); }
+    public void setSelectedDate(LocalDate date) { if (datePicker != null && date != null) datePicker.setValue(date); }
+    public void setSessionNotes(String notes) { if (notesTextArea != null) notesTextArea.setText(notes != null ? notes : "");}
+
+    public boolean confirm(String message) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, message, ButtonType.YES, ButtonType.NO);
+        alert.setHeaderText(null);
+        return alert.showAndWait().filter(response -> response == ButtonType.YES).isPresent();
     }
 
-    private void sendNotification() {
-        if (confirm("Bạn có chắc muốn gửi thông báo?")) {
-            showSuccess("Thông báo đã được gửi (mô phỏng).");
-        }
-    }
-
-    private void exportToExcel() {
-        showSuccess("Đã xuất ra Excel (mô phỏng).");
-    }
-
-    @Override
-    public void refreshView() {
-        super.refreshView();
-        System.out.println(getViewId() + " refreshed.");
-        // Consider if homeworkHeaderCheckbox state needs to be updated based on list items
-        // after a full refresh or data load. For now, it only pushes changes down.
-    }
-
-    @Override
-    public void onActivate() {
-        super.onActivate();
-        System.out.println(getViewId() + " activated.");
-    }
-
-    protected boolean confirm(String message) {
-        System.out.println("Confirmation Dialog: " + message + " (Simulating YES)");
-        return true;
-    }
-
-    // Changed visibility to public
     public void showSuccess(String message) {
-        System.out.println("Success Notification: " + message);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message);
+        alert.setHeaderText("Thành công");
+        alert.showAndWait();
+    }
+
+    public void showError(String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR, message);
+        alert.setHeaderText("Lỗi");
+        alert.showAndWait();
     }
 }
-

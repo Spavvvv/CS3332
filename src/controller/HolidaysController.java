@@ -5,7 +5,6 @@ import src.model.holidays.HolidayHistory;
 import src.model.holidays.HolidaysModel;
 import utils.DaoManager;
 import src.dao.HolidayDAO;
-import view.components.HolidaysView;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -13,22 +12,17 @@ import java.util.List;
 
 public class HolidaysController {
     private HolidaysModel model;
-    private HolidaysView view;
-    private final String currentUser;
 
-    public HolidaysController(HolidaysView view, String currentUser) {
-        // Get necessary DAO from DaoManager
+    /**
+     * Constructor không có tham số, khởi tạo đơn giản
+     */
+    public HolidaysController() {
+        // Lấy HolidayDAO từ DaoManager
         DaoManager daoManager = DaoManager.getInstance();
         HolidayDAO holidayDAO = daoManager.getHolidayDAO();
 
-        // Initialize the model with the HolidayDAO
-        // HolidayDAO already includes methods for both holiday and history operations
-        this.model = new HolidaysModel(); // Updated to pass only holidayDAO
-        this.view = view;
-        this.currentUser = currentUser;
-
-        // Set the controller in the view
-        view.setController(this);
+        // Khởi tạo model
+        this.model = new HolidaysModel();
     }
 
     public int getCurrentYear() {
@@ -37,7 +31,6 @@ public class HolidaysController {
 
     public void changeYear(int year) {
         model.setCurrentYear(year);
-        view.refreshView();
     }
 
     public YearMonth getYearMonth(int month) {
@@ -56,25 +49,27 @@ public class HolidaysController {
         return model.getRecentHistory(limit);
     }
 
+    /**
+     * Thêm holiday mới, không cần thông tin người dùng
+     */
     public void addHoliday(Holiday holiday) {
         model.addHoliday(holiday);
 
-        // Log the action
+        // Log thao tác với mô tả không có currentUser
         String actionDesc = holiday.getName() + " [" +
                 formatDate(holiday.getStartDate()) + " -> " +
                 formatDate(holiday.getEndDate()) + "]";
 
-        // The logAction method within the model should now use the injected DAO
-        model.logAction(currentUser + ": Thêm mới", actionDesc);
-
-        // Refresh the view
-        view.refreshView();
+        model.logAction("Thêm mới", actionDesc);
     }
 
+    /**
+     * Xóa holiday, không cần thông tin người dùng
+     */
     public void deleteHoliday(Long id) {
-        // Get the holiday details before deletion for logging
+        // Lấy thông tin holiday trước khi xóa để log
         Holiday holiday = null;
-        for (Holiday h : getAllHolidays()) { // getAllHolidays uses the DAO in the model
+        for (Holiday h : getAllHolidays()) {
             if (h.getId().equals(id)) {
                 holiday = h;
                 break;
@@ -82,26 +77,19 @@ public class HolidaysController {
         }
 
         if (holiday != null) {
-            // The deleteHoliday method within the model should now use the injected DAO
             model.deleteHoliday(id);
 
-            // Log the action
+            // Log thao tác với mô tả không có currentUser
             String actionDesc = holiday.getName() + " [" +
                     formatDate(holiday.getStartDate()) + " -> " +
                     formatDate(holiday.getEndDate()) + "]";
 
-            // The logAction method within the model should now use the injected DAO
-            model.logAction(currentUser + ": Xóa", actionDesc);
+            model.logAction("Xóa", actionDesc);
         }
-
-        // Refresh the view
-        view.refreshView();
     }
 
     private String formatDate(LocalDate date) {
         return String.format("%02d/%02d/%d",
                 date.getDayOfMonth(), date.getMonthValue(), date.getYear());
     }
-
-    // Removed cleanup method as connection management is handled by DAOs/DaoManager
 }

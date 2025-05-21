@@ -19,6 +19,7 @@ import javafx.util.converter.DefaultStringConverter;
 import src.controller.AbsenceCallController;
 import src.model.ClassSession;
 import src.model.absence.AbsenceRecord;
+import src.model.attendance.Attendance;
 import view.BaseScreenView;
 import src.controller.NavigationController;
 
@@ -136,7 +137,7 @@ public class AbsenceCallView extends BaseScreenView {
         );
 
         Label sessionLabel = new Label("Buổi học:");
-        sessionLabel.setStyle("-fx-font-weight: bold;");
+        sessionLabel.setStyle("-fx-text-fill: black; -fx-font-weight: bold;");
         sessionSelector = new ComboBox<>();
         sessionSelector.setPromptText("Chọn buổi học");
         sessionSelector.setPrefWidth(300);
@@ -145,14 +146,14 @@ public class AbsenceCallView extends BaseScreenView {
             @Override
             protected void updateItem(ClassSession session, boolean empty) {
                 super.updateItem(session, empty);
-                setText(empty || session == null ? null : session.getSummary());
+                setText("Buổi " + String.valueOf(empty || session == null ? null : session.getSessionNumber()));
             }
         });
 
         sessionSelector.setConverter(new StringConverter<ClassSession>() {
             @Override
             public String toString(ClassSession session) {
-                return session == null ? null : session.getSummary();
+                return session == null ? null : "Buổi " + session.getSessionNumber();
             }
 
             @Override
@@ -163,7 +164,7 @@ public class AbsenceCallView extends BaseScreenView {
 
 
         Label fromLabel = new Label("Từ ngày:");
-        fromLabel.setStyle("-fx-font-weight: bold;");
+        fromLabel.setStyle("-fx-text-fill: black; -fx-font-weight: bold;");
         fromDatePicker = new DatePicker(LocalDate.now());
         fromDatePicker.setPrefWidth(150);
 
@@ -188,28 +189,33 @@ public class AbsenceCallView extends BaseScreenView {
         tv.setStyle("-fx-border-color: " + BORDER_COLOR + "; -fx-border-radius: 5;");
         tv.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY); // Uncomment if you want columns to fill width
 
-        TableColumn<AbsenceRecord, Integer> idCol = new TableColumn<>("STT");
+        TableColumn<AbsenceRecord, Integer> idCol = new TableColumn<>();
+        setBlackHeaderText(idCol, "STT");
         idCol.setCellValueFactory(new PropertyValueFactory<>("displayId"));
         idCol.setPrefWidth(50);
         idCol.setSortable(false);
         idCol.setEditable(false);
 
-        TableColumn<AbsenceRecord, String> nameCol = new TableColumn<>("Họ và tên");
+        TableColumn<AbsenceRecord, String> nameCol = new TableColumn<>();
+        setBlackHeaderText(nameCol, "Họ và tên");
         nameCol.setCellValueFactory(new PropertyValueFactory<>("studentName"));
         nameCol.setPrefWidth(200);
         nameCol.setEditable(false);
 
-        TableColumn<AbsenceRecord, String> classCol = new TableColumn<>("Lớp học");
+        TableColumn<AbsenceRecord, String> classCol = new TableColumn<>();
+        setBlackHeaderText(classCol,"Lớp học");
         classCol.setCellValueFactory(new PropertyValueFactory<>("className"));
         classCol.setPrefWidth(150);
         classCol.setEditable(false);
 
-        TableColumn<AbsenceRecord, String> dateCol = new TableColumn<>("Ngày nghỉ");
+        TableColumn<AbsenceRecord, String> dateCol = new TableColumn<>();
+        setBlackHeaderText(dateCol, "Ngày nghỉ");
         dateCol.setCellValueFactory(cellData -> cellData.getValue().absenceDateFormattedProperty());
         dateCol.setPrefWidth(100);
         dateCol.setEditable(false);
 
-        TableColumn<AbsenceRecord, String> statusCol = new TableColumn<>("Tình trạng");
+        TableColumn<AbsenceRecord, String> statusCol = new TableColumn<>();
+        setBlackHeaderText(statusCol, "Tình trạng");
         statusCol.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
         statusCol.setCellFactory(ComboBoxTableCell.forTableColumn(new DefaultStringConverter(), statusOptions));
         statusCol.setOnEditCommit(event -> {
@@ -242,7 +248,8 @@ public class AbsenceCallView extends BaseScreenView {
         statusCol.setEditable(true);
 
 
-        TableColumn<AbsenceRecord, String> noteCol = new TableColumn<>("Ghi chú");
+        TableColumn<AbsenceRecord, String> noteCol = new TableColumn<>();
+        setBlackHeaderText(noteCol, "Ghi chú");
         noteCol.setCellValueFactory(new PropertyValueFactory<>("note"));
         noteCol.setCellFactory(TextFieldTableCell.forTableColumn());
         noteCol.setOnEditCommit(event -> {
@@ -253,7 +260,8 @@ public class AbsenceCallView extends BaseScreenView {
         noteCol.setPrefWidth(200);
         noteCol.setEditable(true);
 
-        TableColumn<AbsenceRecord, Boolean> calledCol = new TableColumn<>("Đã gọi");
+        TableColumn<AbsenceRecord, Boolean> calledCol = new TableColumn<>();
+        setBlackHeaderText(calledCol, "Đã gọi");
         calledCol.setCellValueFactory(new PropertyValueFactory<>("called"));
         calledCol.setCellFactory(CheckBoxTableCell.forTableColumn(calledCol));
         calledCol.setOnEditCommit(event -> {
@@ -263,18 +271,6 @@ public class AbsenceCallView extends BaseScreenView {
         });
         calledCol.setPrefWidth(100);
         calledCol.setEditable(true);
-
-        // --- CỘT "CÓ PHÉP" (APPROVEDCOL) ĐÃ BỊ XÓA ---
-        // TableColumn<AbsenceRecord, Boolean> approvedCol = new TableColumn<>("Có phép");
-        // approvedCol.setCellValueFactory(new PropertyValueFactory<>("approved"));
-        // approvedCol.setCellFactory(CheckBoxTableCell.forTableColumn(approvedCol));
-        // approvedCol.setOnEditCommit(event -> {
-        //     AbsenceRecord record = event.getRowValue();
-        //     record.setApproved(event.getNewValue());
-        //     if (controller != null) controller.setDataChanged(true);
-        // });
-        // approvedCol.setPrefWidth(100);
-        // approvedCol.setEditable(true);
 
         // Thêm các cột vào TableView, không bao gồm approvedCol
         tv.getColumns().addAll(idCol, nameCol, classCol, dateCol, statusCol, noteCol, calledCol);
@@ -286,7 +282,9 @@ public class AbsenceCallView extends BaseScreenView {
 
         if (navController != null) {
             returnButton.setOnAction(e -> navController.goBack());
-            homeworkButton.setOnAction(e -> navController.navigateTo("classDetails"));
+            homeworkButton.setOnAction(e ->
+                    //mainController.setSessionDetail();
+                    navController.navigateTo("classroom-attendance-view"));
         } else {
             LOGGER.warning("AbsenceCallView: NavigationController from BaseScreenView is null. Navigation buttons will be disabled.");
             if (returnButton != null) returnButton.setDisable(true);
@@ -304,6 +302,7 @@ public class AbsenceCallView extends BaseScreenView {
                 // Chỉ cập nhật label, không tự động lọc khi chỉ thay đổi ngày
                 updateCurrentSessionDayLabel();
                 // Nếu bạn muốn lọc ngay khi ngày thay đổi, hãy gọi controller.applyFilters() ở đây
+                controller.applyFilters();
             });
         } else {
             LOGGER.severe("AbsenceCallView: Controller is null during setupEventHandlers. Data-related actions will not be wired.");
@@ -390,4 +389,17 @@ public class AbsenceCallView extends BaseScreenView {
         }
         updateCurrentSessionDayLabel();
     }
+
+    // Create a utility method to set up columns with black text
+    private void setBlackHeaderText(TableColumn<AbsenceRecord, ?> column, String title) {
+        Label label = new Label(title);
+        label.setTextFill(Color.BLACK);
+        label.setFont(Font.font("System", FontWeight.BOLD, 12));
+        label.setAlignment(Pos.CENTER);
+        label.setMaxWidth(Double.MAX_VALUE);
+        column.setGraphic(label);
+    }
+
+
+
 }
