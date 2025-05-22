@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 
 import src.model.person.Student;
 import src.model.person.Teacher;
-import view.components.ClassList.ClassListScreenView;
 
 public class Course {
     private String courseId;

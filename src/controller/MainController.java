@@ -1,8 +1,17 @@
 package src.controller;
 
+import src.controller.Attendance.AttendanceController;
 import src.model.ClassSession;
-import view.*;
-import view.components.*;
+import src.view.Attendance.AbsenceCallScreenView;
+import src.view.Attendance.AbsenceCallView;
+import src.view.Attendance.AttendanceScreenView;
+import src.view.Attendance.ClassroomAttendanceView;
+import src.view.Dashboard.DashboardView;
+import src.view.Holidays.HolidaysView;
+import src.view.Report.*;
+import src.view.Rooms.RoomView;
+import src.view.Schedule.ClassDetailsView;
+import src.view.Schedule.ScheduleView;
 import src.model.attendance.*;
 
 import java.sql.SQLException;
@@ -14,11 +23,12 @@ import src.model.person.Student;
 import src.model.person.Teacher;
 import src.model.person.Parent;
 import javafx.scene.control.Alert;
-import view.components.ClassList.ClassListScreenView;
-import view.components.StudentList.StudentListScreenView;
+import src.view.ClassList.ClassListScreenView;
+import src.view.StudentList.StudentListScreenView;
 
-import utils.DaoManager;
-import src.dao.AbsenceRecordDAO;
+import src.utils.DaoManager;
+import src.dao.Attendance.AbsenceRecordDAO;
+import src.view.components.Screen.*;
 
 /**
  Controller chính của ứng dụng, quản lý logic nghiệp vụ
@@ -59,11 +69,11 @@ public class MainController {
     private void initialize() throws SQLException {
         registerViews();
 
-        // Thiết lập main controller cho tất cả các view đã đăng ký
+        // Thiết lập main controller cho tất cả các src.view đã đăng ký
         setMainControllerForAllViews();
     }
     /**
-     Đăng ký các view với NavigationController
+     Đăng ký các src.view với NavigationController
      */
     private void registerViews() throws SQLException {
         // Đăng ký các views với NavigationController
@@ -74,10 +84,8 @@ public class MainController {
         navigationController.registerView("schedule", new ScheduleView());
         navigationController.registerView("classDetails", new ClassDetailsView());
         navigationController.registerView("attendance", new AttendanceScreenView());
-        navigationController.registerView("absence-call-view", new AbsenceCallView());
+        navigationController.registerView("absence-call-src.view", new AbsenceCallView());
         navigationController.registerView("absence-call-table", new AbsenceCallScreenView());
-        navigationController.registerView("exams", new ExamsView());
-        navigationController.registerView("details-view", new DetailsView());
         navigationController.registerView("ClassListView", new ClassListScreenView());
         navigationController.registerView("StudentListView", new StudentListScreenView());
         navigationController.registerView("learning-reports", new ReportView());
@@ -88,24 +96,24 @@ public class MainController {
         navigationController.registerView("classrooms", new RoomView());
         navigationController.registerView("holidays", new HolidaysView());
         navigationController.registerView("students", new StudentListScreenView());
-        navigationController.registerView("classroom-attendance-view", new ClassroomAttendanceView());
+        navigationController.registerView("classroom-attendance-src.view", new ClassroomAttendanceView());
         //navigationController.registerView("classes", new CreateClassScreenView());
     }
     /**
-     Thiết lập MainController cho tất cả các view đã đăng ký
+     Thiết lập MainController cho tất cả các src.view đã đăng ký
      */
     private void setMainControllerForAllViews() {
         for (String route : navigationController.getRegisteredRoutes()) {
             ScreenView view = navigationController.getViewByRoute(route);
             if (view != null) {
-// Cung cấp reference đến MainController cho view có thể sử dụng
+// Cung cấp reference đến MainController cho src.view có thể sử dụng
                 view.setMainController(this);
-                System.out.println("MainController set for view: " + view.getTitle());
+                System.out.println("MainController set for src.view: " + view.getTitle());
             }
         }
     }
     /**
-     Thiết lập MainController cho một view cụ thể
+     Thiết lập MainController cho một src.view cụ thể
      @param view View cần thiết lập MainController
      */
     public void setMainControllerForView(BaseScreenView view) {
@@ -197,7 +205,7 @@ public class MainController {
     // TODO: Implement - Xóa session từ database
     // Giả lập: Luôn trả về thành công
         if (currentSessionDetail != null && id == currentSessionDetail.getId()) {
-    // Thông báo cho các view rằng session đã bị xóa
+    // Thông báo cho các src.view rằng session đã bị xóa
             if (navigationController != null) {
                 navigationController.getCurrentView().handleSystemMessage("class_deleted", id);
             }

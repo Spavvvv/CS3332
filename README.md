@@ -8,7 +8,7 @@ Project Structure
 
 Controller Layer
 
-The controller layer handles the application's logic and coordinates between the view and model layers.
+The controller layer handles the application's logic and coordinates between the src.view and model layers.
 
 ![image](https://github.com/user-attachments/assets/3104a9a5-0422-448f-bd32-af2ab06c464d)
 
@@ -22,7 +22,7 @@ The model layer represents the data structures and business objects used in the 
 
 View Layer
 
-The view layer handles the user interface components and screens.
+The src.view layer handles the user interface components and screens.
 
 ![image](https://github.com/user-attachments/assets/7d93ca14-badf-4cd4-b04e-e6acfdc50d44)
 

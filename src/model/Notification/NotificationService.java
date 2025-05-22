@@ -1,7 +1,7 @@
 
 package src.model.Notification;
 
-import src.dao.NotificationDAO; // Import DAO
+import src.dao.Notifications.NotificationDAO; // Import DAO
 
 import java.util.List;
 // import java.util.stream.Collectors; // Không còn cần thiết nếu DAO trả về đúng danh sách

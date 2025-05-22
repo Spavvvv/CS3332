@@ -18,7 +18,7 @@ public class TeacherStatisticsModel {
     private final SimpleIntegerProperty totalSessions; // Tổng số buổi dạy từ dailyStats
     private final SimpleDoubleProperty totalHours;    // Tổng số giờ dạy từ dailyStats
 
-    // Constructor for daily view
+    // Constructor for daily src.view
     public TeacherStatisticsModel(int stt, String teacherId, String teacherName) {
         this.stt = new SimpleIntegerProperty(stt);
         this.teacherId = new SimpleStringProperty(teacherId);
@@ -28,7 +28,7 @@ public class TeacherStatisticsModel {
         this.totalHours = new SimpleDoubleProperty(0.0);
     }
 
-    // Getters and setters for daily view
+    // Getters and setters for daily src.view
     public int getStt() {
         return stt.get();
     }

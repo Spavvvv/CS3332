@@ -1,6 +1,6 @@
 package src.model.holidays;
 
-import src.dao.HolidayDAO;
+import src.dao.Holidays.HolidayDAO;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 

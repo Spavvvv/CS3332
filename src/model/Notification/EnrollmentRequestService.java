@@ -1,6 +1,6 @@
 package src.model.Notification;
 
-import src.dao.StudentDAO;
+import src.dao.Person.StudentDAO;
 import src.model.person.Student;
 
 import java.util.ArrayList;

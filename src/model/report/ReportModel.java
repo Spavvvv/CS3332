@@ -4,11 +4,10 @@ package src.model.report;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import java.time.LocalDate;
-import java.sql.SQLException; // Mặc dù không được sử dụng trực tiếp trong các phương thức mới, nó có thể liên quan đến DAO
 import java.util.List; // Cần thiết cho getClassStatusesFromDAO
 import java.util.ArrayList; // Có thể được sử dụng bởi DAO
 
-import src.dao.ReportDAO;
+import src.dao.Report.ReportDAO;
 
 public class ReportModel {
     // Data containers

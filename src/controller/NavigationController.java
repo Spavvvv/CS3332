@@ -5,10 +5,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import view.LoginUI;
-import view.RegisterUI;
-import view.UI;
-import view.ScreenView;
+import src.view.components.Screen.LoginUI;
+import src.view.components.Screen.RegisterUI;
+import src.view.components.Screen.UI;
+import src.view.components.Screen.ScreenView;
 
 /**
  Controller phụ trách điều hướng giữa các màn hình trong ứng dụng
@@ -48,13 +48,13 @@ public class NavigationController {
 
 
     /**
-     Đăng ký một view vào hệ thống
-     @param route      Đường dẫn để truy cập view
+     Đăng ký một src.view vào hệ thống
+     @param route      Đường dẫn để truy cập src.view
      @param screenView View cần đăng ký
      */
     public void registerView(String route, ScreenView screenView) {
         viewsMap.put(route, screenView);
-        // Cung cấp reference đến NavigationController cho view có thể sử dụng
+        // Cung cấp reference đến NavigationController cho src.view có thể sử dụng
         screenView.setNavigationController(this);
     }
 
@@ -69,14 +69,14 @@ public class NavigationController {
             return false;
         }
 
-        // Kiểm tra xem view hiện tại có cho phép rời đi không
+        // Kiểm tra xem src.view hiện tại có cho phép rời đi không
         if (currentView != null && !currentView.onDeactivate()) {
             return false;
         }
 
         ScreenView targetView = viewsMap.get(route);
 
-        // Cập nhật UI với nội dung của view mới
+        // Cập nhật UI với nội dung của src.view mới
         ui.setContent(targetView.getRoot());
 
         // Lưu route hiện tại vào lịch sử
@@ -84,14 +84,14 @@ public class NavigationController {
             updateNavigationHistory(currentRoute);
         }
 
-        // Lưu lại route và view hiện tại
+        // Lưu lại route và src.view hiện tại
         currentRoute = route;
         currentView = targetView;
 
         // Gọi onShow() trước onActivate để chuẩn bị dữ liệu
         targetView.onShow();
 
-        // Thông báo cho view biết nó đã được kích hoạt
+        // Thông báo cho src.view biết nó đã được kích hoạt
         targetView.onActivate();
 
         return true;
@@ -127,7 +127,7 @@ public class NavigationController {
     }
 
     /**
-     Lấy view hiện tại
+     Lấy src.view hiện tại
      @return View hiện tại
      */
     public ScreenView getCurrentView() {
@@ -187,8 +187,8 @@ public class NavigationController {
     }
 
     /**
-     * Lấy view tương ứng với route
-     * @param route Đường dẫn cần lấy view
+     * Lấy src.view tương ứng với route
+     * @param route Đường dẫn cần lấy src.view
      * @return View tương ứng với route, null nếu route không tồn tại
      */
     public ScreenView getViewByRoute(String route) {
@@ -196,26 +196,26 @@ public class NavigationController {
     }
 
     /**
-     * Lấy tất cả các view đã đăng ký
-     * @return Danh sách các view
+     * Lấy tất cả các src.view đã đăng ký
+     * @return Danh sách các src.view
      */
     public List<ScreenView> getAllRegisteredViews() {
         return new ArrayList<>(viewsMap.values());
     }
 
     /**
-     * Kiểm tra một view có đăng ký trong hệ thống không
+     * Kiểm tra một src.view có đăng ký trong hệ thống không
      * @param view View cần kiểm tra
-     * @return true nếu view đã đăng ký, false nếu không
+     * @return true nếu src.view đã đăng ký, false nếu không
      */
     public boolean isViewRegistered(ScreenView view) {
         return viewsMap.containsValue(view);
     }
 
     /**
-     * Lấy route tương ứng với một view
+     * Lấy route tương ứng với một src.view
      * @param view View cần lấy route
-     * @return Route tương ứng với view, null nếu view không tồn tại
+     * @return Route tương ứng với src.view, null nếu src.view không tồn tại
      */
     public String getRouteForView(ScreenView view) {
         for (Map.Entry<String, ScreenView> entry : viewsMap.entrySet()) {

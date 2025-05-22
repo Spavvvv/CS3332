@@ -2,11 +2,10 @@ package src.model.attendance;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import src.model.person.Parent;
-import src.model.person.Student;
+
 import java.time.LocalDate;
-import utils.DaoManager;
-import src.dao.HomeworkDAO;
+import src.utils.DaoManager;
+import src.dao.Attendance.HomeworkDAO;
 
 public class ClassAttendanceModel {
     private ObservableList<StudentAttendanceData> attendanceList = FXCollections.observableArrayList();
