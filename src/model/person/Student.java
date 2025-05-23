@@ -40,6 +40,7 @@ public class Student extends Person {
         this.currentCourses = currentCourses;
     }
 
+
     // Getters and Setters for parent-related attributes
     public String getParentName() {
         return parentName;

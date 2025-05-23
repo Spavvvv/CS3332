@@ -10,7 +10,7 @@ public class Teacher extends Person {
     private String position;
 
     public Teacher(String id, String name, String gender, String contactNumber, String birthday, String email,
-                   String teacherId, String position) {
+                   String teacherId) {
         super(id, name, gender, contactNumber, birthday, email);
         this.teacherId = teacherId;
         this.position = position;

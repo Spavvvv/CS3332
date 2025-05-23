@@ -282,4 +282,39 @@ public class DashboardDAO {
             return new ArrayList<>(); // Return empty list on error
         }
     }
+    public boolean hasTimeConflictForRoom(String roomId, String dayOfWeek, LocalTime newStartTime, LocalTime newEndTime) throws SQLException {
+        // Kiểm tra các tham số đầu vào cơ bản
+        if (roomId == null || roomId.trim().isEmpty() ||
+                dayOfWeek == null || dayOfWeek.trim().isEmpty() ||
+                newStartTime == null || newEndTime == null) {
+            System.err.println("[CourseDAO] Tham số không hợp lệ (null hoặc rỗng) cho hasTimeConflictForRoom.");
+            // Tùy thuộc vào logic mong muốn, có thể ném IllegalArgumentException
+            return false;
+        }
+
+        // Logic kiểm tra xung đột thời gian:
+        // Xung đột xảy ra nếu (ThờiGianBắtĐầuMới < ThờiGianKếtThúcHiệnTại) VÀ (ThờiGianKếtThúcMới > ThờiGianBắtĐầuHiệnTại)
+        String sql = "SELECT COUNT(*) FROM courses " +
+                "WHERE room_id = ? AND day_of_week = ? " +    // Cùng phòng và cùng ngày
+                "AND start_time < ? AND end_time > ?";       // Kiểm tra sự chồng chéo thời gian
+
+        try (Connection conn = DatabaseConnection.getConnection(); // Giả sử DatabaseConnection.getConnection() hoạt động đúng
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, roomId);
+            stmt.setString(2, dayOfWeek);
+            // Điều kiện: start_time (của lớp hiện có) < newEndTime (của lớp mới)
+            stmt.setTime(3, Time.valueOf(newEndTime));
+            // Điều kiện: end_time (của lớp hiện có) > newStartTime (của lớp mới)
+            stmt.setTime(4, Time.valueOf(newStartTime));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0; // Nếu số lượng > 0, tức là có xung đột
+                }
+            }
+        }
+        // Mặc định không có xung đột nếu truy vấn thất bại hoặc không tìm thấy (mặc dù COUNT(*) luôn trả về một hàng)
+        return false;
+    }
 }

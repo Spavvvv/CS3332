@@ -2,6 +2,9 @@ package view;
 
 import java.io.*;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.Year;
 import java.time.format.DateTimeFormatter;
@@ -589,11 +592,18 @@ public class RegisterUI {
         // Sử dụng DAO để kiểm tra và lưu dữ liệu
         RegisterDAO registerDAO = new RegisterDAO();
         try {
+            if (role.equals("Admin")) {
+                if (registerDAO.isAdminExists()) {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Hệ thống đã có tài khoản Admin. Không thể đăng ký thêm tài khoản Admin.");
+                    return; // Dừng quá trình nếu đã có Admin
+                }
+            }
             // Kiểm tra trùng lặp username
             if (registerDAO.isUsernameExists(username)) {
                 showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Tên đăng nhập đã tồn tại.");
                 return;
             }
+
             // Kiểm tra trùng lặp email
             if (registerDAO.isEmailExists(email)) {
                 showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Email đã được sử dụng.");

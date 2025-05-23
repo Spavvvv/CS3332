@@ -206,7 +206,21 @@ public class RegisterDAO {
         }
         return false;
     }
+    public boolean isAdminExists() throws SQLException {
+        String sql = "SELECT COUNT(*) AS admin_count FROM accounts WHERE role = 'Admin'";
+        // Sử dụng DatabaseConnection.getConnection() nếu nó là static method
+        // Hoặc sử dụng dbConnector.getConnection() nếu bạn có instance dbConnector
+        try (Connection conn = DatabaseConnection.getConnection(); // Giả định DatabaseConnection.getConnection() là static
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("admin_count") > 0;
+                }
+            }
+        }
+        return false; // Mặc định là không tìm thấy hoặc có lỗi không ném SQLException
+    }
     private boolean isEmailExistsInternal(Connection conn, String email) throws SQLException {
         String sql = "SELECT COUNT(*) FROM users WHERE email = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {

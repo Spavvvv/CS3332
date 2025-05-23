@@ -71,44 +71,18 @@ public class TeacherDAO {
      * @throws SQLException if a database access error occurs
      */
     boolean internalInsert(Connection conn, Teacher teacher) throws SQLException {
-        // Note: We assume the transaction is handled by the calling public method
-
-        // First insert into the persons table
-        String personSql = "INSERT INTO persons (id, name, gender, contact_number, birthday, email, role) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-        try (PreparedStatement personStatement = conn.prepareStatement(personSql)) {
-            personStatement.setString(1, teacher.getId());
+        // Chèn trực tiếp vào bảng `teachers`
+        String sql = "INSERT INTO teachers (id, name, gender, contact_number, birthday, email) " + // Corrected: Use 'id'
+                "VALUES (?, ?, ?, ?, ?, ?)"; // Corrected: 6 placeholders for 6 columns
+        try (PreparedStatement personStatement = conn.prepareStatement(sql)) {
+            personStatement.setString(1, teacher.getTeacherId()); // Value for 'id' (PK)
             personStatement.setString(2, teacher.getName());
             personStatement.setString(3, teacher.getGender());
             personStatement.setString(4, teacher.getContactNumber());
-            personStatement.setString(5, teacher.getBirthday());
+            personStatement.setDate(5, Date.valueOf(teacher.getBirthday()));
             personStatement.setString(6, teacher.getEmail());
-            personStatement.setString(7, teacher.getRole().toString());
-            int personRowsInserted = personStatement.executeUpdate();
-
-            if (personRowsInserted > 0) {
-                // Then insert into the teachers table
-                String teacherSql = "INSERT INTO teachers (person_id, teacher_id, position) VALUES (?, ?, ?)";
-
-                try (PreparedStatement teacherStatement = conn.prepareStatement(teacherSql)) {
-                    teacherStatement.setString(1, teacher.getId());
-                    teacherStatement.setString(2, teacher.getTeacherId());
-                    teacherStatement.setString(3, teacher.getPosition());
-
-                    int teacherRowsInserted = teacherStatement.executeUpdate();
-
-                    if (teacherRowsInserted > 0 && teacher.getSubjects() != null && !teacher.getSubjects().isEmpty()) {
-                        // Insert teacher's subjects using the same connection
-                        return internalInsertTeacherSubjects(conn, teacher.getId(), teacher.getSubjects());
-                    }
-
-                    return teacherRowsInserted > 0;
-                }
-            }
+            return personStatement.executeUpdate() > 0;
         }
-
-        return false; // Return false if person insert failed
     }
 
     /**
@@ -121,88 +95,80 @@ public class TeacherDAO {
      * @throws SQLException if a database access error occurs
      */
     boolean internalUpdate(Connection conn, Teacher teacher) throws SQLException {
-        // Note: We assume the transaction is handled by the calling public method
+        // Bước 1: Cập nhật bảng 'teachers'
+        String sqlTeachers = "UPDATE teachers SET name = ?, gender = ?, contact_number = ?, birthday = ?, email = ? " +
+                "WHERE id = ?"; // 'id' này là teachers.id (PK của bảng teachers)
+        int teacherRowsAffected = 0;
+        try (PreparedStatement psTeachers = conn.prepareStatement(sqlTeachers)) {
+            psTeachers.setString(1, teacher.getName());
+            psTeachers.setString(2, teacher.getGender());
+            psTeachers.setString(3, teacher.getContactNumber()); // Sửa: contact_number là tham số thứ 3
 
-        // First update the persons table
-        String personSql = "UPDATE persons SET name = ?, gender = ?, contact_number = ?, " +
-                "birthday = ?, email = ? WHERE id = ?";
-
-        try (PreparedStatement personStatement = conn.prepareStatement(personSql)) {
-            personStatement.setString(1, teacher.getName());
-            personStatement.setString(2, teacher.getGender());
-            personStatement.setString(3, teacher.getContactNumber());
-            personStatement.setString(4, teacher.getBirthday()); // Corrected variable name from 'statement' to 'personStatement'
-            personStatement.setString(5, teacher.getEmail());
-            personStatement.setString(6, teacher.getId());
-
-            int personRowsUpdated = personStatement.executeUpdate();
-
-            if (personRowsUpdated > 0) {
-                // Then update the teachers table
-                String teacherSql = "UPDATE teachers SET teacher_id = ?, position = ? WHERE person_id = ?";
-
-                try (PreparedStatement teacherStatement = conn.prepareStatement(teacherSql)) {
-                    teacherStatement.setString(1, teacher.getTeacherId());
-                    teacherStatement.setString(2, teacher.getPosition());
-                    teacherStatement.setString(3, teacher.getId());
-
-                    int teacherRowsUpdated = teacherStatement.executeUpdate();
-
-                    // If teacher row updated and subjects exist, update subjects
-                    // Note: This logic assumes subjects should always be updated if the teacher row updated.
-                    // Consider if subjects should only be updated if the list is not null and has changes.
-                    if (teacherRowsUpdated > 0 && teacher.getSubjects() != null) {
-                        // Update teacher's subjects using the same connection
-                        internalDeleteTeacherSubjects(conn, teacher.getId()); // Delete existing subjects
-                        // If subjects list is not empty, insert new subjects
-                        if (!teacher.getSubjects().isEmpty()) {
-                            return internalInsertTeacherSubjects(conn, teacher.getId(), teacher.getSubjects());
-                        } else {
-                            // Teacher row updated, and subjects were cleared (empty list provided)
-                            return true;
-                        }
-                    } else if (teacherRowsUpdated > 0 && teacher.getSubjects() == null) {
-                        // Teacher row updated, but no subjects provided in the update, subjects remain as they are.
-                        return true;
-                    }
-
-                    // Return true if teacher row was updated even if subjects weren't explicitly handled (e.g., subjects was null)
-                    return teacherRowsUpdated > 0;
+            if (teacher.getBirthday() != null && !teacher.getBirthday().isEmpty()) {
+                try {
+                    // teacher.getBirthday() nên là chuỗi "yyyy-MM-dd"
+                    psTeachers.setDate(4, java.sql.Date.valueOf(teacher.getBirthday())); // Sửa: birthday là tham số thứ 4
+                } catch (IllegalArgumentException e) {
+                    System.err.println("Lỗi định dạng ngày sinh khi cập nhật teachers: " + teacher.getBirthday() + " - " + e.getMessage());
+                    psTeachers.setNull(4, java.sql.Types.DATE);
                 }
+            } else {
+                psTeachers.setNull(4, java.sql.Types.DATE); // Sửa: birthday là tham số thứ 4
             }
+            psTeachers.setString(5, teacher.getEmail()); // Sửa: email là tham số thứ 5
+            psTeachers.setString(6, teacher.getTeacherId()); // teacher.getTeacherId() là teachers.id (PK)
+
+            teacherRowsAffected = psTeachers.executeUpdate();
         }
 
-        return false; // Return false if person update failed
+        // Nếu không có user_id liên kết thì không cần cập nhật bảng users
+        if (teacher.getId() == null || teacher.getId().isEmpty() || "N/A".equalsIgnoreCase(teacher.getId())) {
+            System.out.println("Teacher không có user_id hợp lệ, bỏ qua cập nhật bảng users.");
+            return teacherRowsAffected > 0;
+        }
+
+        // Bước 2: Cập nhật bảng 'users'
+        String sqlUsers = "UPDATE users SET name = ?, gender = ?, contact_number = ?, birthday = ?, email = ? " +
+                "WHERE id = ?"; // 'id' này là users.id (PK của bảng users, tương ứng teacher.getId())
+        int userRowsAffected = 0;
+        try (PreparedStatement psUsers = conn.prepareStatement(sqlUsers)) {
+            psUsers.setString(1, teacher.getName());
+            psUsers.setString(2, teacher.getGender());
+            psUsers.setString(3, teacher.getContactNumber()); // Sửa: contact_number là tham số thứ 3
+
+            if (teacher.getBirthday() != null && !teacher.getBirthday().isEmpty()) {
+                try {
+                    // teacher.getBirthday() nên là chuỗi "yyyy-MM-dd"
+                    psUsers.setDate(4, java.sql.Date.valueOf(teacher.getBirthday())); // Sửa: birthday là tham số thứ 4
+                } catch (IllegalArgumentException e) {
+                    System.err.println("Lỗi định dạng ngày sinh khi cập nhật users: " + teacher.getBirthday() + " - " + e.getMessage());
+                    psUsers.setNull(4, java.sql.Types.DATE);
+                }
+            } else {
+                psUsers.setNull(4, java.sql.Types.DATE); // Sửa: birthday là tham số thứ 4
+            }
+            psUsers.setString(5, teacher.getEmail()); // Sửa: email là tham số thứ 5
+            psUsers.setString(6, teacher.getId());    // teacher.getId() là users.id (PK)
+
+            userRowsAffected = psUsers.executeUpdate();
+        }
+
+        if (teacherRowsAffected > 0) {
+            if (userRowsAffected == 0 && !(teacher.getId() == null || teacher.getId().isEmpty() || "N/A".equalsIgnoreCase(teacher.getId()))) {
+                System.out.println("Cập nhật bảng teachers thành công, nhưng không có dòng nào được cập nhật ở bảng users cho user_id: " + teacher.getId() + ". Dữ liệu có thể không thay đổi hoặc user_id không tồn tại.");
+            }
+            return true;
+        }
+        return false;
     }
 
 
-    /**
-     * Internal method to delete a teacher from the database using an existing connection.
-     * Handles deleting from teacher_subjects, teachers, and persons tables.
-     *
-     * @param conn the active database connection
-     * @param id the ID of the teacher to delete (person_id)
-     * @return true if successful
-     * @throws SQLException if a database access error occurs
-     */
-    boolean internalDelete(Connection conn, String id) throws SQLException {
-        // Note: We assume the transaction is handled by the calling public method
-
-        // First delete teacher's subjects using the same connection
-        internalDeleteTeacherSubjects(conn, id);
-
-        // Then delete from teachers table using the same connection
-        String teacherSql = "DELETE FROM teachers WHERE person_id = ?";
-        try (PreparedStatement teacherStatement = conn.prepareStatement(teacherSql)) {
-            teacherStatement.setString(1, id);
-            teacherStatement.executeUpdate();
-        }
-
-        // Finally delete from persons table using the same connection
-        String personSql = "DELETE FROM persons WHERE id = ?";
-        try (PreparedStatement personStatement = conn.prepareStatement(personSql)) {
-            personStatement.setString(1, id);
-            return personStatement.executeUpdate() > 0;
+    boolean internalDelete(Connection conn, String teacherIdInTeachersTable) throws SQLException {
+        // Xóa từ bảng `teachers` trực tiếp dựa trên PK của nó
+        String sql = "DELETE FROM teachers WHERE id = ?";
+        try (PreparedStatement statement = conn.prepareStatement(sql)) {
+            statement.setString(1, teacherIdInTeachersTable);
+            return statement.executeUpdate() > 0;
         }
     }
 
@@ -216,26 +182,16 @@ public class TeacherDAO {
      * @throws SQLException if a database access error occurs
      */
     Teacher getById(Connection conn, String id) throws SQLException {
-        String sql = "SELECT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "WHERE p.id = ?";
-
+        String sql = "SELECT id, user_id, name, gender, contact_number, birthday, email " +
+                "FROM teachers WHERE user_id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, id);
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
-                    Teacher teacher = extractTeacherFromResultSet(resultSet);
-
-                    // Load teacher's subjects using the same connection
-                    internalLoadSubjectsForTeacher(conn, teacher);
-
-                    return teacher;
+                    return extractTeacherFromResultSet(resultSet);
                 }
             }
         }
-
         return null;
     }
 
@@ -261,7 +217,6 @@ public class TeacherDAO {
                     Teacher teacher = extractTeacherFromResultSet(resultSet);
 
                     // Load teacher's subjects using the same connection
-                    internalLoadSubjectsForTeacher(conn, teacher);
 
                     return teacher;
                 }
@@ -282,26 +237,23 @@ public class TeacherDAO {
      */
     List<Teacher> getAll(Connection conn) throws SQLException {
         List<Teacher> teachers = new ArrayList<>();
-        String sql = "SELECT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "WHERE p.role = 'Teacher'";
-
+        // Thử truy vấn trực tiếp từ bảng teachers trước để kiểm tra
+        String sql = "SELECT id, user_id, name, gender, contact_number, birthday, email " +
+                // Thêm cột position nếu có trong bảng teachers và bạn muốn lấy nó
+                // ", position " +
+                "FROM teachers";
+        System.out.println("[DEBUG TeacherDAO.getAll] Executing SQL: " + sql);
         try (Statement statement = conn.createStatement();
              ResultSet resultSet = statement.executeQuery(sql)) {
-
             while (resultSet.next()) {
-                Teacher teacher = extractTeacherFromResultSet(resultSet);
-
-                // Load teacher's subjects using the same connection
-                internalLoadSubjectsForTeacher(conn, teacher);
-
-                teachers.add(teacher);
+                // extractTeacherFromResultSet cần phải khớp với các cột được chọn ở đây
+                teachers.add(extractTeacherFromResultSet(resultSet));
             }
         }
-
         return teachers;
     }
+
+
 
     /**
      * Search teachers by name or email using an existing connection.
@@ -313,28 +265,18 @@ public class TeacherDAO {
      */
     List<Teacher> internalSearchTeachers(Connection conn, String searchTerm) throws SQLException {
         List<Teacher> teachers = new ArrayList<>();
-        String sql = "SELECT p.*, t.teacher_id, t.position " +
-                "FROM persons p " +
-                "JOIN teachers t ON p.id = t.person_id " +
-                "WHERE p.role = 'Teacher' AND (p.name LIKE ? OR p.email LIKE ?)";
-
+        String sql = "SELECT teacher_id, name, email FROM teachers " +
+                "WHERE name LIKE ? OR email LIKE ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             String searchPattern = "%" + searchTerm + "%";
             statement.setString(1, searchPattern);
             statement.setString(2, searchPattern);
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    Teacher teacher = extractTeacherFromResultSet(resultSet);
-
-                    // Load teacher's subjects using the same connection
-                    internalLoadSubjectsForTeacher(conn, teacher);
-
-                    teachers.add(teacher);
+                    teachers.add(extractTeacherFromResultSet(resultSet));
                 }
             }
         }
-
         return teachers;
     }
 
@@ -362,8 +304,6 @@ public class TeacherDAO {
                     Teacher teacher = extractTeacherFromResultSet(resultSet);
 
                     // Load teacher's subjects using the same connection
-                    internalLoadSubjectsForTeacher(conn, teacher);
-
                     teachers.add(teacher);
                 }
             }
@@ -395,8 +335,6 @@ public class TeacherDAO {
                     Teacher teacher = extractTeacherFromResultSet(resultSet);
 
                     // Load teacher's subjects using the same connection
-                    internalLoadSubjectsForTeacher(conn, teacher);
-
                     teachers.add(teacher);
                 }
             }
@@ -412,60 +350,8 @@ public class TeacherDAO {
      * @param teacher the teacher object to load subjects into
      * @throws SQLException if a database access error occurs
      */
-    private void internalLoadSubjectsForTeacher(Connection conn, Teacher teacher) throws SQLException {
-        String sql = "SELECT subject FROM teacher_subjects WHERE teacher_id = ?";
 
-        try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, teacher.getId());
 
-            try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    teacher.addSubject(resultSet.getString("subject"));
-                }
-            }
-        }
-    }
-
-    /**
-     * Internal helper method to insert teacher subjects using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param teacherId the teacher ID
-     * @param subjects the list of subjects to insert
-     * @return true if successful
-     * @throws SQLException if a database access error occurs
-     */
-    private boolean internalInsertTeacherSubjects(Connection conn, String teacherId, List<String> subjects) throws SQLException {
-        String sql = "INSERT INTO teacher_subjects (teacher_id, subject) VALUES (?, ?)";
-
-        try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            for (String subject : subjects) {
-                statement.setString(1, teacherId);
-                statement.setString(2, subject);
-                statement.addBatch();
-            }
-
-            int[] results = statement.executeBatch();
-            // Check if all batch operations were successful (at least one row affected)
-            return results.length == subjects.size() && Arrays.stream(results).allMatch(result -> result >= 0); // >= 0 for Statement.SUCCESS_NO_INFO or row count
-        }
-    }
-
-    /**
-     * Internal helper method to delete teacher subjects using an existing connection.
-     *
-     * @param conn the active database connection
-     * @param teacherId the teacher ID
-     * @throws SQLException if a database access error occurs
-     */
-    private void internalDeleteTeacherSubjects(Connection conn, String teacherId) throws SQLException {
-        String sql = "DELETE FROM teacher_subjects WHERE teacher_id = ?";
-
-        try (PreparedStatement statement = conn.prepareStatement(sql)) {
-            statement.setString(1, teacherId);
-            statement.executeUpdate();
-        }
-    }
 
     /**
      * Internal method to add a subject to a teacher using an existing connection.
@@ -517,15 +403,21 @@ public class TeacherDAO {
      * @throws SQLException if a database access error occurs
      */
     private Teacher extractTeacherFromResultSet(ResultSet resultSet) throws SQLException {
+        String userId = resultSet.getString("user_id"); // users.id
+        String teacherRecordPk = resultSet.getString("id"); // teachers.id (PK của bảng teachers)
+        String name = resultSet.getString("name");
+        String gender = resultSet.getString("gender");
+        String contactNumber = resultSet.getString("contact_number");
+        String birthday = resultSet.getString("birthday"); // Dạng String
+        String email = resultSet.getString("email");
         return new Teacher(
-                resultSet.getString("id"), // person.id
-                resultSet.getString("name"), // person.name
-                resultSet.getString("gender"), // person.gender
-                resultSet.getString("contact_number"), // person.contact_number
-                resultSet.getString("birthday"), // person.birthday
-                resultSet.getString("email"), // person.email
-                resultSet.getString("teacher_id"), // teachers.teacher_id
-                resultSet.getString("position") // teachers.position
+                userId,            // Tham số 1: id (users.id) cho Person
+                name,              // Tham số 2: name
+                gender,            // Tham số 3: gender
+                contactNumber,     // Tham số 4: contactNumber
+                birthday,          // Tham số 5: birthday
+                email,             // Tham số 6: email
+                teacherRecordPk    // Tham số 7: teacherId (chính là teachers.id)
         );
     }
 
@@ -586,9 +478,10 @@ public class TeacherDAO {
      * @param id the ID of the teacher to delete (person_id)
      * @return true if the deletion was successful, false otherwise
      */
-    public boolean delete(String id) {
+    public boolean delete(String id) { // Đổi tên tham số 'id' thành 'teacherRecordId' cho rõ ràng hơn
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false); // Start transaction
+            // Gọi internalDelete, truyền teacherRecordId (chính là teachers.id)
             boolean success = internalDelete(conn, id);
             if (success) {
                 conn.commit(); // Commit if successful
@@ -597,7 +490,7 @@ public class TeacherDAO {
             }
             return success;
         } catch (SQLException e) {
-            System.err.println("Error deleting teacher with ID: " + id + ": " + e.getMessage());
+            System.err.println("Error deleting teacher record with teachers.id: " + id + ": " + e.getMessage());
             e.printStackTrace();
             return false;
         }

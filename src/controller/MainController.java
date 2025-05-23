@@ -15,6 +15,7 @@ import src.model.person.Parent;
 import javafx.scene.control.Alert;
 import view.components.ClassList.ClassListScreenView;
 import view.components.ClassList.CreateClassScreenView;
+import view.components.Setting.SettingView;
 import view.components.StudentList.StudentListScreenView;
 
 /**
@@ -85,6 +86,8 @@ public class MainController {
         navigationController.registerView("holidays", new HolidaysView());
         navigationController.registerView("students", new StudentListScreenView());
         navigationController.registerView("classroom-attendance-view", new ClassroomAttendanceView());
+        navigationController.registerView("setting_view", new SettingView());
+        navigationController.registerView("profile", new UserProfileView());
         //navigationController.registerView("classes", new CreateClassScreenView());
     }
     /**

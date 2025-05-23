@@ -33,6 +33,7 @@ public abstract class BaseScreenView implements ScreenView {
         this.title.set(title);
     }
 
+
     protected Person getCurrentUser() {
         if (mainController != null) {
             return mainController.getCurrentUser();
@@ -94,10 +95,17 @@ public abstract class BaseScreenView implements ScreenView {
     }
 
     @Override
-    public void setMainController(MainController mainController) {
-        this.mainController = mainController;
+    public void setMainController(MainController mainControllerInstance) {
+        System.out.println("BaseScreenView.setMainController called with MainController hashCode: " + mainControllerInstance.hashCode());
+        if (mainControllerInstance != null && mainControllerInstance.getCurrentUser() != null) {
+            System.out.println("BaseScreenView.setMainController: Instance has user: " + mainControllerInstance.getCurrentUser().getName());
+        } else if (mainControllerInstance != null) {
+            System.out.println("BaseScreenView.setMainController: Instance does NOT have user yet, or user is null.");
+        } else {
+            System.out.println("BaseScreenView.setMainController: Called with a NULL MainController instance!");
+        }
+        BaseScreenView.mainController = mainControllerInstance;
     }
-
     /**
      * Lấy đối tượng NavigationController
      * @return đối tượng NavigationController đã được thiết lập

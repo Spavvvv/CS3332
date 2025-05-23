@@ -5,6 +5,7 @@ module CS3323 {
     requires java.sql;
     requires java.desktop;
     requires java.prefs;
+    requires javafx.base; // Đảm bảo có dòng này (nếu chưa có)
 
 
     exports view;
@@ -24,4 +25,5 @@ module CS3323 {
     opens src.model.teaching.quarterly to javafx.base;
     opens src.model.teaching.yearly to javafx.base;
     opens src.model.report to javafx.base;
+    opens view.components.Setting to javafx.base; // <--- Dòng này đã được thêm vào
 }
