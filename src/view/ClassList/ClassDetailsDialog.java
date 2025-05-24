@@ -8,14 +8,20 @@ import javafx.scene.layout.*;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import src.dao.Person.TeacherDAO;
+import src.model.system.course.Course;
+import src.model.person.Teacher;
+
+import java.util.Optional;
 
 public class ClassDetailsDialog {
     private Stage dialogStage;
     private VBox mainContainer;
     private ScrollPane scrollPane;
+    private TeacherDAO teacherDAO;
 
-    // Lớp học cần hiển thị chi tiết
-    private ClassListScreenView.ClassInfo classInfo;
+    // Class information to display
+    private Course course;
 
     // Constants for styling
     private static final String PRIMARY_COLOR = "#4F46E5";
@@ -24,8 +30,9 @@ public class ClassDetailsDialog {
     private static final String LABEL_COLOR = "#64748B";
     private static final String BG_COLOR = "#F8FAFC";
 
-    public ClassDetailsDialog(ClassListScreenView.ClassInfo classInfo) {
-        this.classInfo = classInfo;
+    public ClassDetailsDialog(Course course, TeacherDAO teacherDAO) {
+        this.course = course; // Pass the course object containing class details
+        this.teacherDAO = teacherDAO; // Inject the TeacherDAO for managing teacher relationships
         createDialog();
     }
 
@@ -42,30 +49,30 @@ public class ClassDetailsDialog {
         mainContainer.setPadding(new Insets(25));
         mainContainer.setStyle("-fx-background-color: white;");
 
-        // Tạo form hiển thị thông tin
+        // Create form with class details
         VBox formContainer = createFormContainer();
 
-        // Tạo thanh sidebar hiển thị lịch sử
+        // Create sidebar to display additional history or other information
         VBox sidebar = createSidebar();
 
-        // Kết hợp form và sidebar
+        // Combine form and sidebar
         HBox contentLayout = new HBox(20);
         contentLayout.getChildren().addAll(formContainer, sidebar);
         HBox.setHgrow(formContainer, Priority.ALWAYS);
 
-        // Tạo footer với nút đóng
+        // Create footer with close button
         HBox footer = createFooter();
 
-        // Thêm vào container chính
+        // Add to main container
         mainContainer.getChildren().addAll(contentLayout, footer);
 
-        // Tạo scroll pane
+        // Create scroll pane
         scrollPane = new ScrollPane(mainContainer);
         scrollPane.setFitToWidth(true);
         scrollPane.setFitToHeight(true);
         scrollPane.setStyle("-fx-background-color: white;");
 
-        // Tạo scene
+        // Create scene
         Scene scene = new Scene(scrollPane, 700, 500);
         dialogStage.setScene(scene);
     }
@@ -74,78 +81,79 @@ public class ClassDetailsDialog {
         VBox form = new VBox(15);
         form.setStyle("-fx-background-color: white;");
 
-        // GridPane cho form
+        // GridPane for the form layout
         GridPane gridPane = new GridPane();
         gridPane.setVgap(15);
         gridPane.setHgap(15);
 
-        // Tạo các label và text field
+        // Add labels and fields to display course information
         int row = 0;
 
-        Label codeLabel = new Label("Mã:");
-        TextField codeField = createReadOnlyTextField(classInfo.getCode());
+        Label codeLabel = new Label("Mã lớp:");
+        TextField codeField = createReadOnlyTextField(course.getCourseId());
         gridPane.add(codeLabel, 0, row);
         gridPane.add(codeField, 1, row);
 
         Label nameLabel = new Label("Tên lớp:");
-        TextField nameField = createReadOnlyTextField(classInfo.getName());
+        TextField nameField = createReadOnlyTextField(course.getCourseName());
         gridPane.add(nameLabel, 2, row);
         gridPane.add(nameField, 3, row);
         row++;
 
-        Label courseLabel = new Label("Khóa học:");
-        TextField courseField = createReadOnlyTextField("Lớp chính"); // Giả sử là "Lớp chính"
-        gridPane.add(courseLabel, 0, row);
-        gridPane.add(courseField, 1, row, 3, 1); // Span 3 columns
+        Label subjectLabel = new Label("Môn học:");
+        TextField subjectField = createReadOnlyTextField(course.getSubject());
+        gridPane.add(subjectLabel, 0, row);
+        gridPane.add(subjectField, 1, row, 3, 1);
         row++;
-
-        Label locationLabel = new Label("Cơ sở:");
-        TextField locationField = createReadOnlyTextField("Cơ sở Láng Hạ"); // Giả sử
-        gridPane.add(locationLabel, 0, row);
-        gridPane.add(locationField, 1, row, 3, 1); // Span 3 columns
-        row++;
-
-        Label statusLabel = new Label("Trạng thái:");
-        TextField statusField = createReadOnlyTextField("Đang học");
-        gridPane.add(statusLabel, 0, row);
-        gridPane.add(statusField, 1, row);
 
         Label startDateLabel = new Label("Ngày bắt đầu:");
-        TextField startDateField = createReadOnlyTextField(classInfo.getStartDate());
-        gridPane.add(startDateLabel, 2, row);
-        gridPane.add(startDateField, 3, row);
-        row++;
+        TextField startDateField = createReadOnlyTextField(
+                course.getStartDate() != null ? course.getStartDate().toString() : "Không xác định"
+        );
+        gridPane.add(startDateLabel, 0, row);
+        gridPane.add(startDateField, 1, row);
 
         Label endDateLabel = new Label("Ngày kết thúc:");
-        TextField endDateField = createReadOnlyTextField(classInfo.getEndDate());
-        gridPane.add(endDateLabel, 0, row);
-        gridPane.add(endDateField, 1, row);
-
-        Label priceLabel = new Label("Giá:");
-        HBox priceBox = new HBox(0);
-        TextField priceField = createReadOnlyTextField("150.000");
-        Label priceUnit = new Label(" / Buổi/Thu theo tháng");
-        priceUnit.setStyle("-fx-background-color: #f1f5f9; -fx-padding: 8 15;");
-        priceBox.getChildren().addAll(priceField, priceUnit);
-        gridPane.add(priceLabel, 2, row);
-        gridPane.add(priceBox, 3, row);
+        TextField endDateField = createReadOnlyTextField(
+                course.getEndDate() != null ? course.getEndDate().toString() : "Không xác định"
+        );
+        gridPane.add(endDateLabel, 2, row);
+        gridPane.add(endDateField, 3, row);
         row++;
 
-        Label sessionsLabel = new Label("Số buổi:");
-        TextField sessionsField = createReadOnlyTextField("35");
-        gridPane.add(sessionsLabel, 0, row);
-        gridPane.add(sessionsField, 1, row);
+        Label dayOfWeekLabel = new Label("Ngày học:");
+        TextField dayOfWeekField = createReadOnlyTextField(course.getDayOfWeek());
+        gridPane.add(dayOfWeekLabel, 0, row);
+        gridPane.add(dayOfWeekField, 1, row);
+        row++;
 
-        Label durationLabel = new Label("Thời lượng:");
-        HBox durationBox = new HBox(0);
-        TextField durationField = createReadOnlyTextField("90");
-        Label durationUnit = new Label(" phút");
-        durationUnit.setStyle("-fx-background-color: #f1f5f9; -fx-padding: 8 15;");
-        durationBox.getChildren().addAll(durationField, durationUnit);
-        gridPane.add(durationLabel, 2, row);
-        gridPane.add(durationBox, 3, row);
+        Label startTimeLabel = new Label("Giờ bắt đầu:");
+        TextField startTimeField = createReadOnlyTextField(
+                course.getCourseStartTime() != null ? course.getCourseStartTime().toString() : "Không xác định"
+        );
+        gridPane.add(startTimeLabel, 0, row);
+        gridPane.add(startTimeField, 1, row);
 
-        // Style cho tất cả label
+        Label endTimeLabel = new Label("Giờ kết thúc:");
+        TextField endTimeField = createReadOnlyTextField(
+                course.getCourseEndTime() != null ? course.getCourseEndTime().toString() : "Không xác định"
+        );
+        gridPane.add(endTimeLabel, 2, row);
+        gridPane.add(endTimeField, 3, row);
+        row++;
+
+        Label roomLabel = new Label("Mã phòng học:");
+        TextField roomField = createReadOnlyTextField(course.getRoomId() != null ? course.getRoomId() : "Không xác định");
+        gridPane.add(roomLabel, 0, row);
+        gridPane.add(roomField, 1, row);
+        row++;
+
+        Label teacherLabel = new Label("Giáo viên:");
+        TextField teacherField = createReadOnlyTextField(getTeacherName(course.getTeacher() != null ? course.getTeacher().getId() : null));
+        gridPane.add(teacherLabel, 0, row);
+        gridPane.add(teacherField, 1, row);
+
+        // Style for all labels
         gridPane.getChildren().filtered(node -> node instanceof Label).forEach(node -> {
             Label label = (Label) node;
             label.setStyle("-fx-text-fill: " + LABEL_COLOR + "; -fx-font-size: 13px;");
@@ -217,5 +225,15 @@ public class ClassDetailsDialog {
 
     public void show() {
         dialogStage.showAndWait();
+    }
+
+    private String getTeacherName(String teacherId) {
+        if (teacherId == null || teacherId.isEmpty()) {
+            return "Không xác định";
+        }
+
+        // Fetch teacher name using TeacherDAO
+        Optional<Teacher> teacher = teacherDAO.findById(teacherId);
+        return teacher.map(Teacher::getName).orElse("Không xác định");
     }
 }

@@ -1,8 +1,11 @@
 package src.view.StudentList;
 import javafx.scene.Node;
 import javafx.stage.Stage;
+import src.controller.MainController;
 import src.dao.Notifications.NotificationDAO;
+import src.dao.Person.CourseDAO;
 import src.dao.Person.StudentDAO;
+import src.dao.Person.TeacherDAO;
 import src.model.person.Person;
 import src.model.person.Student;
 import javafx.beans.property.SimpleStringProperty;
@@ -12,14 +15,16 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import src.model.Notification.NotificationService;
+import src.model.person.Person;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import src.view.components.Screen.BaseScreenView;
 import src.model.person.Permission; // Import enum Permission (đảm bảo đường dẫn đúng)
 import src.model.person.RolePermissions;
+import src.view.components.Screen.BaseScreenView;
 
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.Period;
@@ -960,7 +965,7 @@ public class StudentListScreenView extends BaseScreenView {
     }
 
     /**
-     * Handle src.view details action
+     * Handle view details action
      */
 
     private void handleViewDetails(StudentInfo studentInfo) {
@@ -970,6 +975,7 @@ public class StudentListScreenView extends BaseScreenView {
         VBox mainContent = new VBox(20);
         mainContent.setPadding(new Insets(20));
         mainContent.setStyle("-fx-background-color: #f8f9fa;");
+
         // --- Phần 1: Thông tin cá nhân ---
         VBox personalInfoSection = new VBox(10);
         personalInfoSection.setPadding(new Insets(15));
@@ -993,7 +999,7 @@ public class StudentListScreenView extends BaseScreenView {
         personalGrid.add(createDetailLabel("Họ tên:", true), 0, 1);
         personalGrid.add(
                 setupEditableTextField(studentInfo, studentInfo.getName(), "name", "Họ tên",
-                        createEditButton("Họ tên")), // Truyền nút Sửa đã tạo
+                        createEditButton("Họ tên")),
                 1, 1
         );
         // Ngày sinh (Chỉnh sửa bằng DatePicker)
@@ -1003,7 +1009,6 @@ public class StudentListScreenView extends BaseScreenView {
                         createEditButton("Ngày sinh")),
                 1, 2
         );
-
         // Phụ huynh (Chỉnh sửa bằng TextField)
         personalGrid.add(createDetailLabel("Phụ huynh:", true), 0, 3);
         personalGrid.add(
@@ -1011,42 +1016,22 @@ public class StudentListScreenView extends BaseScreenView {
                         createEditButton("Phụ huynh")),
                 1, 3
         );
-        // SĐT phụ huynh (Chỉnh sửa bằng TextField)
+        // SĐT phụ huynh
         personalGrid.add(createDetailLabel("SĐT phụ huynh:", true), 0, 4);
-        HBox parentPhoneEditableBox = setupEditableTextField(
-                studentInfo, studentInfo.getParentPhone(), "parentPhone", "SĐT phụ huynh",
-                createEditButton("SĐT phụ huynh") // Nút Sửa
-        );
-        // Thêm nút Copy vào HBox này một cách cẩn thận
-        // Nút copy sẽ nằm giữa Label/TextField và nút Sửa/Lưu
-        // Cấu trúc của setupEditableTextField trả về HBox(labelOrInput, editButton)
-        // Chúng ta cần chèn nút copy vào.
-        HBox finalParentPhoneBox = new HBox(5);
-        Node displayOrEditNodeForParentPhone = parentPhoneEditableBox.getChildren().get(0); // Label hoặc TextField
-        Button editOrSaveButtonForParentPhone = (Button) parentPhoneEditableBox.getChildren().get(parentPhoneEditableBox.getChildren().size() -1 ); // Nút Sửa/Lưu
-        finalParentPhoneBox.getChildren().addAll(
-                displayOrEditNodeForParentPhone,
-                createCopyButton(studentInfo.getParentPhone(), "Sao chép SĐT phụ huynh"), // Nút copy
-                editOrSaveButtonForParentPhone
-        );
-        finalParentPhoneBox.setAlignment(Pos.CENTER_LEFT);
-        // Cần đảm bảo logic của nút Sửa/Lưu vẫn hoạt động đúng với Node trong finalParentPhoneBox
-        // Điều này phức tạp hơn, tạm thời đơn giản hóa SĐT phụ huynh chỉ có Sửa, không copy khi đang sửa.
-        // Hoặc nút copy sẽ copy giá trị hiện tại của Label/TextField.
-        // Đơn giản hóa: Tạo HBox riêng cho SĐT phụ huynh để xử lý dễ hơn
         Label parentPhoneValueLabel = createDetailLabel(studentInfo.getParentPhone(), false);
         Button parentPhoneEditButton = createEditButton("SĐT phụ huynh");
         HBox parentPhoneCellBox = new HBox(5,
                 parentPhoneValueLabel,
-                createCopyButton(studentInfo.getParentPhone(), "Sao chép SĐT phụ huynh"), // Copy giá trị label
+                createCopyButton(studentInfo.getParentPhone(), "Sao chép SĐT phụ huynh"),
                 parentPhoneEditButton
         );
         parentPhoneCellBox.setAlignment(Pos.CENTER_LEFT);
         setupFieldEditLogic(studentInfo, "parentPhone", "SĐT phụ huynh", parentPhoneValueLabel, parentPhoneEditButton, parentPhoneCellBox, studentInfo.getParentPhone());
         personalGrid.add(parentPhoneCellBox, 1, 4);
         personalInfoSection.getChildren().addAll(personalTitle, createVerticalSpacer(10), personalGrid);
+
         // --- Phần 2: Thông tin liên hệ ---
-        VBox contactInfoSection = new VBox(10); // Tương tự như trên
+        VBox contactInfoSection = new VBox(10);
         contactInfoSection.setPadding(new Insets(15));
         contactInfoSection.setStyle("-fx-background-color: white; -fx-border-color: #dee2e6; -fx-border-width: 1; -fx-border-radius: 8; -fx-background-radius: 8;");
         Label contactTitle = new Label("📞 Thông tin liên hệ");
@@ -1055,7 +1040,7 @@ public class StudentListScreenView extends BaseScreenView {
         GridPane contactGrid = new GridPane();
         contactGrid.setHgap(10);
         contactGrid.setVgap(8);
-        // Điện thoại (Chỉnh sửa bằng TextField)
+        // Điện thoại
         contactGrid.add(createDetailLabel("Điện thoại:", true), 0, 0);
         Label phoneValueLabel = createDetailLabel(studentInfo.getPhone(), false);
         Button phoneEditButton = createEditButton("SĐT");
@@ -1068,14 +1053,15 @@ public class StudentListScreenView extends BaseScreenView {
         setupFieldEditLogic(studentInfo, "phone", "Điện thoại", phoneValueLabel, phoneEditButton, phoneCellBox, studentInfo.getPhone());
         contactGrid.add(phoneCellBox, 1, 0);
 
-        // Email (Không có nút sửa trong code gốc, giữ nguyên)
+        // Email
         contactGrid.add(createDetailLabel("Email:", true), 0, 1);
         HBox emailBox = new HBox(5, createDetailLabel(studentInfo.getEmail(), false), createCopyButton(studentInfo.getEmail(), "Sao chép Email"));
         emailBox.setAlignment(Pos.CENTER_LEFT);
         contactGrid.add(emailBox, 1, 1);
         contactInfoSection.getChildren().addAll(contactTitle, createVerticalSpacer(10), contactGrid);
+
         // --- Phần 3: Thông tin học tập ---
-        VBox academicInfoSection = new VBox(10); // Tương tự
+        VBox academicInfoSection = new VBox(10);
         academicInfoSection.setPadding(new Insets(15));
         academicInfoSection.setStyle("-fx-background-color: white; -fx-border-color: #dee2e6; -fx-border-width: 1; -fx-border-radius: 8; -fx-background-radius: 8;");
         Label academicTitle = new Label("🎓 Thông tin học tập");
@@ -1084,21 +1070,49 @@ public class StudentListScreenView extends BaseScreenView {
         GridPane academicGrid = new GridPane();
         academicGrid.setHgap(10);
         academicGrid.setVgap(8);
-        // Lớp học (Chỉnh sửa bằng ComboBox)
-        academicGrid.add(createDetailLabel("Lớp học:", true), 0, 0);
-        List<String> classOptions = Arrays.asList("Lớp A1", "Lớp B2", "Lớp C3", "Chưa xếp lớp"); // Lấy từ ClassDAO sau
-        academicGrid.add(
-                setupEditableComboBoxField(studentInfo, studentInfo.getClassName(), "className", "Lớp học",
-                        createEditButton("Lớp học"), classOptions),
-                1, 0
-        );
-        // Trạng thái (Chỉnh sửa bằng ComboBox)
+
+        // >>> PHẦN THAY ĐỔI CHO MỤC "LỚP HỌC" <<<
+        academicGrid.add(createDetailLabel("Lớp học:", true), 0, 0); // Nhãn "Lớp học:"
+
+        VBox enrolledCoursesDisplay = new VBox(3); // VBox để hiển thị danh sách các khóa học
+        enrolledCoursesDisplay.setAlignment(Pos.CENTER_LEFT);
+
+        try {
+            // Khởi tạo các DAO cần thiết
+            StudentDAO studentDAO = new StudentDAO();
+            CourseDAO courseDAO = new CourseDAO();
+            TeacherDAO teacherDAO = new TeacherDAO(); // Cần cho CourseDAO
+
+            // Thiết lập dependencies
+            courseDAO.setTeacherDAO(teacherDAO); // CourseDAO cần TeacherDAO
+            studentDAO.setCourseDAO(courseDAO);   // StudentDAO cần CourseDAO
+
+            // Lấy danh sách các đối tượng Course mà sinh viên đã đăng ký
+            List<src.model.system.course.Course> enrolledCourses = studentDAO.getCoursesForStudent(studentInfo.getUserId());
+
+            if (enrolledCourses != null && !enrolledCourses.isEmpty()) {
+                for (src.model.system.course.Course course : enrolledCourses) {
+                    // Hiển thị ID và tên khóa học
+                    Label courseLabel = createDetailLabel(course.getCourseId() + " - " + course.getCourseName(), false);
+                    enrolledCoursesDisplay.getChildren().add(courseLabel);
+                }
+            } else {
+                enrolledCoursesDisplay.getChildren().add(createDetailLabel("Chưa tham gia khóa học nào.", false));
+            }
+        } catch (Exception e) {
+            System.err.println("Lỗi khi tải danh sách lớp học của sinh viên: " + e.getMessage());
+            e.printStackTrace();
+            enrolledCoursesDisplay.getChildren().add(createDetailLabel("Lỗi tải danh sách lớp học.", false));
+            // showInfo("Đã xảy ra lỗi khi tải danh sách lớp học của học viên: " + e.getMessage()); // Tùy chọn: hiển thị alert
+        }
+        academicGrid.add(enrolledCoursesDisplay, 1, 0); // Thêm VBox này vào grid
+        // >>> KẾT THÚC PHẦN THAY ĐỔI CHO MỤC "LỚP HỌC" <<<
+
+        // Trạng thái (Chỉnh sửa bằng ComboBox) - Giữ nguyên
         academicGrid.add(createDetailLabel("Trạng thái:", true), 0, 1);
-        List<String> statusOptions = Arrays.asList("Đang học", "Nghỉ học", "Bảo lưu", "Mới"); // Các trạng thái hợp lệ
-        // HBox cho trạng thái cần được xây dựng cẩn thận để giữ style màu mè
-        Label statusValueLabelOriginal = createDetailLabel(studentInfo.getStatus(), false); // Label gốc để lấy style
+        List<String> statusOptions = Arrays.asList("Đang học", "Nghỉ học", "Bảo lưu", "Mới");
+        Label statusValueLabelOriginal = createDetailLabel(studentInfo.getStatus(), false);
         String initialStatusBgColor, initialStatusTextColor;
-        // ... (copy logic switch case để lấy màu cho initialStatusBgColor, initialStatusTextColor)
         switch (studentInfo.getStatus()) {
             case "Đang học": initialStatusBgColor = GREEN_COLOR + "40"; initialStatusTextColor = GREEN_COLOR; break;
             case "Nghỉ học": initialStatusBgColor = RED_COLOR + "40"; initialStatusTextColor = RED_COLOR; break;
@@ -1114,10 +1128,13 @@ public class StudentListScreenView extends BaseScreenView {
         statusCellBox.setAlignment(Pos.CENTER_LEFT);
         academicGrid.add(statusCellBox, 1, 1);
         academicInfoSection.getChildren().addAll(academicTitle, createVerticalSpacer(10), academicGrid);
+
+        // Thêm các section vào mainContent
         mainContent.getChildren().addAll(personalInfoSection, contactInfoSection, academicInfoSection);
+
         DialogPane dialogPane = alert.getDialogPane();
         dialogPane.setContent(mainContent);
-        dialogPane.setPrefWidth(550); // Tăng chiều rộng nếu cần
+        dialogPane.setPrefWidth(550);
         dialogPane.setPrefHeight(Region.USE_COMPUTED_SIZE);
         alert.getButtonTypes().setAll(new ButtonType("Đóng", ButtonBar.ButtonData.OK_DONE));
         alert.showAndWait();

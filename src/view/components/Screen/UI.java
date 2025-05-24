@@ -2,6 +2,7 @@ package src.view.components.Screen;
 
 import src.controller.MainController;
 import src.controller.NavigationController;
+import src.model.person.Permission;
 import src.model.person.Person;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -16,9 +17,12 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import src.model.Notification.Notification; // Model Notification của bạn
 import src.model.Notification.NotificationService; // Service của bạn
-
+import java.util.Collections; // Để sắp xếp
 import java.time.format.DateTimeFormatter; // Để định dạng ngày giờ
 import javafx.scene.control.ScrollPane;
+import src.model.person.Role;
+import src.model.person.RolePermissions;
+
 /**
  * Lớp quản lý giao diện người dùng chính của ứng dụng
  */
@@ -35,6 +39,8 @@ public class UI {
     private Label breadcrumbPathLabel;
     private Label userLabel;
     private NotificationService notificationService;
+    private Role currentUserSystemRole; // << --- THÊM DÒNG NÀY (để lưu Role enum)
+
     // Biến để lưu trạng thái hiển thị submenu
     private VBox sidebar;
     private VBox trainingSubmenu;
@@ -70,13 +76,38 @@ public class UI {
             this.currentUserName = person.getName();
             this.currentUserContact = person.getContactNumber();
             this.currentUserEmail = person.getEmail();
-            this.currentUserRole = determineUserRole(person);
+            this.currentUserRole = determineUserRole(person); // Dành cho hiển thị chuỗi
+            this.currentUserSystemRole = determineUserSystemRole(person); // << --- THÊM DÒNG NÀY
 
-            // Cập nhật UI nếu đã được khởi tạo
+            updateUserDisplay();
+        } else {
+            // Xử lý khi người dùng đăng xuất hoặc không có thông tin
+            this.currentUserName = "Khách";
+            this.currentUserContact = "";
+            this.currentUserEmail = "";
+            this.currentUserRole = "Khách";
+            this.currentUserSystemRole = null; // Đặt là null khi không có người dùng
             updateUserDisplay();
         }
     }
-
+    private Role determineUserSystemRole(Person person) {
+        if (person == null) {
+            return null;
+        }
+        String className = person.getClass().getSimpleName();
+        switch (className) {
+            case "Admin":
+                return Role.ADMIN;
+            case "Teacher":
+                return Role.TEACHER;
+            case "Student":
+                return Role.STUDENT;
+            case "Parent":
+                return Role.PARENT;
+            default:
+                return null; // Hoặc một vai trò mặc định nếu bạn có
+        }
+    }
     /**
      * Xác định vai trò người dùng từ loại đối tượng
      * @param person Đối tượng người dùng
@@ -385,11 +416,13 @@ public class UI {
         manageSubmenu = createSubmenu();
         manageSubmenu.getChildren().addAll(
                 createSubmenuButton("Phòng học", "classrooms"),
-                createSubmenuButton("Ngày nghỉ", "holidays"),
-                createSubmenuButton("Cài đặt", "settings")
+                createSubmenuButton("Ngày nghỉ", "holidays")
         );
         manageSubmenu.setVisible(false);
         manageSubmenu.setManaged(false);
+        if (this.currentUserSystemRole != null && RolePermissions.hasPermission(this.currentUserSystemRole, Permission.SETTING_SYSTEM)) {
+            manageSubmenu.getChildren().add(createSubmenuButton("Cài đặt", "setting_view"));
+        }
 
         sidebar.getChildren().addAll(
                 trainingHeader, trainingSubmenu,
