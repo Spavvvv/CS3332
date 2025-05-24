@@ -9,10 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Data Access Object for the Account entity
- * Handles database operations for user accounts
- */
 public class AccountDAO {
     private final DatabaseConnection dbConnector;
 
@@ -32,38 +28,59 @@ public class AccountDAO {
      * @return true if successful, false otherwise
      */
     public boolean save(String username, String password, String role) {
-        // Thủ tục hai bước: lưu account trước, sau đó tạo user record liên kết với account
-        String sql = "INSERT INTO accounts (username, password, role) VALUES (?, ?, ?)";
+        // Phương thức save này có vẻ khác với phiên bản trước đó trong artifact.
+        // Sử dụng logic từ code bạn cung cấp.
+        // Cần đảm bảo ID cho bảng accounts và users được xử lý đúng.
+        // Schema của bạn yêu cầu ID cho accounts (VARCHAR 50, NOT NULL, PK).
+        // Schema của bạn yêu cầu ID cho users (VARCHAR 50, NOT NULL, PK).
 
-        try (Connection conn = dbConnector.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        String accountSql = "INSERT INTO accounts (id, username, password, role) VALUES (?, ?, ?, ?)";
+        String userSql = "INSERT INTO users (id, account_id, name, active) VALUES (?, ?, ?, true)";
 
-            stmt.setString(1, username);
-            stmt.setString(2, password); // Nên mã hóa trong môi trường production
-            stmt.setString(3, role);
+        // Tạo ID mới cho account và user (ví dụ sử dụng UUID)
+        String newAccountId = java.util.UUID.randomUUID().toString().substring(0, Math.min(50, 36));
+        String newUserId = java.util.UUID.randomUUID().toString().substring(0, Math.min(50, 36));
+        // Tên mặc định cho user mới, bạn có thể muốn truyền tên này vào hàm save
+        String defaultNameForNewUser = "Người dùng " + username;
 
-            int affectedRows = stmt.executeUpdate();
 
-            if (affectedRows > 0) {
-                // Lấy ID của account vừa tạo
-                try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
-                    if (generatedKeys.next()) {
-                        String accountId = generatedKeys.getString(1);
+        try (Connection conn = dbConnector.getConnection()) {
+            conn.setAutoCommit(false); // Bắt đầu transaction
 
-                        // Tạo user record mới với account_id
-                        String userSql = "INSERT INTO users (account_id, active) VALUES (?, true)";
-                        try (PreparedStatement userStmt = conn.prepareStatement(userSql)) {
-                            userStmt.setString(1, accountId);
-                            return userStmt.executeUpdate() > 0;
-                        }
-                    }
+            // Bước 1: Chèn vào bảng accounts
+            try (PreparedStatement stmt = conn.prepareStatement(accountSql)) {
+                stmt.setString(1, newAccountId); // Cung cấp ID cho account
+                stmt.setString(2, username);
+                stmt.setString(3, password); // Nên mã hóa trong môi trường production
+                stmt.setString(4, role);
+                int affectedRows = stmt.executeUpdate();
+                if (affectedRows == 0) {
+                    conn.rollback();
+                    return false; // Không chèn được account
                 }
             }
-            return false;
+
+            // Bước 2: Chèn vào bảng users, liên kết với account_id vừa tạo
+            try (PreparedStatement userStmt = conn.prepareStatement(userSql)) {
+                userStmt.setString(1, newUserId); // ID cho bảng users
+                userStmt.setString(2, newAccountId); // account_id từ account vừa tạo
+                userStmt.setString(3, defaultNameForNewUser); // Tên người dùng
+                // Các trường khác của users có thể cần giá trị mặc định hoặc null
+                // active đã được đặt là true trong câu SQL
+                if (userStmt.executeUpdate() == 0) {
+                    conn.rollback();
+                    return false; // Không chèn được user
+                }
+            }
+
+            conn.commit(); // Hoàn thành transaction
+            return true;
 
         } catch (SQLException e) {
             System.err.println("Error saving account: " + e.getMessage());
             e.printStackTrace();
+            // Cố gắng rollback nếu có lỗi và connection còn mở
+            // try (Connection conn = dbConnector.getConnection()) { if (conn != null && !conn.isClosed()) conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
             return false;
         }
     }
@@ -105,6 +122,8 @@ public class AccountDAO {
      * @return true if successful, false otherwise
      */
     public boolean delete(String id) {
+        // Lưu ý: Khóa ngoại users.account_id tham chiếu đến accounts.id có ON DELETE SET NULL.
+        // Nên việc xóa account sẽ tự động cập nhật users.account_id thành NULL cho các user liên quan.
         String sql = "DELETE FROM accounts WHERE id = ?";
 
         try (Connection conn = dbConnector.getConnection();
@@ -177,13 +196,12 @@ public class AccountDAO {
     }
 
     /**
-     * Find an account by person ID
-     *
-     * @param userId Person ID to search for
+     * Find an account by user ID (users.id)
+     * This method is crucial for SettingView to link Teacher (User) to their Account.
+     * @param userId ID of the user (from users.id)
      * @return Optional containing the account data if found
      */
     public Optional<Account> findByUserId(String userId) {
-        // Thay đổi truy vấn để tìm account dựa trên user id từ bảng users
         String sql = "SELECT a.* FROM accounts a " +
                 "JOIN users u ON u.account_id = a.id " +
                 "WHERE u.id = ?";
@@ -195,12 +213,13 @@ public class AccountDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
+                    // mapResultSetToAccount sẽ chỉ đọc các cột của bảng 'accounts'
                     return Optional.of(mapResultSetToAccount(rs));
                 }
             }
 
         } catch (SQLException e) {
-            System.err.println("Error finding account by user ID: " + e.getMessage());
+            System.err.println("Error finding account by user ID (" + userId + "): " + e.getMessage());
             e.printStackTrace();
         }
 
@@ -241,10 +260,9 @@ public class AccountDAO {
      * @return Optional containing the Person object if authentication successful
      */
     public Optional<Person> authenticate(String username, String password) {
-        // Truy vấn cả bảng accounts và users
-        String sql = "SELECT a.*, u.* FROM accounts a " +
+        String sql = "SELECT a.id as account_table_id, a.role, u.* FROM accounts a " + // Đổi tên a.id để tránh trùng với u.id
                 "JOIN users u ON u.account_id = a.id " +
-                "WHERE a.username = ? AND a.password = ?";
+                "WHERE a.username = ? AND a.password = ?"; // Cân nhắc sử dụng password hashing
 
         try (Connection conn = dbConnector.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -254,24 +272,35 @@ public class AccountDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    // Lấy thông tin từ bảng accounts
-                    String accountId = rs.getString("a.id");
-                    String role = rs.getString("a.role");
-
-                    // Lấy thông tin từ bảng users
-                    String userId = rs.getString("u.id");
+                    String role = rs.getString("a.role"); // Lấy từ alias của bảng accounts
+                    String userId = rs.getString("u.id"); // ID từ bảng users
                     String name = rs.getString("u.name");
                     String email = rs.getString("u.email");
+                    String gender = rs.getString("u.gender");
+                    String contactNumber = rs.getString("u.contact_number");
+                    String birthday = rs.getString("u.birthday"); // Dạng String từ DB
                     boolean isActive = rs.getBoolean("u.active");
 
-                    // Kiểm tra trạng thái hoạt động
                     if (!isActive) {
-                        System.out.println("Tài khoản không hoạt động.");
+                        System.out.println("Tài khoản người dùng (" + name + ") không hoạt động.");
                         return Optional.empty();
                     }
 
-                    // Dựa vào vai trò, tạo đối tượng Person tương ứng
-                    return createPersonObject(role, userId, name, email);
+                    switch (role.toUpperCase()) {
+                        case "TEACHER":
+                            // Teacher constructor: (id, name, gender, contactNumber, birthday, email, teacherId, position)
+                            // `userId` (từ users.id) được dùng làm ID chính cho Person.
+                            // `teacherId` trong Teacher model có thể là users.id hoặc một ID riêng từ bảng teachers.
+                            // Dựa trên TeacherDAO, teacher.getId() là users.id, teacher.getTeacherId() là teachers.id.
+                            // Ở đây, chúng ta không có teachers.id trực tiếp, nên có thể dùng users.id cho teacherId.
+                            return Optional.of(new Teacher(userId, name, gender, contactNumber, birthday, email, userId)); // Sử dụng userId cho teacherId, role cho position
+                        case "ADMIN":
+                            // Admin constructor: (id, name, gender, contactNumber, birthday, email, accessLevel)
+                            return Optional.of(new Admin(userId, name, gender, contactNumber, birthday, email, "FullAccess")); // Giả định accessLevel
+                        default:
+                            System.err.println("Vai trò không xác định trong authenticate: " + role);
+                            return Optional.empty();
+                    }
                 }
             }
 
@@ -283,32 +312,26 @@ public class AccountDAO {
         return Optional.empty();
     }
 
-    // Hàm tạo đối tượng Person dựa vào vai trò
-    private Optional<Person> createPersonObject(String role, String userId, String name, String email) {
-        switch (role.toUpperCase()) {
-            case "TEACHER":
-                return Optional.of(new Teacher(userId, name, "Không xác định", email, "", "", userId, "Giáo viên"));
-            case "ADMIN":
-                return Optional.of(new Admin(userId, name, "Không xác định", email, "", "", null));
-            default:
-                return Optional.empty();
-        }
-    }
+    // Hàm tạo đối tượng Person dựa vào vai trò (đã được tích hợp vào authenticate)
+    // private Optional<Person> createPersonObject(String role, String userId, String name, String email) { ... }
 
     /**
      * Load the appropriate Person subclass based on role and ID
      *
      * @param role User role
-     * @param userId Person ID
+     * @param userId Person ID (users.id)
      * @return Optional containing the Person object
      */
     private Optional<Person> loadPersonByRole(String role, String userId) throws SQLException {
-        // Thay đổi cách lấy dữ liệu từ DAO tương ứng với từng loại người dùng
+        // Phương thức này có thể không cần thiết nếu authenticate đã xử lý việc tạo Person.
+        // Tuy nhiên, giữ lại nếu có trường hợp sử dụng khác.
         switch (role.toUpperCase()) {
             case "TEACHER":
-                TeacherDAO teacherDAO = new TeacherDAO();
+                TeacherDAO teacherDAO = new TeacherDAO(); // Cần xử lý SQLException từ constructor TeacherDAO
+                // TeacherDAO.findById(userId) mong đợi users.id (vì Teacher.id là users.id)
                 return teacherDAO.findById(userId).map(teacher -> (Person) teacher);
             case "ADMIN":
+                // Lấy thông tin Admin từ bảng users
                 String sql = "SELECT * FROM users WHERE id = ?";
                 try (Connection conn = dbConnector.getConnection();
                      PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -320,11 +343,7 @@ public class AccountDAO {
                             String gender = rs.getString("gender");
                             String contactNumber = rs.getString("contact_number");
                             String birthday = rs.getString("birthday");
-                            // String address = rs.getString("address"); // Nếu cần
-                            // ---- QUAN TRỌNG: Xác định nguồn gốc của 'accessLevel' ----
-                            // Tương tự như trong createPersonObject, bạn cần quyết định cách lấy accessLevel.
-                            // Ví dụ: lấy từ cột 'access_level' trong bảng 'users' nếu có, hoặc giá trị mặc định.
-                            String accessLevel = "Full"; // << THAY ĐỔI HOẶC CẤU HÌNH GIÁ TRỊ NÀY
+                            String accessLevel = "Full"; // Giả định
                             return Optional.of(new Admin(userId, name, gender, contactNumber, birthday, email, accessLevel));
                         }
                     }
@@ -332,9 +351,8 @@ public class AccountDAO {
                     System.err.println("Lỗi khi tải dữ liệu Admin từ bảng users: " + e.getMessage());
                     e.printStackTrace();
                 }
-                return Optional.empty(); // Không tìm thấy Admin hoặc có lỗi
+                return Optional.empty();
             default:
-                // STUDENT và PARENT không còn được xử lý ở đây cho việc load Person qua account
                 return Optional.empty();
         }
     }
@@ -366,9 +384,10 @@ public class AccountDAO {
     }
 
     /**
-     * Map a ResultSet row to an Account object
+     * Map a ResultSet row to an Account object.
+     * This method is critical for findByUserId to work correctly for SettingView.
      *
-     * @param rs ResultSet containing account data
+     * @param rs ResultSet containing account data (assumed to be columns from 'accounts' table)
      * @return Account object populated with data from the ResultSet
      * @throws SQLException if a database access error occurs
      */
@@ -376,20 +395,21 @@ public class AccountDAO {
         Account account = new Account();
         account.setId(rs.getString("id"));
         account.setUsername(rs.getString("username"));
-        account.setPassword(rs.getString("password"));
-        account.setPersonId(rs.getString("person_id"));
+        account.setPassword(rs.getString("password")); // Chỉ lấy để map, không dùng trực tiếp
         account.setRole(rs.getString("role"));
+        // Đã xóa: account.setPersonId(rs.getString("person_id")); // Dòng này gây lỗi
         return account;
     }
 
     /**
-     * Inner class to represent Account data
+     * Inner class to represent Account data.
+     * This class is used by SettingView indirectly via findByUserId.
      */
     public static class Account {
         private String id;
         private String username;
-        private String password;
-        private String personId;
+        private String password; // Chỉ dùng để map, không nên sử dụng trực tiếp
+        // Đã xóa: private String personId; // Thuộc tính này gây lỗi
         private String role;
 
         public String getId() {
@@ -416,13 +436,9 @@ public class AccountDAO {
             this.password = password;
         }
 
-        public String getPersonId() {
-            return personId;
-        }
-
-        public void setPersonId(String personId) {
-            this.personId = personId;
-        }
+        // Đã xóa getter và setter cho personId
+        // public String getPersonId() { return personId; }
+        // public void setPersonId(String personId) { this.personId = personId; }
 
         public String getRole() {
             return role;

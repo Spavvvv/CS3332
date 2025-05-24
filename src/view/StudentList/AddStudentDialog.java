@@ -7,8 +7,8 @@ import javafx.scene.control.*; // Control, Tooltip, Alert, etc.
 import javafx.scene.layout.GridPane;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import src.model.Notification.NotificationService;
 import src.dao.Person.StudentDAO;
+import src.model.Notification.NotificationService;
 import src.model.person.Student;
 
 import java.sql.SQLException;
@@ -141,7 +141,7 @@ public class AddStudentDialog extends Stage {
         });
         parentPhoneField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (!newVal) { // Khi focus mất đi
-               validatePhone(parentPhoneField);
+                validatePhone(parentPhoneField);
             }
         });
     }
@@ -251,16 +251,16 @@ public class AddStudentDialog extends Stage {
                     // Ghi log hoặc xử lý trường hợp notificationService hoặc currentUserId không được cung cấp
                     System.err.println("Không thể gửi thông báo: NotificationService hoặc currentUserId chưa được thiết lập trong AddStudentDialog.");
                     // Cân nhắc: Nếu muốn, bạn có thể gửi thông báo với senderId mặc định là "SYSTEM"
-                     if (this.notificationService != null) {
-                         String studentName = newStudent.getName();
-                         String studentId = newStudent.getId();
-                         String notificationMessage = String.format(
-                             "Một học viên mới đã được tạo. Tên: %s, ID: %s. (Người tạo không xác định).",
-                             studentName,
-                             studentId
-                         );
-                         this.notificationService.sendNotificationToAdmins(notificationMessage, "SYSTEM");
-                     }
+                    if (this.notificationService != null) {
+                        String studentName = newStudent.getName();
+                        String studentId = newStudent.getId();
+                        String notificationMessage = String.format(
+                                "Một học viên mới đã được tạo. Tên: %s, ID: %s. (Người tạo không xác định).",
+                                studentName,
+                                studentId
+                        );
+                        this.notificationService.sendNotificationToAdmins(notificationMessage, "SYSTEM");
+                    }
                 }
                 // **KẾT THÚC LOGIC GỬI THÔNG BÁO**
                 close(); // Đóng dialog sau khi thêm thành công và gửi thông báo

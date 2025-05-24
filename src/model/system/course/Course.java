@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 import src.model.person.Student;
 import src.model.person.Teacher;
+import src.view.ClassList.ClassListScreenView;
 
 public class Course {
     private String courseId;
@@ -28,6 +29,7 @@ public class Course {
     private String roomId;   // Foreign key to rooms/classrooms table
     private String classId;  // Foreign key to classes table (student group/cohort)
 
+    private String dayOfWeek;
     private List<Student> students; // Transient or managed by enrollment
     private int totalCurrentStudent; // Derived from students list or enrollment
     private float progress; // Variable to store progress loaded from DB
@@ -85,6 +87,12 @@ public class Course {
     // --- Getters and Setters for Course fields ---
     public String getCourseId() {
         return courseId;
+    }
+    public String getDayOfWeek() {
+        return dayOfWeek;
+    }
+    public void setDayOfWeek(String dayOfWeek) {
+        this.dayOfWeek = dayOfWeek;
     }
 
     public void setCourseId(String courseId) {

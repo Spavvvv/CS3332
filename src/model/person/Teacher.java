@@ -4,19 +4,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Teacher extends Person {
-    private String userId;
-    private String address;
+    private String teacherId;
     private List<String> subjects;
+    private String position;
 
     public Teacher(String id, String name, String gender, String contactNumber, String birthday, String email,
-                   String userId, String address) {
+                   String teacherId) {
         super(id, name, gender, contactNumber, birthday, email);
-        this.userId = userId;
-        this.address = address;
+        this.teacherId = teacherId;
+        this.position = position;
         this.subjects = new ArrayList<>();
-
-        System.out.println("Teacher constructor - id (from Person): " + super.id);
-        System.out.println("Teacher constructor - userId: " + this.userId);
     }
 
     @Override
@@ -39,21 +36,12 @@ public class Teacher extends Person {
     }
 
     // Getters and Setters
-    public String getUserId() {
-        System.out.println("Teacher.getUserId() called - returning: " + this.userId);
-        return this.userId;
+    public String getTeacherId() {
+        return teacherId;
     }
 
-    public void setUserId(String userId) {
-        this.userId = userId;
-    }
-
-    public String getAddress() {
-        return address;
-    }
-
-    public void setAddress(String address) {
-        this.address = address;
+    public void setTeacherId(String teacherId) {
+        this.teacherId = teacherId;
     }
 
     public List<String> getSubjects() {
@@ -64,12 +52,20 @@ public class Teacher extends Person {
         this.subjects = subjects;
     }
 
+    public String getPosition() {
+        return position;
+    }
+
+    public void setPosition(String position) {
+        this.position = position;
+    }
+
     @Override
     public String toString() {
         return super.toString() +
                 ", Role: " + getRole() +
-                ", User ID: " + userId +
-                ", Address: " + address +
+                ", Teacher ID: " + teacherId +
+                ", Position: " + position +
                 ", Subjects: " + subjects;
     }
 }

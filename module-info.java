@@ -45,4 +45,6 @@ module CS3323 {
     exports src.controller.Reports;
     exports src.controller.Settings;
     opens src.controller.Settings to javafx.fxml;
+    opens src.view.settings to javafx.base;
+
 }

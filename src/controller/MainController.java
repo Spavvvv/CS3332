@@ -29,6 +29,7 @@ import src.view.StudentList.StudentListScreenView;
 import src.utils.DaoManager;
 import src.dao.Attendance.AbsenceRecordDAO;
 import src.view.components.Screen.*;
+import src.view.settings.SettingsView;
 
 /**
  Controller chính của ứng dụng, quản lý logic nghiệp vụ
@@ -97,6 +98,8 @@ public class MainController {
         navigationController.registerView("holidays", new HolidaysView());
         navigationController.registerView("students", new StudentListScreenView());
         navigationController.registerView("classroom-attendance-src.view", new ClassroomAttendanceView());
+        navigationController.registerView("setting_view", new SettingsView());
+        navigationController.registerView("profile", new UserProfileView());
         //navigationController.registerView("classes", new CreateClassScreenView());
     }
     /**

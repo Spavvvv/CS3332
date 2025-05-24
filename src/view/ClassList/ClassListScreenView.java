@@ -1,9 +1,11 @@
 package src.view.ClassList;
 import src.controller.MainController;
+import src.dao.Classrooms.ClassroomDAO;
 import src.dao.Person.CourseDAO;
 import src.dao.Person.StudentDAO;
 import src.dao.Person.TeacherDAO;
 import src.model.person.Person; // Import lớp Person (đảm bảo đường dẫn đúng với project của bạn)
+import src.model.person.Role; // Import enum Role (đảm bảo đường dẫn đúng)
 import src.model.person.Permission; // Import enum Permission (đảm bảo đường dẫn đúng)
 import src.model.person.RolePermissions; // Import lớp RolePermissions (đảm bảo đường dẫn đúng)
 import javafx.beans.property.SimpleStringProperty;
@@ -19,8 +21,12 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import src.view.components.Screen.BaseScreenView;
 import src.model.system.course.Course;
+import src.view.ClassList.CreateClassScreenView;
 
+import java.io.*;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,6 +48,7 @@ public class ClassListScreenView extends BaseScreenView {
     private Label titleLabel;
     private HBox statisticsContainer;
     private TextField searchField;
+    private Label totalClassesCountLabel;
     private Button searchButton;
     private Button exportExcelButton;
     private Button createClassButton; // Khai báo nút tạo lớp học ở cấp độ lớp
@@ -50,10 +57,12 @@ public class ClassListScreenView extends BaseScreenView {
     private TableView<ClassInfo> classesTable;
     private CourseDAO courseDAO;
     private MainController mainController; // Để tham chiếu đến MainController
+    private ClassroomDAO classroomDAO;
+    private ObservableList<ClassInfo> classes = FXCollections.observableArrayList();
 
     // Data
-    private ObservableList<ClassInfo> classes = FXCollections.observableArrayList();
     private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     public ClassListScreenView() {
         super("Lớp học", "classes");
 
@@ -65,30 +74,43 @@ public class ClassListScreenView extends BaseScreenView {
         this.courseDAO.setStudentDAO(studentDAO); // Quan trọng: inject dependency
         this.courseDAO.setTeacherDAO(teacherDAO); // Quan trọng: inject dependency
         // Nếu CourseDAO không có dependency, new CourseDAO() là đủ.
-
-        initializeData(); // Gọi sau khi courseDAO đã sẵn sàng
         initializeView();
+        initializeData(); // Gọi sau khi courseDAO đã sẵn sàng
     }
 
 
 
     // Thay thế phương thức initializeData
     private void initializeData() {
-        classes = FXCollections.observableArrayList();
+        // Thay vì: classes = FXCollections.observableArrayList();
+        // Hãy dùng:
+        this.classes.clear(); // Xóa tất cả các mục khỏi danh sách hiện tại
 
-        // Tải dữ liệu từ database qua CourseDAO
         try {
             List<Course> coursesFromDb = courseDAO.findAll();
+            if (coursesFromDb == null || coursesFromDb.isEmpty()) {
+                System.err.println("Không có khóa học nào được truy xuất từ cơ sở dữ liệu.");
+            } else {
+                System.out.println("Đã tải các khóa học: " + coursesFromDb.size());
+            }
 
-            // Lặp qua danh sách các Course và thêm vào TableView
             int stt = 1;
-            for (Course course : coursesFromDb) {
-                addCourseToTableView(course, stt++);
+            if (coursesFromDb != null) {
+                for (Course course : coursesFromDb) {
+                    addCourseToTableView(course, stt++); // Phương thức này sẽ gọi this.classes.add()
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
-            showInfo("Lỗi khi tải danh sách lớp học từ cơ sở dữ liệu: " + e.getMessage());
+            // showInfo("Lỗi khi tải dữ liệu lớp học từ cơ sở dữ liệu: " + e.getMessage());
         }
+
+        // Cập nhật label tổng số lớp
+        if (this.totalClassesCountLabel != null && this.classes != null) {
+            this.totalClassesCountLabel.setText(String.valueOf(this.classes.size()));
+        }
+        // TableView sẽ tự động cập nhật vì nó đang "quan sát" cùng một đối tượng ObservableList classes
+        // mà bạn vừa clear() và add() vào.
     }
     @Override
     public void initializeView() {
@@ -226,20 +248,74 @@ public class ClassListScreenView extends BaseScreenView {
         titleBar.getChildren().addAll(titleLabel, spacer, createClassButton, exportExcelButton);
         return titleBar;
     }
+    // src/view/components/ClassList/ClassListScreenView.java
+    private VBox createSingleStatCard(String title, String color, String initialValue,
+                                      String valueLabelText, String iconString) {
+        VBox card = new VBox(10);
+        card.setAlignment(Pos.CENTER_LEFT);
+        card.setPadding(new Insets(15, 20, 15, 20));
+        card.setStyle(
+                "-fx-background-color: " + color + ";" +
+                        "-fx-background-radius: 8;" +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0, 0, 2);"
+        );
+
+        HBox titleBox = new HBox(10);
+        titleBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label iconLabel = new Label(iconString);
+        iconLabel.setTextFill(Color.WHITE);
+        iconLabel.setFont(Font.font("System", 18)); // Sửa ở đây
+
+        Label titleTextLabel = new Label(title);
+        titleTextLabel.setFont(Font.font("System", FontWeight.BOLD, 16)); // Giữ nguyên FontWeight.BOLD nếu muốn đậm
+        titleTextLabel.setTextFill(Color.WHITE);
+
+        titleBox.getChildren().addAll(iconLabel, titleTextLabel);
+
+        VBox statValueBox = new VBox(2);
+        statValueBox.setAlignment(Pos.CENTER_LEFT);
+        statValueBox.setPadding(new Insets(8, 0, 0, 0));
+
+        this.totalClassesCountLabel = new Label(initialValue);
+        this.totalClassesCountLabel.setFont(Font.font("System", FontWeight.BOLD, 32));
+        this.totalClassesCountLabel.setTextFill(Color.WHITE);
+
+        Label descriptionLabel = new Label(valueLabelText);
+        descriptionLabel.setFont(Font.font("System", 12)); // Sửa ở đây
+        descriptionLabel.setTextFill(Color.WHITE);
+
+        statValueBox.getChildren().addAll(this.totalClassesCountLabel, descriptionLabel);
+
+        card.getChildren().addAll(titleBox, statValueBox);
+        return card;
+    }
 
     /**
      Create statistics cards for the top of the screen
      */
+    // src/view/components/ClassList/ClassListScreenView.java
+    /**
+     * Tạo phần thống kê - giờ chỉ có 1 card tổng số lớp học
+     */
     private HBox createStatisticsSection() {
-        HBox statsContainer = new HBox(20);
+        HBox statsContainer = new HBox(0); // HBox chứa các thẻ thống kê
         statsContainer.setPadding(new Insets(0, 0, 15, 0));
-        statsContainer.setAlignment(Pos.CENTER);
-// Create 4 stat cards
-        VBox openingCard = createStatCard("Khai giảng", GREEN_COLOR, "0", "11", "Tuần này", "Tháng này", "📝");
-        VBox closingCard = createStatCard("Kết thúc", PRIMARY_COLOR, "0", "0", "Tuần này", "Tháng này", "🎓");
-        VBox countCard = createStatCard("Sĩ số", YELLOW_COLOR, "1", "31", "Tối thiểu", "Tối đa", "👥");
-        VBox statusCard = createStatCard("Trạng thái", PURPLE_COLOR, "0", "1", "Chờ duyệt", "Đang học", "⏱");
-        statsContainer.getChildren().addAll(openingCard, closingCard, countCard, statusCard);
+        // Căn chỉnh cho HBox, ví dụ: căn trái hoặc căn giữa nếu chỉ có 1 card
+        statsContainer.setAlignment(Pos.CENTER_LEFT); // Hoặc Pos.CENTER
+        VBox totalClassesCard = createSingleStatCard(
+                "Tổng số Lớp học",   // Tiêu đề
+                PRIMARY_COLOR,        // Màu sắc (ví dụ: màu Indigo)
+                "0",                  // Giá trị ban đầu (sẽ được cập nhật)
+                "Lớp đang hoạt động", // Nhãn mô tả dưới con số
+                "📚"                  // Icon
+        );
+
+        // Đặt kích thước mong muốn cho card
+        totalClassesCard.setPrefWidth(280); // Điều chỉnh chiều rộng nếu cần
+        totalClassesCard.setMaxWidth(Region.USE_PREF_SIZE); // Để card không bị kéo giãn quá mức
+
+        statsContainer.getChildren().add(totalClassesCard);
         return statsContainer;
     }
     /**
@@ -473,33 +549,45 @@ public class ClassListScreenView extends BaseScreenView {
         });
 
         // Số buổi column
-        TableColumn<ClassInfo, String> sessionsCol = new TableColumn<>("Số buổi");
-        sessionsCol.setCellValueFactory(new PropertyValueFactory<>("numSessions"));
-        sessionsCol.setPrefWidth(100);
-        sessionsCol.setCellFactory(column -> new TableCell<>() {
+        TableColumn<ClassInfo, String> progressCol = new TableColumn<>("Tiến độ"); // Đổi tên cột cho phù hợp
+        progressCol.setCellValueFactory(new PropertyValueFactory<>("displayedProgress")); // Liên kết với thuộc tính mới
+        progressCol.setPrefWidth(130); // Điều chỉnh độ rộng nếu cần
+        progressCol.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) {
+                if (empty || item == null || item.equals("N/A") || !item.contains("/")) {
                     setGraphic(null);
-                    setText(null);
+                    setText(item); // Hiển thị "N/A" hoặc chuỗi gốc nếu không phân tích được
                 } else {
                     HBox progressBox = new HBox(5);
                     progressBox.setAlignment(Pos.CENTER_LEFT);
-                    String[] parts = item.split("/");
-                    int current = Integer.parseInt(parts[0]);
-                    int total = Integer.parseInt(parts[1]);
-                    ProgressBar progressBar = new ProgressBar((double)current/total);
-                    progressBar.setPrefWidth(60);
-                    progressBar.setStyle("-fx-accent: " + GREEN_COLOR + ";");
-                    Label progressLabel = new Label(item);
-                    progressLabel.setStyle("-fx-text-fill: " + TEXT_COLOR + "; -fx-padding: 0 0 0 5;");
-                    progressBox.getChildren().addAll(progressBar, progressLabel);
-                    setGraphic(progressBox);
-                    setText(null);
+                    try {
+                        String[] parts = item.split("/");
+                        long current = Long.parseLong(parts[0]);
+                        long total = Long.parseLong(parts[1]);
+
+                        ProgressBar progressBar = new ProgressBar(total == 0 ? 0 : (double) current / total);
+                        progressBar.setPrefWidth(70); // Điều chỉnh độ rộng của ProgressBar
+                        // Bạn có thể thay GREEN_COLOR bằng màu khác nếu muốn
+                        progressBar.setStyle("-fx-accent: " + GREEN_COLOR + ";");
+
+                        Label progressLabel = new Label(item); // Hiển thị dạng "x/y"
+                        // Bạn có thể thay TEXT_COLOR bằng màu khác nếu muốn
+                        progressLabel.setStyle("-fx-text-fill: " + TEXT_COLOR + "; -fx-padding: 0 0 0 5;");
+
+                        progressBox.getChildren().addAll(progressBar, progressLabel);
+                        setGraphic(progressBox);
+                        setText(null);
+                    } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                        setText(item);
+                        setGraphic(null);
+                        System.err.println("Lỗi phân tích chuỗi tiến độ cho TableCell: " + item + " - " + e.getMessage());
+                    }
                 }
             }
         });
+
 
         // Ngày bắt đầu column
         TableColumn<ClassInfo, String> startDateCol = new TableColumn<>("Ngày bắt đầu");
@@ -510,17 +598,64 @@ public class ClassListScreenView extends BaseScreenView {
         TableColumn<ClassInfo, String> endDateCol = new TableColumn<>("Ngày kết thúc");
         endDateCol.setCellValueFactory(new PropertyValueFactory<>("endDate"));
         endDateCol.setPrefWidth(100);
+        TableColumn<ClassInfo, String> dayOfWeekColumn = new TableColumn<>("Days");
+        dayOfWeekColumn.setCellValueFactory(new PropertyValueFactory<>("classDate"));
+        classesTable.getColumns().add(dayOfWeekColumn);
+        dayOfWeekColumn.setPrefWidth(100);
 
         // Giáo viên column
         TableColumn<ClassInfo, String> teacherCol = new TableColumn<>("Giáo viên");
         teacherCol.setCellValueFactory(new PropertyValueFactory<>("teacher"));
         teacherCol.setPrefWidth(120);
+        teacherCol.setCellFactory(col -> new TableCell<ClassInfo, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
 
-        // Quản lý column
-        TableColumn<ClassInfo, String> managerCol = new TableColumn<>("Quản lý");
-        managerCol.setCellValueFactory(new PropertyValueFactory<>("manager"));
-        managerCol.setPrefWidth(120);
+                if (empty || item == null || getTableRow() == null || getTableRow().getItem() == null) {
+                    setText(null);
+                    setGraphic(null);
+                } else {
+                    Button assignTeacherButton = new Button(item.isEmpty() ? "Thêm GV" : item);
+                    assignTeacherButton.setStyle(item.isEmpty()
+                            ? "-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold;"
+                            : "-fx-background-color: #3f51b5; -fx-text-fill: white; -fx-font-weight: bold;");
+                    assignTeacherButton.setMinWidth(100);
 
+                    assignTeacherButton.setOnAction(event -> {
+                        Person currentUser = getCurrentUser(); // Lấy người dùng hiện tại từ BaseScreenView
+                        boolean canAddTeacher = false;
+                        if (currentUser != null && currentUser.getRole() != null) {
+                            canAddTeacher = RolePermissions.hasPermission(currentUser.getRole(), Permission.ADDTEACHER_INTOCOURSE);
+                        }
+
+                        if (!canAddTeacher) {
+                            showInfo("Bạn không có quyền thực hiện thao tác này.");
+                            return; // Dừng lại nếu không có quyền
+                        }
+                        ClassInfo selectedClassInfo = getTableRow().getItem();
+
+                        // Gọi CourseDAO và TeacherDAO (đảm bảo được khởi tạo sẵn)
+                        Course course = courseDAO.findById(selectedClassInfo.getCode()).orElse(null);
+                        if (course == null) {
+                            showInfo("Không thể tìm thấy lớp học.");
+                            return;
+                        }
+                        TeacherDAO teacherDAO = courseDAO.getTeacherDAO(); // Đảm bảo TeacherDAO đã được inject.
+
+                        // Gọi AddTeacherIntoCourse Dialog
+                        AddTeacherIntoCourse dialog = new AddTeacherIntoCourse(course, courseDAO, teacherDAO);
+                        dialog.show();
+
+                        // Làm mới dữ liệu sau thay đổi
+                        loadClasses(); // Hàm này phải gọi lại backend để refresh bảng
+                    });
+
+                    setGraphic(assignTeacherButton);
+                    setText(null);
+                }
+            }
+        });
         // Ngày học column
         TableColumn<ClassInfo, String> classDateCol = new TableColumn<>("Ngày học");
         classDateCol.setCellValueFactory(new PropertyValueFactory<>("classDate"));
@@ -561,7 +696,7 @@ public class ClassListScreenView extends BaseScreenView {
                     );
                     HBox content = new HBox(5);
                     content.setAlignment(Pos.CENTER);
-                    Label label = new Label("1/1 học viên");
+                    Label label = new Label("Học viên");
                     label.setTextFill(Color.WHITE);
                     Label arrow = new Label("→");
                     arrow.setTextFill(Color.WHITE);
@@ -634,27 +769,47 @@ public class ClassListScreenView extends BaseScreenView {
 
         // *** BEGIN MODIFICATION: Add Details Button Column ***
         TableColumn<ClassInfo, Void> detailsDialogCol = new TableColumn<>("Chi Tiết");
-        detailsDialogCol.setPrefWidth(100); // Adjust width as needed
+        detailsDialogCol.setPrefWidth(100); // Điều chỉnh độ rộng nếu cần
         detailsDialogCol.setCellFactory(param -> new TableCell<ClassInfo, Void>() {
             private final Button btnDetails = new Button("Xem");
-
             {
                 btnDetails.setStyle(
-                        "-fx-background-color: " + PURPLE_COLOR + ";" + // Or any other color
+                        "-fx-background-color: " + PURPLE_COLOR + ";" + // Hoặc màu khác tùy ý
                                 "-fx-text-fill: white;" +
                                 "-fx-background-radius: 4;" +
                                 "-fx-padding: 5 10;" +
                                 "-fx-cursor: hand;"
                 );
                 btnDetails.setOnAction(event -> {
+                    // 1. Lấy đối tượng ClassInfo của dòng được chọn
                     ClassInfo selectedClassInfo = getTableView().getItems().get(getIndex());
                     if (selectedClassInfo != null) {
-                        ClassDetailsDialog detailsDialog = new ClassDetailsDialog(selectedClassInfo);
-                        detailsDialog.show();
+                        // 2. Lấy đối tượng Course đầy đủ từ courseDAO bằng courseId
+                        //    selectedClassInfo.getCode() chính là courseId
+                        Optional<Course> optionalCourse = courseDAO.findById(selectedClassInfo.getCode());
+                        if (optionalCourse.isPresent()) {
+                            Course course = optionalCourse.get(); // Đây là đối tượng Course bạn cần
+                            // 3. Lấy đối tượng TeacherDAO từ courseDAO
+                            //    (Giả sử courseDAO có phương thức getTeacherDAO())
+                            TeacherDAO teacherDAOInstance = courseDAO.getTeacherDAO();
+                            if (teacherDAOInstance == null) {
+                                // Xử lý trường hợp TeacherDAO chưa được khởi tạo trong CourseDAO
+                                // Ví dụ: Khởi tạo nó ở đây hoặc báo lỗi
+                                System.err.println("Lỗi: TeacherDAO chưa được thiết lập trong CourseDAO.");
+                                // Có thể hiển thị thông báo lỗi cho người dùng
+                                showInfo("Lỗi: Không thể tải thông tin giáo viên. Vui lòng liên hệ quản trị viên.");
+                                return;
+                            }
+                            // 4. Gọi constructor của ClassDetailsDialog và truyền Course, TeacherDAO vào
+                            ClassDetailsDialog detailsDialog = new ClassDetailsDialog(course, teacherDAOInstance);
+                            detailsDialog.show();
+                        } else {
+                            // Xử lý trường hợp không tìm thấy Course với ID tương ứng
+                            showInfo("Không tìm thấy thông tin chi tiết cho lớp học này.");
+                        }
                     }
                 });
             }
-
             @Override
             protected void updateItem(Void item, boolean empty) {
                 super.updateItem(item, empty);
@@ -669,8 +824,8 @@ public class ClassListScreenView extends BaseScreenView {
 
         // Add all columns to the table
         classesTable.getColumns().addAll(
-                selectCol, sttCol, codeCol, nameCol, sessionsCol,
-                startDateCol, endDateCol, teacherCol, managerCol,
+                selectCol, sttCol, codeCol, nameCol, progressCol,
+                startDateCol, endDateCol, teacherCol,
                 classDateCol, studentsCol,
                 detailsDialogCol, // *** MODIFICATION: Added new column here ***
                 actionsCol
@@ -729,6 +884,12 @@ public class ClassListScreenView extends BaseScreenView {
             showInfo("Số dòng trên trang: " + selectedSize);
         }
     }
+    private void loadClasses() {
+        initializeData(); // Gọi lại initializeData để tải lại toàn bộ dữ liệu
+        // Hoặc nếu bạn chỉ muốn cập nhật TableView mà không clear hoàn toàn:
+        // classesTable.refresh(); // Dòng này thường dùng nếu ObservableList tự động cập nhật
+        // nhưng để đảm bảo dữ liệu mới nhất từ DB, initializeData an toàn hơn.
+    }
 
 
     /**
@@ -750,7 +911,7 @@ public class ClassListScreenView extends BaseScreenView {
 
 
     /**
-     * Handle src.view students action
+     * Handle view students action
      */
     private void handleViewStudents(ClassInfo classInfo) {
         // Navigate to students list for this class
@@ -794,39 +955,41 @@ public class ClassListScreenView extends BaseScreenView {
     }
 
     // Thêm phương thức addCourseToTableView với tham số stt
+    // Trong ClassListScreenView.java
     private void addCourseToTableView(Course course, int stt) {
-        // Lấy thông tin từ course
         String progress = "0/100"; // Mặc định
         if (course.getProgress() > 0) {
             progress = Math.round(course.getProgress()) + "/100";
         }
+        LocalDate actualStartDate = course.getStartDate();
+        LocalDate actualEndDate = course.getEndDate();
+        // Sử dụng dateFormatter của lớp và kiểm tra null
+        String startDateStr = "N/A"; // Giá trị mặc định nếu null
+        if (course.getStartDate() != null) { // course.getDate().getStartDate() tương đương course.getStartDate()
+            startDateStr = course.getStartDate().format(this.dateFormatter); //Sử dụng this.dateFormatter
+        }
 
-        // Định dạng ngày
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-        String startDate = course.getDate().getStartDate().format(formatter);
-        String endDate = course.getDate().getEndDate().format(formatter);
+        String endDateStr = "N/A"; // Giá trị mặc định nếu null
+        if (course.getEndDate() != null) { // course.getDate().getEndDate() tương đương course.getEndDate()
+            endDateStr = course.getEndDate().format(this.dateFormatter); // Sử dụng this.dateFormatter
+        }
 
-        // Tạo thông tin cho lịch học (placeholder)
-        String classDate = "Chưa có lịch học";
+        String classDate = course.getDayOfWeek() != null ? course.getDayOfWeek() : "N/A";
+        String teacher = course.getTeacher() != null ? course.getTeacher().toString() : "Chưa phân công"; // Kiểm tra null cho teacher là tốt
 
-        // Giáo viên
-        String teacher = course.getTeacher() != null ? course.getTeacher().toString() : "Chưa phân công";
-
-        // Tạo đối tượng ClassInfo và thêm vào danh sách
         ClassInfo classInfo = new ClassInfo(
                 stt,
                 course.getCourseId(),
                 course.getCourseName(),
-                "Đang học",
-                progress,
-                startDate,
-                endDate,
+                "Đang học", // Trạng thái (có thể cần cập nhật động)
+                actualStartDate,    // Truyền LocalDate
+                actualEndDate,      // Truyền LocalDate
                 teacher,
                 classDate
         );
 
         classes.add(classInfo);
-        classesTable.refresh();
+        // classesTable.refresh(); // <<--- XÓA DÒNG NÀY
     }
     // Thêm phương thức loadCoursesFromFile (không phải static)
     @SuppressWarnings("unchecked")
@@ -845,27 +1008,28 @@ public class ClassListScreenView extends BaseScreenView {
         // Nếu courseDAO chưa được khởi tạo ở constructor hoặc initializeData,
         // bạn CẦN phải khởi tạo và cấu hình nó ở đây trước khi truyền đi.
         // Ví dụ (NẾU CHƯA LÀM Ở CONSTRUCTOR):
-
-    if (this.courseDAO == null) {
-        StudentDAO studentDAO = new StudentDAO(); // Cần khởi tạo thực tế
-        TeacherDAO teacherDAO = new TeacherDAO(); // Cần khởi tạo thực tế
-        this.courseDAO = new CourseDAO();
-        this.courseDAO.setStudentDAO(studentDAO);
-        this.courseDAO.setTeacherDAO(teacherDAO);
-        return;
-    }
+        if (this.classroomDAO == null) {
+            this.classroomDAO = new ClassroomDAO(); // Ensure ClassroomDAO is initialized
+        }
+        if (this.courseDAO == null) {
+            StudentDAO studentDAO = new StudentDAO(); // Cần khởi tạo thực tế
+            TeacherDAO teacherDAO = new TeacherDAO(); // Cần khởi tạo thực tế
+            this.courseDAO = new CourseDAO();
+            this.courseDAO.setStudentDAO(studentDAO);
+            this.courseDAO.setTeacherDAO(teacherDAO);
+            return;
+        }
 
         // Truyền this.courseDAO vào constructor của CreateClassScreenView
         CreateClassScreenView createClassScreen = new CreateClassScreenView(
-                this.courseDAO, // <<<<<< THAY ĐỔI CHÍNH: TRUYỀN courseDAO VÀO ĐÂY
+                this.courseDAO,    // Pass existing CourseDAO
+                this.classroomDAO, // Pass existing ClassroomDAO
                 new CreateClassScreenView.CreateClassCallback() {
                     @Override
                     public void onCourseCreated(Course successfullySavedCourse) {
-                        // Callback này được gọi SAU KHI CreateClassScreenView đã LƯU thành công course
-                        // Giờ chỉ cần cập nhật UI ở đây
-                        addCourseToTableView(successfullySavedCourse, classes.size() + 1); // Thêm stt nếu cần
+                        // Add the newly created course to the table view
+                        addCourseToTableView(successfullySavedCourse, classes.size() + 1);
                         showInfo("Đã tạo và lưu lớp học thành công: " + successfullySavedCourse.getCourseName());
-                        // classesTable.refresh(); // Có thể không cần nếu ObservableList tự cập nhật
                     }
                 }
         );
@@ -874,8 +1038,8 @@ public class ClassListScreenView extends BaseScreenView {
 
     @Override
     public void refreshView() {
-        // Refresh the table data
-        classesTable.refresh();
+        System.out.println(getViewId() + " đang làm mới dữ liệu từ cơ sở dữ liệu..."); // Thêm log để theo dõi
+        initializeData(); // Gọi initializeData để tải lại và làm mới toàn bộ
     }
 
 
@@ -898,37 +1062,70 @@ public class ClassListScreenView extends BaseScreenView {
         private final SimpleStringProperty code;
         private final SimpleStringProperty name;
         private final SimpleStringProperty status;
-        private final SimpleStringProperty numSessions;
         private final SimpleStringProperty startDate;
         private final SimpleStringProperty endDate;
         private final SimpleStringProperty teacher;
         private final SimpleStringProperty manager;
         private final SimpleStringProperty classDate;
+        private final LocalDate actualStartDate;
+        private final LocalDate actualEndDate;
+        private final SimpleStringProperty displayedProgress;
         private final int stt;
         private boolean selected;
         private String statusLabel;
 
 
-        public ClassInfo(int stt, String code, String name, String status, String numSessions,
-                         String startDate, String endDate, String teacher, String classDate) {
+        public ClassInfo(int stt, String code, String name, String status,
+                         LocalDate actualStartDate, LocalDate actualEndDate, // Sửa ở đây để nhận LocalDate
+                         String teacherName, String classDateString) { // Đổi tên tham số cho rõ ràng
             this.stt = stt;
             this.code = new SimpleStringProperty(code);
             this.name = new SimpleStringProperty(name);
             this.status = new SimpleStringProperty(status);
-            this.numSessions = new SimpleStringProperty(numSessions);
-            this.startDate = new SimpleStringProperty(startDate);
-            this.endDate = new SimpleStringProperty(endDate);
-            this.teacher = new SimpleStringProperty("");  // Default empty for sample
-            this.manager = new SimpleStringProperty(teacher);  // Using teacher as manager for sample
-            this.classDate = new SimpleStringProperty(classDate);
+
+            // Gán giá trị cho actualStartDate và actualEndDate TRƯỚC
+            this.actualStartDate = actualStartDate;
+            this.actualEndDate = actualEndDate;
+
+            // Khởi tạo displayedProgress SAU KHI actualStartDate và actualEndDate đã có giá trị
+            this.displayedProgress = new SimpleStringProperty(calculateProgressDisplay());
+
+            // Khởi tạo các SimpleStringProperty cho ngày tháng để hiển thị
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+            this.startDate = new SimpleStringProperty(this.actualStartDate != null ? this.actualStartDate.format(formatter) : "N/A");
+            this.endDate = new SimpleStringProperty(this.actualEndDate != null ? this.actualEndDate.format(formatter) : "N/A");
+
+            this.teacher = new SimpleStringProperty(teacherName != null ? teacherName : "");
+            this.manager = new SimpleStringProperty(teacherName != null ? teacherName : ""); // Giả sử manager là teacher
+            this.classDate = new SimpleStringProperty(classDateString);
             this.selected = false;
         }
 
-
+        private String calculateProgressDisplay() {
+            if (actualStartDate == null || actualEndDate == null || actualStartDate.isAfter(actualEndDate)) {
+                return "N/A";
+            }
+            LocalDate today = LocalDate.now();
+            long totalWeeks = java.time.temporal.ChronoUnit.WEEKS.between(actualStartDate, actualEndDate);
+            if (totalWeeks < 0) totalWeeks = 0;
+            long totalSessions = totalWeeks + 1;
+            if (today.isBefore(actualStartDate)) return "0/" + totalSessions;
+            if (today.isAfter(actualEndDate) || today.isEqual(actualEndDate)) return totalSessions + "/" + totalSessions;
+            long weeksPassed = java.time.temporal.ChronoUnit.WEEKS.between(actualStartDate, today);
+            long currentSession = weeksPassed + 1;
+            if (currentSession > totalSessions) currentSession = totalSessions;
+            return currentSession + "/" + totalSessions;
+        }
         public int getStt() {
             return stt;
         }
+        public String getDisplayedProgress() {
+            return displayedProgress.get();
+        }
 
+        public SimpleStringProperty displayedProgressProperty() {
+            return displayedProgress;
+        }
 
         public String getCode() {
             return code.get();
@@ -953,9 +1150,6 @@ public class ClassListScreenView extends BaseScreenView {
         }
 
 
-        public String getNumSessions() {
-            return numSessions.get();
-        }
 
 
         public String getStartDate() {
