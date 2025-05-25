@@ -16,7 +16,10 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.StringConverter;
+import src.controller.Course.CourseController;
+import src.dao.ClassSession.ClassSessionDAO;
 import src.dao.Classrooms.ClassroomDAO;
+import src.dao.Holidays.HolidayDAO;
 import src.dao.Notifications.RoomConflictException;
 import src.dao.Person.CourseDAO;
 import src.dao.Person.TeacherDAO; // Assuming you might want to select a teacher
@@ -63,30 +66,60 @@ public class CreateClassScreenView {
     private ComboBox<Integer> endHourPicker;
     private ComboBox<Integer> endMinutePicker;
     private Button saveButton;
-
+    private CourseController courseController;
     // DAOs and Models
     private CourseDAO courseDAO;
     private ClassroomDAO classroomDAO;
     private TeacherDAO teacherDAO; // For populating teacher ComboBox
     private HolidaysModel holidaysModel; // For checking holidays
     private CreateClassCallback callback;
+    private ClassSessionDAO classSessionDAO;
+    private HolidayDAO holidayDAO;
 
     public interface CreateClassCallback {
         void onCourseCreated(Course course);
     }
 
     public CreateClassScreenView(CourseDAO courseDAO, ClassroomDAO classroomDAO, TeacherDAO teacherDAO,
-                                 HolidaysModel holidaysModel, CreateClassCallback callback) {
+                                 HolidaysModel holidaysModel, CreateClassCallback callback) { // Giữ nguyên các tham số này
+
+        // Gán các DAO được truyền vào
         this.courseDAO = courseDAO;
         this.classroomDAO = classroomDAO;
-        this.teacherDAO = teacherDAO; // Initialize TeacherDAO
-        this.holidaysModel = holidaysModel; // Initialize HolidaysModel
-        this.callback = callback;
+        this.teacherDAO = teacherDAO;
+        this.holidaysModel = holidaysModel; // holidaysModel có thể được dùng để tạo holidayDAO
+        this.callback = callback;           // Vẫn giữ callback nếu bạn có thể muốn dùng cho mục đích khác
+        // hoặc để tương thích ngược, nhưng logic tạo session sẽ qua Controller.
+
+        // Khởi tạo các DAO mà CourseController cần nhưng không được truyền trực tiếp vào View
+        this.classSessionDAO = new ClassSessionDAO(); // Tạo mới
+
+        // Xử lý HolidayDAO:
+        // Nếu HolidaysModel chính là HolidayDAO hoặc có thể cung cấp HolidayDAO
+        this.holidayDAO = new HolidayDAO(); // Giả sử có constructor không tham số cho HolidayDAO
+        // Đảm bảo CourseDAO (mà CourseController sẽ dùng) có các dependency cần thiết
+        // Ví dụ, TeacherDAO đã được truyền vào CreateClassScreenView
+        if (this.courseDAO != null && this.teacherDAO != null) {
+            this.courseDAO.setTeacherDAO(this.teacherDAO); // Thiết lập TeacherDAO cho CourseDAO
+            // this.courseDAO.setStudentDAO(new StudentDAO()); // Nếu CourseDAO cần StudentDAO
+        }
+
+        // Khởi tạo CourseController với tất cả các DAO cần thiết
+        this.courseController = new CourseController(
+                this.courseDAO,
+                this.classSessionDAO,
+                this.classroomDAO,
+                this.teacherDAO,
+                this.holidayDAO
+        );
+
         initialize();
-        setupListeners(); // Call setupListeners after UI is initialized
-        // Initial calculation if start date is already set (e.g. to LocalDate.now())
+        setupListeners();
         Platform.runLater(this::calculateAndDisplayEndDate);
     }
+    public void setClassSessionDAO(ClassSessionDAO classSessionDAO) { this.classSessionDAO = classSessionDAO; }
+    public void setHolidayDAO(HolidayDAO holidayDAO) { this.holidayDAO = holidayDAO; }
+
 
     private void initialize() {
         stage = new Stage();
@@ -238,10 +271,6 @@ public class CreateClassScreenView {
         formGrid.add(teacherComboBox, 3, row);
         row++;
 
-        // You can add Class ID field here if needed, similar to other fields
-        // formGrid.add(createStyledLabel("Mã Nhóm SV (Class ID):"), 0, row);
-        // classIdField = new TextField(); setFieldStyle(classIdField);
-        // formGrid.add(classIdField, 1, row);
 
         root.getChildren().add(formGrid);
     }
@@ -394,72 +423,77 @@ public class CreateClassScreenView {
 
     private void createCourseAndNotify() {
         if (!validateInputs()) {
-            return; // Validation failed, messages shown by validateInputs
+            return;
         }
 
+        // 1. Thu thập dữ liệu và tạo đối tượng Course (logic này giữ nguyên)
+        String courseId = courseIdField.getText().trim();
+        String courseName = courseNameField.getText().trim();
+        String subject = subjectField.getText().trim();
+        LocalDate startDate = startDatePicker.getValue();
+        LocalDate endDate;
         try {
-            String courseId = courseIdField.getText().trim();
-            String courseName = courseNameField.getText().trim();
-            String subject = subjectField.getText().trim();
-            LocalDate startDate = startDatePicker.getValue();
+            endDate = LocalDate.parse(calculatedEndDateField.getText().trim(), DATE_FORMATTER);
+        } catch (Exception e) {
+            showAlert(Alert.AlertType.ERROR, "Lỗi Định Dạng", "Ngày kết thúc không hợp lệ hoặc chưa được tính.");
+            return;
+        }
+        LocalTime startTime = LocalTime.of(startHourPicker.getValue(), startMinutePicker.getValue());
+        LocalTime endTimeValue = LocalTime.of(endHourPicker.getValue(), endMinutePicker.getValue());
 
-            LocalDate endDate;
-            try {
-                endDate = LocalDate.parse(calculatedEndDateField.getText().trim(), DATE_FORMATTER);
-            } catch (Exception e) {
-                showAlert(Alert.AlertType.ERROR,"Lỗi Định Dạng", "Ngày kết thúc không hợp lệ hoặc chưa được tính.");
+        List<String> selectedDays = dayCheckBoxesList.stream()
+                .filter(CheckBox::isSelected)
+                .map(cb -> ((DayOfWeek) cb.getUserData()).getDisplayName(TextStyle.SHORT_STANDALONE, Locale.ENGLISH).toUpperCase())
+                .collect(Collectors.toList());
+
+        Classroom selectedRoom = roomComboBox.getSelectionModel().getSelectedItem();
+        String roomId = (selectedRoom != null) ? selectedRoom.getRoomId() : null;
+        Teacher selectedTeacher = teacherComboBox.getSelectionModel().getSelectedItem();
+        int totalSessions = totalSessionsSpinner.getValue();
+        String classIdFromUI = null; // Lấy từ UI nếu có trường nhập class_id cho Course
+
+        Course newCourse = new Course(
+                courseId, courseName, subject, startDate, endDate,
+                startTime, endTimeValue, selectedDays, roomId,
+                classIdFromUI,
+                selectedTeacher,
+                totalSessions,
+                0.0f // progress ban đầu
+        );
+
+        // 2. Gọi phương thức của CourseController để xử lý toàn bộ nghiệp vụ
+        try {
+            // this.courseController phải được khởi tạo trước đó (thường trong constructor của CreateClassScreenView)
+            if (this.courseController == null) {
+                showAlert(Alert.AlertType.ERROR, "Lỗi Cấu Hình", "CourseController chưa được khởi tạo.");
                 return;
             }
 
-            LocalTime startTime = LocalTime.of(startHourPicker.getValue(), startMinutePicker.getValue());
-            LocalTime endTime = LocalTime.of(endHourPicker.getValue(), endMinutePicker.getValue());
+            boolean success = this.courseController.createCourseAndGenerateSessions(newCourse);
 
-            List<String> selectedDays = dayCheckBoxesList.stream()
-                    .filter(CheckBox::isSelected)
-                    .map(cb -> ((DayOfWeek) cb.getUserData()).getDisplayName(TextStyle.SHORT_STANDALONE, Locale.ENGLISH)) // "Mon", "Tue"
-                    .collect(Collectors.toList());
-
-            Classroom selectedRoom = roomComboBox.getSelectionModel().getSelectedItem();
-            String roomId = selectedRoom != null ? selectedRoom.getRoomId() : null;
-
-            Teacher selectedTeacher = teacherComboBox.getSelectionModel().getSelectedItem();
-            // String teacherId = selectedTeacher != null ? selectedTeacher.getId() : null; // Not directly on Course model constructor like this
-
-            int totalSessions = totalSessionsSpinner.getValue();
-
-            // Using the comprehensive constructor of Course (ensure it matches your latest Course model)
-            Course newCourse = new Course(
-                    courseId, courseName, subject, startDate, endDate,
-                    startTime, endTime, selectedDays, roomId,
-                    null, // classId - you might want a field for this if still used in courses table
-                    selectedTeacher,
-                    totalSessions,
-                    0.0f // Initial progress
-            );
-            // If your Course constructor doesn't take Teacher object directly,
-            // you might need to set teacher ID if your Course model stores teacher_id as String
-            // newCourse.setTeacherId(teacherId); // If Course model stores teacherId String
-            // Or ensure your CourseDAO.save can handle the Teacher object within the Course object.
-
-
-            boolean isSaved = courseDAO.save(newCourse);
-
-            if (isSaved) {
-                showAlert(Alert.AlertType.INFORMATION, "Thành Công", "Đã tạo khóa học thành công!");
-                if (callback != null) {
-                    callback.onCourseCreated(newCourse);
+            if (success) {
+                showAlert(Alert.AlertType.INFORMATION, "Thành Công", "Đã tạo khóa học và lịch học chi tiết thành công!");
+                // Nếu bạn vẫn dùng callback cho mục đích khác (ví dụ: thông báo cho một view khác để refresh)
+                if (this.callback != null) {
+                    // Lưu ý: newCourse ở đây là đối tượng từ UI. Nếu callback cần Course object
+                    // đã được cập nhật ID từ DB (trong trường hợp DB tự tạo ID), thì
+                    // CourseController.createCourseAndGenerateSessions() cần phải trả về
+                    // đối tượng Course đã được cập nhật đó.
+                    this.callback.onCourseCreated(newCourse);
                 }
-                stage.close();
+                stage.close(); // Đóng cửa sổ sau khi thành công
             } else {
-                showAlert(Alert.AlertType.ERROR,"Lỗi Lưu", "Không thể lưu khóa học. Lỗi không xác định từ DAO.");
+                // Trường hợp này ít khi xảy ra nếu CourseController ném Exception khi có lỗi nghiêm trọng,
+                // mà thường là do một điều kiện logic trong Controller/Service trả về false.
+                showAlert(Alert.AlertType.WARNING, "Thông Báo", "Không thể hoàn tất việc tạo khóa học. Vui lòng kiểm tra log hệ thống.");
             }
         } catch (RoomConflictException rce) {
             showAlert(Alert.AlertType.ERROR, "Lỗi Xung Đột Lịch", rce.getMessage());
         } catch (SQLException sqle) {
-            showAlert(Alert.AlertType.ERROR,"Lỗi Cơ sở dữ liệu", "Lỗi khi lưu khóa học: " + sqle.getMessage());
-            sqle.printStackTrace();
-        } catch (Exception e) {
-            showAlert(Alert.AlertType.ERROR,"Lỗi Không Mong Muốn", "Đã xảy ra lỗi: " + e.getMessage());
+            showAlert(Alert.AlertType.ERROR, "Lỗi Cơ Sở Dữ Liệu", "Đã xảy ra lỗi khi xử lý yêu cầu: " + sqle.getMessage());
+            sqle.printStackTrace(); // Quan trọng cho việc debug
+        } catch (Exception e) { // Bắt các lỗi chung khác nếu có từ Controller
+            showAlert(Alert.AlertType.ERROR, "Lỗi Không Mong Muốn", "Đã xảy ra lỗi hệ thống: " + e.getMessage());
             e.printStackTrace();
         }
     }

@@ -43,7 +43,16 @@ public class ClassSessionDAO {
     public ClassSessionDAO() {
         // Constructor
     }
-
+    private boolean hasColumn(ResultSet rs, String columnName) throws SQLException {
+        ResultSetMetaData rsmd = rs.getMetaData();
+        int columns = rsmd.getColumnCount();
+        for (int x = 1; x <= columns; x++) {
+            if (columnName.equalsIgnoreCase(rsmd.getColumnName(x))) {
+                return true;
+            }
+        }
+        return false;
+    }
     /**
      * Maps a database result set row to a ClassSession object.
      *
@@ -54,11 +63,10 @@ public class ClassSessionDAO {
     private ClassSession mapResultSetToClassSession(ResultSet rs) throws SQLException {
         ClassSession session = new ClassSession();
         session.setId(rs.getString("session_id"));
-        session.setCourseId(rs.getString("course_id"));
+        session.setCourseId(rs.getString("course_id")); // Lấy course_id từ bảng
         session.setClassId(rs.getString("course_id"));
-        session.setCourseName(rs.getString("course_name")); // Denormalized
+        session.setCourseName(rs.getString("course_name"));
 
-        // Handle timestamps properly, converting to LocalDateTime
         Timestamp dbStartTime = rs.getTimestamp("start_time");
         if (dbStartTime != null) {
             session.setStartTime(dbStartTime.toLocalDateTime());
@@ -68,12 +76,16 @@ public class ClassSessionDAO {
         if (dbEndTime != null) {
             session.setEndTime(dbEndTime.toLocalDateTime());
         }
-        // Model's setStartTime/setEndTime also updates sessionDate and timeSlot
 
-        session.setRoom(rs.getString("room"));         // Denormalized room name
-        session.setTeacher(rs.getString("teacher_name"));   // Denormalized teacher name
+        session.setRoom(rs.getString("room"));
+        session.setTeacher(rs.getString("teacher_name"));
         session.setSessionNumber(rs.getInt("session_number"));
 
+        // Đọc session_notes từ ResultSet
+        if (hasColumn(rs, "session_notes")) {
+            // Giả sử ClassSession model có phương thức setSessionNotes(String notes)
+            // session.setSessionNotes(rs.getString("session_notes"));
+        }
         return session;
     }
 
@@ -88,28 +100,54 @@ public class ClassSessionDAO {
     private void prepareStatementFromClassSession(PreparedStatement stmt, ClassSession session, boolean includeIdInValues) throws SQLException {
         int paramIndex = 1;
 
-        if (includeIdInValues) {
+        if (includeIdInValues) { // Cho INSERT
             stmt.setString(paramIndex++, session.getId());
-        }
-        stmt.setString(paramIndex++, session.getCourseId());
-        stmt.setString(paramIndex++, session.getClassId());
-        stmt.setString(paramIndex++, session.getCourseName()); // Denormalized
+            stmt.setString(paramIndex++, session.getCourseId());
+            stmt.setString(paramIndex++, session.getClassId()); // class_id
+            stmt.setString(paramIndex++, session.getCourseName());
 
-        if (session.getStartTime() != null) {
-            stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getStartTime()));
-        } else {
-            stmt.setNull(paramIndex++, Types.TIMESTAMP);
-        }
+            if (session.getStartTime() != null) {
+                stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getStartTime()));
+                stmt.setDate(paramIndex++, Date.valueOf(session.getStartTime().toLocalDate())); // session_date
+            } else {
+                stmt.setNull(paramIndex++, Types.TIMESTAMP); // start_time
+                stmt.setNull(paramIndex++, Types.DATE);      // session_date
+            }
 
-        if (session.getEndTime() != null) {
-            stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getEndTime()));
-        } else {
-            stmt.setNull(paramIndex++, Types.TIMESTAMP);
-        }
+            if (session.getEndTime() != null) {
+                stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getEndTime()));
+            } else {
+                stmt.setNull(paramIndex++, Types.TIMESTAMP); // end_time
+            }
 
-        stmt.setString(paramIndex++, session.getRoom());     // Stores room_name
-        stmt.setString(paramIndex++, session.getTeacher());  // Stores teacher_name
-        stmt.setInt(paramIndex++, session.getSessionNumber());
+            stmt.setString(paramIndex++, session.getRoom());
+            stmt.setString(paramIndex++, session.getTeacher());
+            stmt.setInt(paramIndex++, session.getSessionNumber());
+            // if (session.getSessionNotes() != null) { // Nếu có session_notes
+            //     stmt.setString(paramIndex++, session.getSessionNotes());
+            // }
+        } else { // Cho UPDATE (không bao gồm session_id trong phần SET)
+            stmt.setString(paramIndex++, session.getCourseId());
+            stmt.setString(paramIndex++, session.getClassId()); // class_id
+            stmt.setString(paramIndex++, session.getCourseName());
+
+            if (session.getStartTime() != null) {
+                stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getStartTime()));
+                stmt.setDate(paramIndex++, Date.valueOf(session.getStartTime().toLocalDate())); // session_date
+            } else {
+                stmt.setNull(paramIndex++, Types.TIMESTAMP);
+                stmt.setNull(paramIndex++, Types.DATE);
+            }
+
+            if (session.getEndTime() != null) {
+                stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getEndTime()));
+            } else {
+                stmt.setNull(paramIndex++, Types.TIMESTAMP);
+            }
+            stmt.setString(paramIndex++, session.getRoom());
+            stmt.setString(paramIndex++, session.getTeacher());
+            stmt.setInt(paramIndex++, session.getSessionNumber());
+        }
     }
 
     /**
@@ -121,20 +159,55 @@ public class ClassSessionDAO {
      * @throws SQLException If there's a database error
      */
     boolean internalCreate(Connection conn, ClassSession session) throws SQLException {
-        String sql = "INSERT INTO class_sessions (session_id, course_id, course_id, course_name, " +
-                "start_time, end_time, room, teacher_name, " +
-                "session_number) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"; // 9 placeholders for values, not 12 as in the original comment
+        // Câu lệnh SQL này có 10 cột và 10 placeholder (đã bao gồm session_notes)
+        String sql = "INSERT INTO class_sessions (session_id, course_id, course_name, " +
+                "start_time, session_date, end_time, room, teacher_name, session_number, session_notes) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"; // 10 placeholders
 
         if (session.getId() == null || session.getId().trim().isEmpty()) {
-            // Generate a fallback ID if one wasn't provided
             session.setId("SESS_FALLBACK_" + UUID.randomUUID().toString());
             LOGGER.log(Level.INFO, "internalCreate generated fallback session ID: {0} for course {1}",
                     new Object[]{session.getId(), session.getCourseName()});
         }
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            prepareStatementFromClassSession(stmt, session, true); // Include ID in values
+            int paramIndex = 1;
+            stmt.setString(paramIndex++, session.getId());
+            stmt.setString(paramIndex++, session.getCourseId());
+            // Dựa trên hình ảnh bảng class_sessions, không có cột class_id riêng biệt.
+            // Nếu ClassSession.getClassId() trả về giá trị của course_id hoặc một giá trị khác
+            // mà không có cột tương ứng trong INSERT, đó có thể là vấn đề.
+            // Tuy nhiên, lỗi hiện tại là thiếu tham số, không phải sai cột.
+            // Câu SQL của bạn ở trên không có class_id riêng, nên bỏ qua.
+            stmt.setString(paramIndex++, session.getCourseName());
+
+            if (session.getStartTime() != null) {
+                stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getStartTime())); // start_time
+                stmt.setDate(paramIndex++, Date.valueOf(session.getStartTime().toLocalDate())); // session_date
+            } else {
+                stmt.setNull(paramIndex++, Types.TIMESTAMP); // start_time
+                stmt.setNull(paramIndex++, Types.DATE);      // session_date
+            }
+
+            if (session.getEndTime() != null) {
+                stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getEndTime())); // end_time
+            } else {
+                stmt.setNull(paramIndex++, Types.TIMESTAMP); // end_time
+            }
+
+            stmt.setString(paramIndex++, session.getRoom());
+            stmt.setString(paramIndex++, session.getTeacher());
+            stmt.setInt(paramIndex++, session.getSessionNumber());
+
+            // THAM SỐ THỨ 10 BỊ THIẾU LÀ Ở ĐÂY: session_notes
+            // Giả sử ClassSession model có phương thức getSessionNotes()
+            // Nếu session.getSessionNotes() có thể null, bạn cần xử lý:
+            if (session.getSessionNotes() != null) {
+                stmt.setString(paramIndex++, session.getSessionNotes());
+            } else {
+                stmt.setNull(paramIndex++, Types.VARCHAR); // Hoặc Types.LONGVARCHAR nếu session_notes là TEXT
+            }
+
             return stmt.executeUpdate() > 0;
         }
     }
@@ -148,14 +221,37 @@ public class ClassSessionDAO {
      * @throws SQLException If there's a database error
      */
     boolean internalUpdate(Connection conn, ClassSession session) throws SQLException {
-        String sql = "UPDATE class_sessions SET course_id = ?, course_id = ?, course_name = ?, " +
-                "start_time = ?, end_time = ?, room = ?, teacher_name = ?, " +
-                "session_number = ? " +
-                "WHERE session_id = ?"; // 8 fields to set, 1 for WHERE clause (not 11 as in the original comment)
+        String sql = "UPDATE class_sessions SET course_id = ?, course_name = ?, " +
+                "start_time = ?, session_date = ?, end_time = ?, room = ?, teacher_name = ?, " +
+                "session_number = ?, session_notes = ?" +
+                " WHERE session_id = ?"; // 9 fields để SET
 
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            prepareStatementFromClassSession(stmt, session, false); // Don't include ID in SET values
-            stmt.setString(9, session.getId()); // Set the session_id for the WHERE clause (index 9, not 12)
+            int paramIndex = 1;
+            stmt.setString(paramIndex++, session.getCourseId());
+            stmt.setString(paramIndex++, session.getCourseName());
+
+            if (session.getStartTime() != null) {
+                stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getStartTime()));
+                stmt.setDate(paramIndex++, Date.valueOf(session.getStartTime().toLocalDate())); // session_date
+            } else {
+                stmt.setNull(paramIndex++, Types.TIMESTAMP);
+                stmt.setNull(paramIndex++, Types.DATE);
+            }
+
+            if (session.getEndTime() != null) {
+                stmt.setTimestamp(paramIndex++, Timestamp.valueOf(session.getEndTime()));
+            } else {
+                stmt.setNull(paramIndex++, Types.TIMESTAMP);
+            }
+
+            stmt.setString(paramIndex++, session.getRoom());
+            stmt.setString(paramIndex++, session.getTeacher());
+            stmt.setInt(paramIndex++, session.getSessionNumber());
+            // stmt.setString(paramIndex++, session.getSessionNotes()); // session_notes
+
+            stmt.setString(paramIndex++, session.getId()); // Cho WHERE clause
+
             return stmt.executeUpdate() > 0;
         }
     }
@@ -178,140 +274,165 @@ public class ClassSessionDAO {
             ClassroomDAO classroomDAO,
             TeacherDAO teacherDAO,
             HolidayDAO holidayDAO,
-            ScheduleDAO scheduleDAO
+            ScheduleDAO scheduleDAO // scheduleDAO có thể là null nếu không dùng
     ) throws SQLException {
 
         List<ClassSession> generatedSessions = new ArrayList<>();
 
-        // Validate course and required properties
+        // --- Bước 1: Kiểm tra tính hợp lệ của đối tượng Course ---
         if (course == null) {
-            LOGGER.log(Level.WARNING, "Course object is null. Cannot generate sessions.");
+            LOGGER.log(Level.WARNING, "Đối tượng Course là null. Không thể tạo buổi học.");
             return generatedSessions;
         }
 
+        // Sử dụng course.getDaysOfWeekList() thay vì course.getDaysOfWeekAsString()
+        // và course.getClassId() đã có sẵn trong model Course.java
         if (course.getCourseId() == null || course.getStartDate() == null ||
                 course.getEndDate() == null || course.getCourseStartTime() == null || course.getCourseEndTime() == null ||
-                course.getDaysOfWeekAsString() == null || course.getDaysOfWeekAsString().trim().isEmpty() ||
-                course.getClassId() == null) {
-            LOGGER.log(Level.WARNING, "Course {0} has missing essential scheduling fields. Cannot generate sessions.",
+                course.getDaysOfWeekList() == null || course.getDaysOfWeekList().isEmpty()) { // SỬA Ở ĐÂY
+            LOGGER.log(Level.WARNING, "Khóa học {0} thiếu các trường thông tin cần thiết cho lịch trình (ID, ngày, giờ, danh sách ngày học). Không thể tạo buổi học.",
                     course.getCourseId());
             return generatedSessions;
         }
+        // Kiểm tra course.getClassId() nếu nó là bắt buộc cho ClassSession
+        // Trong file Course.java bạn cung cấp, classId có thể null, nên không cần kiểm tra ở đây trừ khi ClassSession yêu cầu.
+        // Nếu ClassSession yêu cầu classId không null:
+        // if (course.getClassId() == null || course.getClassId().trim().isEmpty()){
+        //     LOGGER.log(Level.WARNING, "Khóa học {0} thiếu Class ID. Không thể tạo buổi học.", course.getCourseId());
+        //     return generatedSessions;
+        // }
+
 
         if (course.getStartDate().isAfter(course.getEndDate())) {
-            LOGGER.log(Level.WARNING, "Course {0} start date is after end date. Cannot generate sessions.",
+            LOGGER.log(Level.WARNING, "Ngày bắt đầu của khóa học {0} sau ngày kết thúc. Không thể tạo buổi học.",
                     course.getCourseId());
             return generatedSessions;
         }
 
-        // Get room and teacher information
+        // --- Bước 2: Lấy thông tin phòng học và giáo viên ---
         String actualRoomName = "N/A";
-        String actualTeacherName = "N/A";
-        Classroom classroomForSchedule = null;
-
-        // Fetch Classroom details if available
         if (classroomDAO != null && course.getRoomId() != null && !course.getRoomId().trim().isEmpty()) {
-            Optional<Classroom> classroomOpt = classroomDAO.findByRoomId(course.getRoomId());
+            // Giả định ClassroomDAO.findByRoomId(String roomId) tự quản lý connection
+            // hoặc bạn có một phiên bản findByRoomId(Connection conn, String roomId) nếu cần dùng transaction hiện tại.
+            Optional<Classroom> classroomOpt = classroomDAO.findByRoomId(course.getRoomId()); //
             if (classroomOpt.isPresent()) {
-                classroomForSchedule = classroomOpt.get();
-                actualRoomName = classroomForSchedule.getRoomName();
+                actualRoomName = classroomOpt.get().getRoomName(); //
             } else {
-                LOGGER.log(Level.WARNING, "Classroom not found for ID: {0} for course {1}",
+                LOGGER.log(Level.WARNING, "Không tìm thấy phòng học với ID: {0} cho khóa học {1}",
                         new Object[]{course.getRoomId(), course.getCourseId()});
             }
         }
 
-        // Fetch Teacher details if available
-        if (teacherDAO != null && course.getTeacherId() != null && !course.getTeacherId().trim().isEmpty()) {
-            Optional<Teacher> teacherOpt = teacherDAO.findById(course.getTeacherId());
+        String actualTeacherName = "N/A";
+        // Ưu tiên lấy thông tin Teacher từ đối tượng Course đã có
+        if (course.getTeacher() != null) { //
+            actualTeacherName = course.getTeacher().getName(); // getName() từ lớp Person
+            // Nếu tên không hợp lệ và có TeacherDAO, thử tải lại bằng ID (user_id)
+            if ((actualTeacherName == null || actualTeacherName.trim().isEmpty() || actualTeacherName.equals("N/A")) &&
+                    teacherDAO != null && course.getTeacher().getId() != null && !course.getTeacher().getId().trim().isEmpty()) {
+                // Giả định TeacherDAO.findById(String userId) tự quản lý connection
+                Optional<Teacher> teacherOpt = teacherDAO.findById(course.getTeacher().getId()); // getId() từ Person, là user_id
+                if (teacherOpt.isPresent()) {
+                    actualTeacherName = teacherOpt.get().getName();
+                } else {
+                    LOGGER.log(Level.WARNING, "Không tìm thấy giáo viên (khi tải lại) với user_id: {0} cho khóa học {1}.",
+                            new Object[]{course.getTeacher().getId(), course.getCourseId()});
+                }
+            }
+        } else if (teacherDAO != null && course.getTeacherId() != null && !course.getTeacherId().trim().isEmpty()) {
+            // Nếu course.getTeacher() là null nhưng có course.getTeacherId() (là user_id)
+            Optional<Teacher> teacherOpt = teacherDAO.findById(course.getTeacherId()); //
             if (teacherOpt.isPresent()) {
                 actualTeacherName = teacherOpt.get().getName();
             } else {
-                LOGGER.log(Level.WARNING, "Teacher not found for ID: {0} for course {1}",
+                LOGGER.log(Level.WARNING, "Không tìm thấy giáo viên với user_id: {0} cho khóa học {1}",
                         new Object[]{course.getTeacherId(), course.getCourseId()});
             }
         }
 
-        // Parse scheduled days from string representation
+
+        // --- Bước 3: Phân tích các ngày học trong tuần ---
         Set<DayOfWeek> scheduledDays = new HashSet<>();
-        try {
-            String[] dayStrings = course.getDaysOfWeekAsString().toUpperCase().split(",");
-            for (String dayStr : dayStrings) {
-                if (!dayStr.trim().isEmpty()) {
-                    scheduledDays.add(DayOfWeek.valueOf(dayStr.trim()));
-                }
+        // Sử dụng getDaysOfWeekList() từ Course.java, trả về List<String> như "Mon", "Tue"
+        List<String> shortDayStrings = course.getDaysOfWeekList(); //
+
+        for (String shortDayStr : shortDayStrings) {
+            // Gọi phương thức mapShortDayToDayOfWeek đã thêm vào ClassSessionDAO
+            DayOfWeek dow = mapShortDayToDayOfWeek(shortDayStr);
+            if (dow != null) {
+                scheduledDays.add(dow);
+            } else {
+                // mapShortDayToDayOfWeek đã ghi log cảnh báo
+                LOGGER.log(Level.SEVERE, "Chuỗi ngày không hợp lệ '{0}' trong danh sách ngày học của khóa {1}. Ngày này sẽ bị bỏ qua.",
+                        new Object[]{shortDayStr, course.getCourseId()});
             }
-            if (scheduledDays.isEmpty()) {
-                LOGGER.log(Level.WARNING, "No valid days_of_week found for course {0}: {1}",
-                        new Object[]{course.getCourseId(), course.getDaysOfWeekAsString()});
-                return generatedSessions;
-            }
-        } catch (IllegalArgumentException e) {
-            LOGGER.log(Level.SEVERE, "Error parsing days_of_week '" + course.getDaysOfWeekAsString() +
-                    "' for course " + course.getCourseId(), e);
-            throw new SQLException("Invalid days_of_week format for course " + course.getCourseId() +
-                    ": " + course.getDaysOfWeekAsString(), e);
         }
 
-        // Iterate through dates and generate sessions
+        if (scheduledDays.isEmpty()) {
+            LOGGER.log(Level.WARNING, "Không có ngày học hợp lệ nào được phân tích cho khóa học {0}. Sẽ không có buổi học nào được tạo.",
+                    course.getCourseId());
+            return generatedSessions;
+        }
+
+        // --- Bước 4: Lặp qua các ngày để tạo buổi học ---
         LocalDate currentIterDate = course.getStartDate();
         LocalDate courseEndDate = course.getEndDate();
-        LocalTime sessionStartTimeOfDay = course.getCourseStartTime();
-        LocalTime sessionEndTimeOfDay = course.getCourseEndTime();
+        LocalTime sessionStartTimeOfDay = course.getCourseStartTime(); //
+        LocalTime sessionEndTimeOfDay = course.getCourseEndTime();     //
         int sessionCounter = 1;
 
         while (!currentIterDate.isAfter(courseEndDate)) {
             if (scheduledDays.contains(currentIterDate.getDayOfWeek())) {
-                // Check if this date is a holiday
                 boolean isHoliday = false;
                 if (holidayDAO != null) {
+                    // Giả sử holidayDAO.isHoliday không yêu cầu Connection hoặc tự quản lý
                     isHoliday = holidayDAO.isHoliday(currentIterDate);
                 }
 
                 if (!isHoliday) {
-                    // Generate session for this date
                     LocalDateTime actualSessionStartDateTime = LocalDateTime.of(currentIterDate, sessionStartTimeOfDay);
                     LocalDateTime actualSessionEndDateTime = LocalDateTime.of(currentIterDate, sessionEndTimeOfDay);
 
                     ClassSession newSession = new ClassSession();
-                    // Generate a unique session ID pattern
-                    String generatedSessionId = "SESS_" + course.getCourseId().replaceAll("[^a-zA-Z0-9]", "") + "_" +
+                    String generatedSessionId = "SESS_" +
+                            course.getCourseId().replaceAll("[^a-zA-Z0-9]", "") + "_" +
                             currentIterDate.toString().replace("-", "") + "_" +
                             String.format("%03d", sessionCounter);
 
                     newSession.setId(generatedSessionId);
                     newSession.setCourseId(course.getCourseId());
-                    newSession.setClassId(course.getClassId());
+                    newSession.setClassId(course.getClassId()); // Lấy classId từ Course object
                     newSession.setCourseName(course.getCourseName());
-                    newSession.setStartTime(actualSessionStartDateTime);
-                    newSession.setEndTime(actualSessionEndDateTime);
+                    newSession.setStartTime(actualSessionStartDateTime); // Gán cả ngày và giờ
+                    newSession.setEndTime(actualSessionEndDateTime);   // Gán cả ngày và giờ
                     newSession.setRoom(actualRoomName);
                     newSession.setTeacher(actualTeacherName);
                     newSession.setSessionNumber(sessionCounter);
+                    // newSession.setSessionNotes("Ghi chú cho buổi " + sessionCounter); // Nếu bạn có trường này
 
-                    // Save the session
+                    // Gọi internalCreate đã được cập nhật để lưu session_date, class_id
                     boolean savedSuccessfully = internalCreate(conn, newSession);
                     if (savedSuccessfully) {
                         generatedSessions.add(newSession);
-                        LOGGER.log(Level.FINER, "Generated and saved session: {0}", newSession.getId());
-
-                        // Optional room schedule integration would go here
-                        // Placeholder for now, as the full RoomSchedule implementation is commented
+                        // LOGGER.log(Level.FINER, "Đã tạo và lưu buổi học: {0}", newSession.getId());
                     } else {
-                        LOGGER.log(Level.WARNING, "Failed to save generated class session: {0} for course {1}. "
-                                        + "Transaction should be rolled back by caller.",
+                        LOGGER.log(Level.WARNING, "Không thể lưu buổi học được tạo: {0} cho khóa học {1}. "
+                                        + "Transaction nên được rollback bởi bên gọi.",
                                 new Object[]{newSession.getId(), course.getCourseId()});
+                        // Nếu việc tạo một session thất bại là nghiêm trọng, bạn có thể ném SQLException ở đây
+                        // để trigger rollback ở nơi gọi.
+                        // throw new SQLException("Không thể lưu buổi học đã tạo: " + newSession.getId() + " cho khóa " + course.getCourseId());
                     }
                     sessionCounter++;
                 } else {
-                    LOGGER.log(Level.INFO, "Skipping session generation for course {0} on {1} as it is a holiday.",
+                    LOGGER.log(Level.INFO, "Bỏ qua tạo buổi học cho khóa {0} vào ngày {1} vì là ngày nghỉ.",
                             new Object[]{course.getCourseId(), currentIterDate});
                 }
             }
             currentIterDate = currentIterDate.plusDays(1);
         }
 
-        LOGGER.log(Level.INFO, "Attempted to generate {0} sessions for course {1}, successfully saved {2}",
+        LOGGER.log(Level.INFO, "Đã cố gắng tạo {0} buổi học cho khóa {1}, lưu thành công {2} buổi.",
                 new Object[]{(sessionCounter - 1), course.getCourseId(), generatedSessions.size()});
         return generatedSessions;
     }
@@ -359,10 +480,12 @@ public class ClassSessionDAO {
 
     // Base SELECT statement for consistent column selection
     private String getBaseSelectClassSessionSQL() {
-        return "SELECT session_id, course_id, course_id, course_name, " +
+        // Các cột từ hình ảnh: session_id, session_date, start_time, end_time,
+        // teacher_name, course_name, room, course_id, session_number, session_notes
+        return "SELECT session_id, course_id, course_name, " + // Bỏ class_id nếu không có cột riêng
                 "start_time, end_time, room, teacher_name, " +
-                "session_number " +
-                "FROM class_sessions";
+                "session_number, session_date, session_notes" +
+                " FROM class_sessions";
     }
 
     // Internal query methods (using provided connection)
@@ -400,11 +523,12 @@ public class ClassSessionDAO {
         }
     }
 
-    List<ClassSession> internalFindByClassId(Connection conn, String classId) throws SQLException {
+    List<ClassSession> internalFindByClassId(Connection conn, String classId /* thực chất là course_id */) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
+        // Truy vấn cột course_id, vì không có cột class_id riêng trong bảng
         String sql = getBaseSelectClassSessionSQL() + " WHERE course_id = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, classId);
+            stmt.setString(1, classId); // classId ở đây được dùng như course_id
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     sessions.add(mapResultSetToClassSession(rs));
@@ -430,7 +554,7 @@ public class ClassSessionDAO {
 
     List<ClassSession> internalFindByDateRange(Connection conn, LocalDate startDate, LocalDate endDate) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
-        String sql = getBaseSelectClassSessionSQL() + " WHERE DATE(start_time) BETWEEN ? AND ?";
+        String sql = getBaseSelectClassSessionSQL() + " WHERE session_date BETWEEN ? AND ?"; // Sử dụng session_date
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setDate(1, Date.valueOf(startDate));
             stmt.setDate(2, Date.valueOf(endDate));
@@ -718,37 +842,46 @@ public class ClassSessionDAO {
     public Optional<Integer> findCurrentSessionNumberByDate(String courseId, LocalDate currentDate) {
         if (courseId == null || courseId.trim().isEmpty() || currentDate == null) {
             LOGGER.log(Level.WARNING, "courseId hoặc currentDate không hợp lệ để tìm current session number.");
-            return Optional.of(0); // Trả về 0 nếu đầu vào không hợp lệ
+            return Optional.of(0);
         }
 
-        // DATE(start_time) trong SQL sẽ trích xuất phần ngày từ cột timestamp start_time
-        String sql = "SELECT MAX(session_number) FROM class_sessions WHERE course_id = ? AND DATE(start_time) <= ?";
+        String sql = "SELECT MAX(session_number) FROM class_sessions WHERE course_id = ? AND session_date <= ?"; // SỬA Ở ĐÂY
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, courseId);
-            stmt.setDate(2, java.sql.Date.valueOf(currentDate)); // Chuyển LocalDate sang java.sql.Date
+            stmt.setDate(2, java.sql.Date.valueOf(currentDate));
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     int maxSessionNumber = rs.getInt(1);
-                    // Nếu rs.getInt(1) trả về 0 và rs.wasNull() là true, nghĩa là không có dòng nào khớp
-                    // (MAX(column) trên tập rỗng trả về NULL trong SQL)
                     if (rs.wasNull()) {
-                        return Optional.of(0); // Không có buổi học nào cho đến ngày này
+                        return Optional.of(0);
                     }
                     return Optional.of(maxSessionNumber);
                 } else {
-                    // Điều này không nên xảy ra với MAX(), vì nó luôn trả về một dòng (có thể là NULL)
                     return Optional.of(0);
                 }
             }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Lỗi khi tìm số buổi học hiện tại cho course ID: " + courseId + " theo ngày: " + currentDate, e);
-            // Trong trường hợp lỗi, bạn có thể quyết định trả về empty() hoặc một giá trị mặc định an toàn.
-            // Trả về empty() để lớp gọi có thể xử lý lỗi cụ thể hơn.
             return Optional.empty();
+        }
+    }
+    private DayOfWeek mapShortDayToDayOfWeek(String shortDay) {
+        if (shortDay == null) return null;
+        switch (shortDay.trim().toUpperCase()) {
+            case "MON": return DayOfWeek.MONDAY;
+            case "TUE": return DayOfWeek.TUESDAY;
+            case "WED": return DayOfWeek.WEDNESDAY;
+            case "THU": return DayOfWeek.THURSDAY;
+            case "FRI": return DayOfWeek.FRIDAY;
+            case "SAT": return DayOfWeek.SATURDAY;
+            case "SUN": return DayOfWeek.SUNDAY;
+            default:
+                LOGGER.log(Level.WARNING, "Phát hiện chuỗi ngày viết tắt không hợp lệ: {0}", shortDay);
+                return null;
         }
     }
 
