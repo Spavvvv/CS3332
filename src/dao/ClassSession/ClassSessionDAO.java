@@ -55,7 +55,7 @@ public class ClassSessionDAO {
         ClassSession session = new ClassSession();
         session.setId(rs.getString("session_id"));
         session.setCourseId(rs.getString("course_id"));
-        session.setClassId(rs.getString("class_id"));
+        session.setClassId(rs.getString("course_id"));
         session.setCourseName(rs.getString("course_name")); // Denormalized
 
         // Handle timestamps properly, converting to LocalDateTime
@@ -121,7 +121,7 @@ public class ClassSessionDAO {
      * @throws SQLException If there's a database error
      */
     boolean internalCreate(Connection conn, ClassSession session) throws SQLException {
-        String sql = "INSERT INTO class_sessions (session_id, course_id, class_id, course_name, " +
+        String sql = "INSERT INTO class_sessions (session_id, course_id, course_id, course_name, " +
                 "start_time, end_time, room, teacher_name, " +
                 "session_number) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"; // 9 placeholders for values, not 12 as in the original comment
@@ -148,7 +148,7 @@ public class ClassSessionDAO {
      * @throws SQLException If there's a database error
      */
     boolean internalUpdate(Connection conn, ClassSession session) throws SQLException {
-        String sql = "UPDATE class_sessions SET course_id = ?, class_id = ?, course_name = ?, " +
+        String sql = "UPDATE class_sessions SET course_id = ?, course_id = ?, course_name = ?, " +
                 "start_time = ?, end_time = ?, room = ?, teacher_name = ?, " +
                 "session_number = ? " +
                 "WHERE session_id = ?"; // 8 fields to set, 1 for WHERE clause (not 11 as in the original comment)
@@ -359,7 +359,7 @@ public class ClassSessionDAO {
 
     // Base SELECT statement for consistent column selection
     private String getBaseSelectClassSessionSQL() {
-        return "SELECT session_id, course_id, class_id, course_name, " +
+        return "SELECT session_id, course_id, course_id, course_name, " +
                 "start_time, end_time, room, teacher_name, " +
                 "session_number " +
                 "FROM class_sessions";
@@ -402,7 +402,7 @@ public class ClassSessionDAO {
 
     List<ClassSession> internalFindByClassId(Connection conn, String classId) throws SQLException {
         List<ClassSession> sessions = new ArrayList<>();
-        String sql = getBaseSelectClassSessionSQL() + " WHERE class_id = ?";
+        String sql = getBaseSelectClassSessionSQL() + " WHERE course_id = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, classId);
             try (ResultSet rs = stmt.executeQuery()) {

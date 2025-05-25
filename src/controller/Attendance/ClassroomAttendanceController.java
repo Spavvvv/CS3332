@@ -67,7 +67,7 @@ public class ClassroomAttendanceController {
 
         // Fetch students from the database based on classId
         LOGGER.log(Level.INFO, "Fetching students for classId: {0}", classId);
-        List<Student> students = studentDAO.findByClassId(classId);
+        List<Student> students = studentDAO.findByCourseId(classId);
         LOGGER.log(Level.INFO, "Fetched {0} students for classId: {1}.", new Object[]{students.size(), classId});
 
         // Tải danh sách buổi học
@@ -431,7 +431,7 @@ public class ClassroomAttendanceController {
         LOGGER.log(Level.INFO, "Applying filters: punctuality >= {0}, diligence >= {1} for class {2}",
                 new Object[]{punctualityFilter, diligenceFilter, classId});
         // Lấy danh sách học sinh trong lớp
-        List<Student> students = studentDAO.findByClassId(classId);
+        List<Student> students = studentDAO.findByCourseId(classId);
         if (students.isEmpty()) {
             LOGGER.log(Level.INFO, "No students found in class {0}", classId);
             ObservableList<StudentAttendanceData> emptyList = FXCollections.observableArrayList();

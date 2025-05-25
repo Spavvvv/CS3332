@@ -52,7 +52,7 @@ public class StudentDAO {
      * @throws SQLException if a database access error occurs
      */
     public boolean insertStudent(Student student) throws SQLException {
-        String sql = "INSERT INTO students (id, name, gender, contact_number, birthday, email, class_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO students (id, name, gender, contact_number, birthday, email, course_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
         // Assuming your students table has a class_id column. Adjust if needed.
 
         try (Connection conn = DatabaseConnection.getConnection();
@@ -240,7 +240,7 @@ public class StudentDAO {
      * @throws SQLException if a database access error occurs
      */
     public Student getStudentById(Connection conn, String studentId) throws SQLException {
-        String sql = "SELECT id, name, gender, contact_number, birthday, email, class_id, Parent_Name, Parent_PhoneNumber FROM students WHERE id = ?";
+        String sql = "SELECT id, name, gender, contact_number, birthday, email, course_id, Parent_Name, Parent_PhoneNumber FROM students WHERE id = ?";
         // Assuming students table has class_id
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -620,12 +620,12 @@ public class StudentDAO {
      //* @param classId The ID of the class.
      //* @return A list of students belonging to the class. Returns an empty list if no students are found or on error.
      //*/
-    public List<Student> findByClassId(String classId) {
+    public List<Student> findByCourseId(String course_id) {
         List<Student> students = new ArrayList<>();
         // Ensure your 'students' table has a 'class_id' column or similar foreign key to the 'classes' table.
-        String sql = "SELECT id, name, gender, contact_number, birthday, email, class_id, Parent_Name, Parent_PhoneNumber FROM students WHERE class_id = ?";
+        String sql = "SELECT id, name, gender, contact_number, birthday, email, course_id, Parent_Name, Parent_PhoneNumber FROM students WHERE course_id = ?";
 
-        if (classId == null || classId.trim().isEmpty()) {
+        if (course_id == null || course_id.trim().isEmpty()) {
             LOGGER.log(Level.WARNING, "findByClassId called with null or empty classId.");
             return students; // Return empty list for invalid input
         }
@@ -633,7 +633,7 @@ public class StudentDAO {
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement statement = conn.prepareStatement(sql)) {
 
-            statement.setString(1, classId);
+            statement.setString(1, course_id);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
@@ -642,7 +642,7 @@ public class StudentDAO {
                 }
             }
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error finding students by class ID: " + classId, e);
+            LOGGER.log(Level.SEVERE, "Error finding students by class ID: " + course_id, e);
             // Depending on desired behavior, you might throw e or just return empty list
         }
         return students;
@@ -785,7 +785,7 @@ public class StudentDAO {
      */
     public boolean populateStudentMetrics(StudentAttendanceData attendanceData, String classId) {
         String sql = "SELECT punctuality_score, awareness_score FROM student_metrics " +
-                "WHERE student_id = ? AND class_id = ? " +
+                "WHERE student_id = ? AND course_id = ? " +
                 "ORDER BY record_date DESC LIMIT 1";
 
         try (Connection conn = DatabaseConnection.getConnection();
@@ -834,7 +834,7 @@ public class StudentDAO {
      * @return True nếu lưu thành công, false nếu ngược lại
      */
     public boolean saveStudentMetrics(StudentAttendanceData attendanceData, String classId, String notes) {
-        String sql = "INSERT INTO student_metrics (metric_id, student_id, class_id, record_date, " +
+        String sql = "INSERT INTO student_metrics (metric_id, student_id, course_id, record_date, " +
                 "awareness_score, punctuality_score, notes) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
@@ -984,7 +984,7 @@ public class StudentDAO {
         Student student = studentOptional.get();
         String sql = "SELECT student_id, record_date, awareness_score, punctuality_score, notes " +
                 "FROM student_metrics " +
-                "WHERE student_id = ? AND class_id = ? " +
+                "WHERE student_id = ? AND course_id = ? " +
                 "ORDER BY record_date DESC";
 
         try (Connection conn = DatabaseConnection.getConnection();

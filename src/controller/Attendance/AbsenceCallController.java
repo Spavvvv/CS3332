@@ -125,7 +125,7 @@ public class AbsenceCallController {
 
 
         try {
-            List<Student> studentsInClass = studentDAO.findByClassId(classId);
+            List<Student> studentsInClass = studentDAO.findByCourseId(classId);
             if (studentsInClass == null) studentsInClass = new ArrayList<>();
 
             // Fetch existing attendance records from the 'attendance' table for this session

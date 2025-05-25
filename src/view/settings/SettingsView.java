@@ -11,6 +11,7 @@ import javafx.scene.text.FontWeight;
 import javafx.util.Callback;
 import src.dao.Accounts.AccountDAO;
 import src.dao.Person.CourseDAO;
+import src.dao.Person.StudentDAO;
 import src.dao.Person.TeacherDAO;
 import src.dao.Person.UserDAO;
 import src.model.system.course.Course;
@@ -44,10 +45,11 @@ public class SettingsView extends BaseScreenView {
     public SettingsView() {
         super("Cài đặt Trung Tâm", "settings_view");
         try {
-            this.teacherDAO = new TeacherDAO();
-            this.accountDAO = new AccountDAO();
-            this.userDAO = new UserDAO();
-            this.courseDAO = new CourseDAO();
+            teacherDAO = new TeacherDAO();
+            accountDAO = new AccountDAO();
+            userDAO = new UserDAO();
+            courseDAO = new CourseDAO();
+            courseDAO.setTeacherDAO(teacherDAO);
         } catch (SQLException e) {
             System.err.println("Lỗi nghiêm trọng: Không thể khởi tạo DAO. " + e.getMessage());
             e.printStackTrace();

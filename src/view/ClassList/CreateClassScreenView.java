@@ -24,7 +24,9 @@ import src.model.classroom.Classroom;
 import src.model.holidays.HolidaysModel; // Import HolidaysModel
 import src.model.person.Teacher; // Assuming you have a Teacher model
 import src.model.system.course.Course;
+import src.utils.DatabaseConnection;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -525,7 +527,8 @@ public class CreateClassScreenView {
                 // expects a numeric day. We need to convert 'day' (DayOfWeek enum) to numeric.
                 // Assuming 1=Monday, ..., 7=Sunday (DayOfWeek.getValue())
                 try {
-                    if (courseDAO.hasTimeConflictForRoomAndDay(null, selectedRoom.getRoomId(), day.getValue(), startTime, endTime, null)) {
+                    Connection conn = DatabaseConnection.getConnection();
+                    if (courseDAO.hasTimeConflictForRoomAndDay(conn, selectedRoom.getRoomId(), day.getValue(), startTime, endTime, null)) {
                         errorMessages.append("- Xung đột lịch cho phòng ").append(selectedRoom.getRoomName())
                                 .append(" vào ").append(day.getDisplayName(TextStyle.FULL, new Locale("vi")))
                                 .append(" từ ").append(startTime.format(TIME_FORMATTER))
