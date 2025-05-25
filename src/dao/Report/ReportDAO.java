@@ -67,7 +67,7 @@ public class ReportDAO {
      * @return List of ClassReportData objects
      */
     public List<ClassReportData> getClassReportData(LocalDate fromDate, LocalDate toDate) { // Bỏ tham số statusFilter
-        System.out.println("DEBUG SYSOUT: ReportDAO.getClassReportData called with fromDate: " + fromDate + ", toDate: " + toDate);
+        // System.out.println("DEBUG SYSOUT: ReportDAO.getClassReportData called with fromDate: " + fromDate + ", toDate: " + toDate); // Có thể bỏ bớt SYSOUT nếu LOGGER hoạt động tốt
         LOGGER.info("DAO: getClassReportData called with fromDate: " + fromDate + ", toDate: " + toDate);
         List<ClassReportData> reportData = new ArrayList<>();
 
@@ -78,20 +78,21 @@ public class ReportDAO {
 
         String fromDateStr = fromDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
         String toDateStr = toDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
-        LOGGER.info("DAO: Formatted fromDateStr: " + fromDateStr + ", toDateStr: " + toDateStr);
+        // LOGGER.info("DAO: Formatted fromDateStr: " + fromDateStr + ", toDateStr: " + toDateStr); // Log này có thể không cần thiết mỗi lần chạy
 
         StringBuilder queryBuilder = new StringBuilder();
+        // Đổi tên alias cho các cột count để rõ ràng hơn trong SQL và khi đọc ResultSet
         queryBuilder.append("SELECT c.course_id, c.course_name, ")
-                .append("COUNT(DISTINCT cs.session_id) as total_sessions_held, ")
-                .append("c.total_sessions as total_course_sessions, ")
-                .append("SUM(CASE WHEN a.present = 1 THEN 1 ELSE 0 END) as present_count, ")
-                .append("COUNT(DISTINCT a.attendance_id) as total_attendance_records, ")
-                .append("COUNT(DISTINCT h.homework_id) as total_homework_assigned, ")
-                .append("SUM(CASE WHEN shs.is_submitted = 1 THEN 1 ELSE 0 END) as submitted_homework_count, ")
-                .append("AVG(sm.awareness_score) as awareness, ")
-                .append("AVG(sm.punctuality_score) as punctuality, ")
-                .append("AVG(shs.grade) as average_homework_grade, ")
-                .append("COUNT(DISTINCT e.student_id) as student_count ")
+                .append("COUNT(DISTINCT cs.session_id) as sessions_held_in_period, ")
+                .append("c.total_sessions as course_total_sessions_planned, ")
+                .append("SUM(CASE WHEN a.present = 1 THEN 1 ELSE 0 END) as present_instances_count, ")
+                // .append("COUNT(DISTINCT a.attendance_id) as total_attendance_records, ") // Có thể không cần nếu logic chính dựa trên present_instances_count
+                .append("COUNT(DISTINCT h.homework_id) as distinct_homework_items_assigned, ") // Số bài tập lớn (assignments) được giao
+                .append("SUM(CASE WHEN shs.is_submitted = 1 THEN 1 ELSE 0 END) as total_submission_instances, ") // Tổng số lượt nộp bài
+                .append("AVG(sm.awareness_score) as avg_awareness_score, ")
+                .append("AVG(sm.punctuality_score) as avg_punctuality_score, ")
+                .append("AVG(shs.grade) as avg_homework_grade, ")
+                .append("COUNT(DISTINCT e.student_id) as enrolled_student_count ")
                 .append("FROM courses c ")
                 .append("LEFT JOIN class_sessions cs ON c.course_id = cs.course_id AND cs.session_date BETWEEN ? AND ? ")
                 .append("LEFT JOIN attendance a ON cs.session_id = a.session_id ")
@@ -99,23 +100,22 @@ public class ReportDAO {
                 .append("LEFT JOIN student_homework_submissions shs ON h.homework_id = shs.homework_id ")
                 .append("LEFT JOIN student_metrics sm ON c.course_id = sm.course_id AND sm.record_date BETWEEN ? AND ? ")
                 .append("LEFT JOIN enrollment e ON c.course_id = e.course_id ");
-        // KHÔNG CÒN ĐIỀU KIỆN WHERE c.status = ?
+        // KHÔNG CÓ ĐIỀU KIỆN WHERE c.status
 
         List<Object> parameters = new ArrayList<>();
-        parameters.add(fromDateStr);
+        parameters.add(fromDateStr); // cho cs.session_date
         parameters.add(toDateStr);
-        parameters.add(fromDateStr);
+        parameters.add(fromDateStr); // cho h.assigned_date
         parameters.add(toDateStr);
-        parameters.add(fromDateStr);
+        parameters.add(fromDateStr); // cho sm.record_date
         parameters.add(toDateStr);
-        // KHÔNG CÒN THAM SỐ CHO statusFilter
 
         queryBuilder.append("GROUP BY c.course_id, c.course_name, c.total_sessions ")
                 .append("ORDER BY c.course_name");
 
         String query = queryBuilder.toString();
-        LOGGER.info("DAO: SQL Query: " + query);
-        LOGGER.info("DAO: Query parameters: " + parameters);
+        //LOGGER.info("DAO: SQL Query: " + query); // Có thể comment lại nếu quá dài
+        //LOGGER.info("DAO: Query parameters: " + parameters);
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
@@ -124,40 +124,44 @@ public class ReportDAO {
                 stmt.setObject(i + 1, parameters.get(i));
             }
 
-            LOGGER.info("DAO: Executing query...");
+            //LOGGER.info("DAO: Executing query...");
             try (ResultSet rs = stmt.executeQuery()) {
-                LOGGER.info("DAO: Query executed. Processing ResultSet...");
+                //LOGGER.info("DAO: Query executed. Processing ResultSet...");
                 int counter = 1;
                 while (rs.next()) {
-                    LOGGER.info("DAO: Processing row " + counter);
+                    //LOGGER.info("DAO: Processing row " + counter);
                     String courseName = rs.getString("course_name");
-                    int studentCount = rs.getInt("student_count");
-                    int sessionsHeldInPeriod = rs.getInt("total_sessions_held");
-                    // int totalCourseSessionsFromDB = rs.getInt("total_course_sessions"); // Có thể dùng nếu cần
+                    int studentCount = rs.getInt("enrolled_student_count");
+                    int sessionsHeldInPeriod = rs.getInt("sessions_held_in_period");
+                    // int totalCourseSessionsPlanned = rs.getInt("course_total_sessions_planned");
 
-                    int presentCountRaw = rs.getInt("present_count");
+                    // Chuyên cần
+                    int presentInstancesCount = rs.getInt("present_instances_count");
                     int totalPossibleAttendanceInPeriod = studentCount * sessionsHeldInPeriod;
-                    String attendanceStr = presentCountRaw + "/" + (totalPossibleAttendanceInPeriod > 0 ? totalPossibleAttendanceInPeriod : (sessionsHeldInPeriod > 0 ? sessionsHeldInPeriod : 0));
+                    String attendanceStr = presentInstancesCount + "/" + (totalPossibleAttendanceInPeriod > 0 ? totalPossibleAttendanceInPeriod : (sessionsHeldInPeriod > 0 ? sessionsHeldInPeriod : "0"));
 
-                    int totalHomeworkAssignedInPeriod = rs.getInt("total_homework_assigned");
-                    int submittedHomeworkCountRaw = rs.getInt("submitted_homework_count");
-                    int totalHomeworkSubmissionsPossible = studentCount * totalHomeworkAssignedInPeriod;
-                    String homeworkStr = submittedHomeworkCountRaw + "/" + (totalHomeworkSubmissionsPossible > 0 ? totalHomeworkSubmissionsPossible : (totalHomeworkAssignedInPeriod > 0 ? totalHomeworkAssignedInPeriod : 0));
+                    // Bài tập
+                    int distinctHomeworkItemsAssigned = rs.getInt("distinct_homework_items_assigned");
+                    int totalSubmissionInstances = rs.getInt("total_submission_instances");
 
-                    double avgHomeworkGrade = rs.getDouble("average_homework_grade");
+                    // SỬA ĐỔI LOGIC TÍNH "GIAO" CHO BÀI TẬP THEO YÊU CẦU: (số_bài_tập_lớn * số_học_sinh)
+                    int totalHomeworkExpectedSubmissions = distinctHomeworkItemsAssigned * studentCount;
+                    String homeworkStr = totalSubmissionInstances + "/" + (totalHomeworkExpectedSubmissions > 0 ? totalHomeworkExpectedSubmissions : (distinctHomeworkItemsAssigned > 0 ? distinctHomeworkItemsAssigned : "0"));
+
+                    double avgHomeworkGrade = rs.getDouble("avg_homework_grade");
                     if (rs.wasNull()) avgHomeworkGrade = 0.0;
                     String formattedScore = String.format("%.2f/10", avgHomeworkGrade);
 
-                    double awareness = rs.getDouble("awareness");
+                    double awareness = rs.getDouble("avg_awareness_score");
                     if (rs.wasNull()) awareness = 0.0;
-                    double punctuality = rs.getDouble("punctuality");
+                    double punctuality = rs.getDouble("avg_punctuality_score");
                     if (rs.wasNull()) punctuality = 0.0;
 
                     ClassReportData data = new ClassReportData(
-                            counter,
+                            counter, // STT được tạo ở đây, không phải từ DB
                             courseName,
                             attendanceStr,
-                            homeworkStr,
+                            homeworkStr, // Đã cập nhật logic "Giao"
                             awareness,
                             punctuality,
                             formattedScore
@@ -165,8 +169,8 @@ public class ReportDAO {
                     reportData.add(data);
                     counter++;
                 }
-                if (counter == 1 && reportData.isEmpty()) { // Kiểm tra thêm reportData.isEmpty() cho chắc
-                    LOGGER.info("DAO: ResultSet was empty. No data rows found for the given criteria.");
+                if (counter == 1 && reportData.isEmpty()) {
+                    LOGGER.info("DAO: getClassReportData - ResultSet was empty. No data rows found for the given criteria.");
                 }
             }
         } catch (SQLException e) {
@@ -182,6 +186,7 @@ public class ReportDAO {
     }
 
     public double getAttendancePercentage(LocalDate fromDate, LocalDate toDate) {
+        // Phương thức này giữ nguyên logic
         LOGGER.info("DAO: getAttendancePercentage called with fromDate: " + fromDate + ", toDate: " + toDate);
         if (fromDate == null || toDate == null) {
             LOGGER.log(Level.WARNING, "DAO: Null dates for attendance percentage.");
@@ -196,7 +201,6 @@ public class ReportDAO {
                 "FROM attendance a " +
                 "JOIN class_sessions cs ON a.session_id = cs.session_id " +
                 "WHERE cs.session_date BETWEEN ? AND ?";
-        LOGGER.info("DAO: Attendance Percentage SQL Query: " + query);
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
@@ -207,7 +211,6 @@ public class ReportDAO {
                     int presentCount = rs.getInt("present_count");
                     int totalAttendance = rs.getInt("total_attendance");
                     double percentage = totalAttendance > 0 ? (presentCount / (double) totalAttendance) * 100 : 0;
-                    LOGGER.info("DAO: Attendance - presentCount: " + presentCount + ", totalAttendance: " + totalAttendance + ", percentage: " + percentage);
                     return percentage;
                 }
             }
@@ -219,6 +222,7 @@ public class ReportDAO {
     }
 
     public double getHomeworkPercentage(LocalDate fromDate, LocalDate toDate) {
+        // Phương thức này giữ nguyên logic (tính % bài tập lớn có status 'completed')
         LOGGER.info("DAO: getHomeworkPercentage called with fromDate: " + fromDate + ", toDate: " + toDate);
         if (fromDate == null || toDate == null) {
             LOGGER.log(Level.WARNING, "DAO: Null dates for homework percentage.");
@@ -228,11 +232,10 @@ public class ReportDAO {
         String toDateStr = toDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
 
         String query = "SELECT " +
-                "SUM(CASE WHEN h.status = 'completed' THEN 1 ELSE 0 END) as completed_count, " +
-                "COUNT(h.homework_id) as total_homework_assigned " +
+                "SUM(CASE WHEN h.status = 'completed' THEN 1 ELSE 0 END) as completed_assignments_count, " +
+                "COUNT(h.homework_id) as total_assignments_defined " +
                 "FROM homework h " +
                 "WHERE h.assigned_date BETWEEN ? AND ?";
-        LOGGER.info("DAO: Homework Percentage SQL Query: " + query);
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
@@ -240,10 +243,9 @@ public class ReportDAO {
             stmt.setString(2, toDateStr);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    int completedCount = rs.getInt("completed_count");
-                    int totalHomeworkAssigned = rs.getInt("total_homework_assigned");
-                    double percentage = totalHomeworkAssigned > 0 ? (completedCount / (double) totalHomeworkAssigned) * 100 : 0;
-                    LOGGER.info("DAO: Homework - completedAssignments: " + completedCount + ", totalAssignments: " + totalHomeworkAssigned + ", percentage: " + percentage);
+                    int completedAssignments = rs.getInt("completed_assignments_count");
+                    int totalAssignmentsDefined = rs.getInt("total_assignments_defined");
+                    double percentage = totalAssignmentsDefined > 0 ? (completedAssignments / (double) totalAssignmentsDefined) * 100 : 0;
                     return percentage;
                 }
             }
@@ -254,5 +256,5 @@ public class ReportDAO {
         return 0;
     }
 
-    // PHƯƠNG THỨC getDistinctClassStatuses() ĐÃ BỊ XÓA VÌ BẢNG courses KHÔNG CÓ CỘT status
+    // PHƯƠNG THỨC getDistinctClassStatuses() ĐÃ BỊ XÓA (do bảng courses không có cột status)
 }

@@ -34,7 +34,7 @@ public class ReportModel {
         return classReportData;
     }
 
-    public void loadReportData(LocalDate fromDate, LocalDate toDate, String status) {
+    public void loadReportData(LocalDate fromDate, LocalDate toDate) {
         classReportData.clear();
         try {
             List<ClassReportData> rawData = reportDAO.getClassReportData(fromDate, toDate);

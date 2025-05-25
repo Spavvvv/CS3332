@@ -1,5 +1,5 @@
 
-// File: controller/ReportController.java (Hoặc src.controller.Reports.ReportController theo import của bạn)
+
 package src.controller.Reports; // Hoặc package tương ứng của bạn
 
 import javafx.collections.FXCollections;
@@ -80,7 +80,7 @@ public class ReportController {
             if(view!=null) view.showError("Lỗi tải dữ liệu: Model hoặc View không hợp lệ.");
             return;
         }
-        if (view.getFromDatePicker() == null || view.getToDatePicker() == null || view.getStatusComboBox() == null) {
+        if (view.getFromDatePicker() == null || view.getToDatePicker() == null) {
             System.err.println("ReportController.loadReportData: UI filter components are null in View.");
             view.showError("Lỗi: Không thể tải dữ liệu do các thành phần lọc chưa sẵn sàng.");
             return;
@@ -88,18 +88,7 @@ public class ReportController {
 
         LocalDate fromDate = view.getFromDatePicker().getValue();
         LocalDate toDate = view.getToDatePicker().getValue();
-        String status = view.getStatusComboBox().getValue();
 
-        if (status == null && view.getStatusComboBox().getItems() != null && !view.getStatusComboBox().getItems().isEmpty()) {
-            if(view.getStatusComboBox().getItems().contains(DEFAULT_STATUS_FILTER)) {
-                status = DEFAULT_STATUS_FILTER;
-            } else {
-                status = view.getStatusComboBox().getItems().get(0);
-            }
-            view.getStatusComboBox().setValue(status);
-        } else if (status == null) {
-            status = DEFAULT_STATUS_FILTER;
-        }
 
         if (fromDate == null || toDate == null) {
             view.showError("Vui lòng chọn ngày bắt đầu và ngày kết thúc.");
@@ -114,10 +103,10 @@ public class ReportController {
             return;
         }
 
-        System.out.println("ReportController: Requesting model to load data with params - From: " + fromDate + ", To: " + toDate + ", Status: " + status);
+        System.out.println("ReportController: Requesting model to load data with params - From: " + fromDate + ", To: " + toDate);
         try {
             // Bước 1: Yêu cầu model tải và xử lý dữ liệu
-            model.loadReportData(fromDate, toDate, status);
+            model.loadReportData(fromDate, toDate);
 
             // Bước 2: Lấy dữ liệu đã xử lý từ model thông qua các getters
             double attendancePercentage = model.getAttendancePercentage();

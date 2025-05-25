@@ -17,7 +17,8 @@ import javafx.scene.text.Text;
 // Import ReportModel và ClassReportData
 import src.model.report.ReportModel;
 import src.model.report.ReportModel.ClassReportData;
-// Import ReportController
+
+//Controller
 import src.controller.Reports.ReportController;
 
 import src.view.components.Screen.BaseScreenView;
@@ -25,12 +26,15 @@ import src.view.components.Screen.BaseScreenView;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class ReportView extends BaseScreenView {
+    private static final Logger LOGGER = Logger.getLogger(ReportView.class.getName());
 
     private DatePicker fromDatePicker;
     private DatePicker toDatePicker;
-    private ComboBox<String> statusComboBox;
+    // private ComboBox<String> statusComboBox; // ĐÃ BỎ
     private Button searchButton;
     private Button exportPdfButton;
     private Button exportExcelButton;
@@ -51,21 +55,16 @@ public class ReportView extends BaseScreenView {
         super("Báo cáo tình hình học tập", "learning-reports");
         System.out.println("ReportView constructor: START");
 
-        // 1. Khởi tạo Model
-        // ReportModel giờ tự khởi tạo ReportDAO bên trong nó.
         this.model = new ReportModel();
         System.out.println("ReportView constructor: ReportModel created.");
 
-        // 2. Khởi tạo Controller, truyền model và src.view (this) vào
         this.controller = new ReportController(this.model, this);
         System.out.println("ReportView constructor: ReportController created and linked.");
 
-        // 3. Xây dựng giao diện người dùng
         System.out.println("ReportView constructor: Calling initializeView()...");
         initializeView();
         System.out.println("ReportView constructor: initializeView() completed.");
 
-        // 4. Yêu cầu Controller thiết lập các trình xử lý sự kiện
         System.out.println("ReportView constructor: Calling controller.initializeEventHandlers()...");
         if (this.controller != null) {
             this.controller.initializeEventHandlers();
@@ -74,7 +73,6 @@ public class ReportView extends BaseScreenView {
         }
         System.out.println("ReportView constructor: controller.initializeEventHandlers() completed (if controller was not null).");
 
-        // 5. Yêu cầu Controller tải dữ liệu ban đầu
         System.out.println("ReportView constructor: Calling controller.loadInitialData()...");
         if (this.controller != null) {
             this.controller.loadInitialData();
@@ -94,28 +92,25 @@ public class ReportView extends BaseScreenView {
         root.setSpacing(20);
         root.setPadding(new Insets(20));
 
-        HBox filterPanel = createFilterPanel();
-        root.getChildren().add(filterPanel);
+        HBox filterPanel = createFilterPanel(); // Filter panel giờ không còn statusComboBox
 
         Text titleText = new Text("Báo cáo tình hình học tập");
         titleText.setFont(Font.font("System", FontWeight.BOLD, 24));
         titleText.setFill(Color.web("#0078D7"));
         HBox titleBox = new HBox(titleText);
         titleBox.setAlignment(Pos.CENTER);
-        titleBox.setPadding(new Insets(10, 0, 20, 0));
-        root.getChildren().add(titleBox);
+        titleBox.setPadding(new Insets(0, 0, 10, 0));
 
         this.metricsPanel = createMetricsPanel();
-        root.getChildren().add(this.metricsPanel);
-
         VBox tableContainer = createReportTable();
-        root.getChildren().add(tableContainer);
 
-        if (this.reportTable != null && this.reportTable.getParent() instanceof VBox) {
-            VBox.setVgrow(this.reportTable, Priority.ALWAYS);
-        } else if (tableContainer.getChildren().contains(this.reportTable)) {
+        root.getChildren().addAll(titleBox, filterPanel, this.metricsPanel, tableContainer);
+
+        if (this.reportTable != null && tableContainer.getChildren().contains(this.reportTable)) {
             VBox.setVgrow(this.reportTable, Priority.ALWAYS);
         }
+        VBox.setVgrow(tableContainer, Priority.ALWAYS);
+
         System.out.println("ReportView.initializeView() UI construction part completed.");
     }
 
@@ -124,46 +119,42 @@ public class ReportView extends BaseScreenView {
         fromDatePicker = new DatePicker(LocalDate.now().minusMonths(1));
         toDatePicker = new DatePicker(LocalDate.now());
 
-        // ComboBox with predefined options
-        statusComboBox = new ComboBox<>();
-        statusComboBox.setPromptText("Chọn trạng thái");
-        ObservableList<String> statuses = FXCollections.observableArrayList("Active", "Inactive");
-        statusComboBox.setItems(statuses);
-        statusComboBox.setPrefWidth(150);
+        // statusComboBox ĐÃ BỎ
 
-        searchButton = new Button("Tìm kiếm");
-        searchButton.setStyle("-fx-background-color: #0078D7; -fx-text-fill: white;");
-        searchButton.setOnAction(event -> refreshView()); // Trigger refreshView() when clicked
+        searchButton = new Button("Lọc dữ liệu"); // Nút này giờ sẽ lọc theo ngày
+        searchButton.setStyle("-fx-background-color: #0078D7; -fx-text-fill: white; -fx-font-weight: bold;");
+        // Event handler của searchButton sẽ được controller thiết lập
+        // và controller sẽ chỉ lấy fromDate, toDate.
 
         exportPdfButton = new Button("Xuất PDF");
-        exportPdfButton.setStyle("-fx-background-color: #E74C3C; -fx-text-fill: white;");
+        exportPdfButton.setStyle("-fx-background-color: #D9534F; -fx-text-fill: white;");
+        exportPdfButton.setDisable(true);
 
         exportExcelButton = new Button("Xuất Excel");
-        exportExcelButton.setStyle("-fx-background-color: #27AE60; -fx-text-fill: white;");
+        exportExcelButton.setStyle("-fx-background-color: #5CB85C; -fx-text-fill: white;");
+        exportExcelButton.setDisable(true);
 
-        printButton = new Button("In");
-        printButton.setStyle("-fx-background-color: #34495E; -fx-text-fill: white;");
+        printButton = new Button("In Báo Cáo");
+        printButton.setStyle("-fx-background-color: #5BC0DE; -fx-text-fill: white;");
+        printButton.setDisable(true);
 
         HBox filterPanelLayout = new HBox(15);
-        filterPanelLayout.setPadding(new Insets(15));
+        filterPanelLayout.setPadding(new Insets(10));
         filterPanelLayout.setAlignment(Pos.CENTER_LEFT);
-        filterPanelLayout.setStyle("-fx-background-color: #F0F0F0; -fx-border-radius: 5; -fx-background-radius: 5;");
+        filterPanelLayout.setStyle("-fx-background-color: #FFFFFF; -fx-border-color: #DDDDDD; -fx-border-width: 1px; -fx-border-radius: 5; -fx-background-radius: 5; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 5, 0, 1, 1);");
 
-        // Labels with black text for From Date, To Date, and Status
         Label fromDateLabel = new Label("Từ ngày:");
-        fromDateLabel.setTextFill(Color.BLACK);
+        fromDateLabel.setStyle("-fx-font-weight: normal; -fx-text-fill: #333;");
 
         Label toDateLabel = new Label("Đến ngày:");
-        toDateLabel.setTextFill(Color.BLACK);
+        toDateLabel.setStyle("-fx-font-weight: normal; -fx-text-fill: #333;");
 
-        Label statusLabel = new Label("Trạng thái:");
-        statusLabel.setTextFill(Color.BLACK);
+        // statusLabel ĐÃ BỎ
 
-        HBox dateFilterGroup = new HBox(10, fromDateLabel, fromDatePicker, toDateLabel, toDatePicker);
+        HBox dateFilterGroup = new HBox(8, fromDateLabel, fromDatePicker, new Label(" "), toDateLabel, toDatePicker);
         dateFilterGroup.setAlignment(Pos.CENTER_LEFT);
 
-        HBox statusFilterGroup = new HBox(10, statusLabel, statusComboBox);
-        statusFilterGroup.setAlignment(Pos.CENTER_LEFT);
+        // statusFilterGroup ĐÃ BỎ
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -171,100 +162,125 @@ public class ReportView extends BaseScreenView {
         HBox actionButtonsGroup = new HBox(10, searchButton, exportPdfButton, exportExcelButton, printButton);
         actionButtonsGroup.setAlignment(Pos.CENTER_RIGHT);
 
-        filterPanelLayout.getChildren().addAll(dateFilterGroup, statusFilterGroup, spacer, actionButtonsGroup);
+        // Bỏ statusFilterGroup khỏi filterPanelLayout
+        filterPanelLayout.getChildren().addAll(dateFilterGroup, spacer, actionButtonsGroup);
 
         return filterPanelLayout;
     }
 
-
-
+    // ... (createMetricsPanel, createProgressCircleBox, createCriteriaMetricsBox, createReportTable giữ nguyên) ...
+    // Đảm bảo các phương thức này không có tham chiếu nào đến statusComboBox hoặc logic status
     private HBox createMetricsPanel() {
-        awarenessValue = new Label("0 sao/học viên");
-        awarenessValue.setFont(Font.font("System", FontWeight.BOLD, 14));
-        awarenessValue.setTextFill(Color.web("#333"));
-        punctualityValue = new Label("0 điểm/học viên");
-        punctualityValue.setFont(Font.font("System", FontWeight.BOLD, 14));
-        punctualityValue.setTextFill(Color.web("#333"));
-        homeworkScoreValue = new Label("0/10 điểm");
-        homeworkScoreValue.setFont(Font.font("System", FontWeight.BOLD, 14));
-        homeworkScoreValue.setTextFill(Color.web("#333"));
-        attendanceProgressBox = createProgressCircleBox("Tỷ lệ đi học", 0, "#4CAF50");
-        homeworkProgressBox = createProgressCircleBox("Tiến trình làm bài tập", 0, "#5D62F9");
-        VBox criteriaBox = createCriteriaMetricsBox(awarenessValue, punctualityValue, homeworkScoreValue);
-        HBox newMetricsPanel = new HBox(20);
-        newMetricsPanel.setAlignment(Pos.CENTER);
-        newMetricsPanel.setPadding(new Insets(15));
-        newMetricsPanel.getChildren().addAll(attendanceProgressBox, homeworkProgressBox, criteriaBox);
-        return newMetricsPanel;
+        awarenessValue = new Label("0.0 sao");
+        punctualityValue = new Label("0.0 điểm");
+        homeworkScoreValue = new Label("0.0/10");
+
+        String valueStyle = "-fx-font-family: 'Arial'; -fx-font-weight: bold; -fx-font-size: 18px; -fx-text-fill: #2C3E50;";
+        awarenessValue.setStyle(valueStyle);
+        punctualityValue.setStyle(valueStyle);
+        homeworkScoreValue.setStyle(valueStyle);
+
+        attendanceProgressBox = createProgressCircleBox("Chuyên cần", 0, "#3498DB");
+        homeworkProgressBox = createProgressCircleBox("Bài tập VN", 0, "#9B59B6");
+        VBox criteriaMetricsBox = createCriteriaMetricsBox(awarenessValue, punctualityValue, homeworkScoreValue);
+
+        HBox metricsLayout = new HBox(20);
+        metricsLayout.setAlignment(Pos.CENTER);
+        metricsLayout.getChildren().addAll(attendanceProgressBox, homeworkProgressBox, criteriaMetricsBox);
+        HBox.setHgrow(attendanceProgressBox, Priority.ALWAYS);
+        HBox.setHgrow(homeworkProgressBox, Priority.ALWAYS);
+        HBox.setHgrow(criteriaMetricsBox, Priority.ALWAYS);
+        return metricsLayout;
     }
 
     private VBox createProgressCircleBox(String labelText, double percentage, String color) {
         VBox progressBox = new VBox(10);
         progressBox.setAlignment(Pos.CENTER);
         progressBox.setPadding(new Insets(15));
-        progressBox.setStyle("-fx-background-color: white; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 10, 0, 0, 5); -fx-background-radius: 5;");
-        progressBox.setPrefWidth(250); progressBox.setPrefHeight(180);
+        progressBox.setStyle("-fx-background-color: white; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 8, 0, 2, 2); -fx-background-radius: 8px; -fx-border-color: #E0E0E0; -fx-border-width: 1px; -fx-border-radius: 8px;");
+        progressBox.setPrefWidth(220);
+        progressBox.setPrefHeight(180);
+
         StackPane progressIndicator = new StackPane();
-        progressIndicator.setPrefSize(120, 120);
-        Circle backgroundCircle = new Circle(50);
+        progressIndicator.setPrefSize(100, 100);
+
+        Circle backgroundCircle = new Circle(45);
         backgroundCircle.setFill(Color.TRANSPARENT);
-        backgroundCircle.setStroke(Color.LIGHTGRAY);
-        backgroundCircle.setStrokeWidth(8);
-        Circle progressCircleItem = new Circle(50);
+        backgroundCircle.setStroke(Color.web("#E0E0E0"));
+        backgroundCircle.setStrokeWidth(7);
+
+        Circle progressCircleItem = new Circle(45);
         progressCircleItem.setFill(Color.TRANSPARENT);
         progressCircleItem.setStroke(Color.web(color));
-        progressCircleItem.setStrokeWidth(8);
+        progressCircleItem.setStrokeWidth(7);
         progressCircleItem.setRotate(-90);
-        double circumference = 2 * Math.PI * 50;
-        double dashArray = (percentage / 100.0) * circumference;
+
+        double circumference = 2 * Math.PI * 45;
+        double clampedPercentage = Math.max(0, Math.min(100, percentage));
+        double visibleDashLength = (clampedPercentage / 100.0) * circumference;
+        double gapLength = Math.max(0.00001, circumference - visibleDashLength);
+
         progressCircleItem.getStrokeDashArray().clear();
-        if (dashArray > 0 && Double.isFinite(dashArray)) {
-            progressCircleItem.getStrokeDashArray().addAll(dashArray, circumference - dashArray);
+        if (Double.isFinite(visibleDashLength) && Double.isFinite(gapLength)) {
+            if (clampedPercentage >= 100.0) {
+                progressCircleItem.getStrokeDashArray().addAll(circumference, 0.00001);
+            } else if (clampedPercentage <= 0.0) {
+                progressCircleItem.getStrokeDashArray().addAll(0.0, circumference);
+            } else {
+                progressCircleItem.getStrokeDashArray().addAll(visibleDashLength, gapLength);
+            }
         } else {
             progressCircleItem.getStrokeDashArray().addAll(0.0, circumference);
+            LOGGER.warning("Invalid dash array values for progress circle: percentage=" + percentage +
+                    ", visibleDash=" + visibleDashLength + ", gap=" + gapLength);
         }
+
         Label percentageLabelText = new Label(String.format("%.0f%%", percentage));
-        percentageLabelText.setFont(Font.font("System", FontWeight.BOLD, 18));
-        percentageLabelText.setTextFill(Color.BLACK);
+        percentageLabelText.setFont(Font.font("System", FontWeight.BOLD, 16));
+        percentageLabelText.setTextFill(Color.web(color));
         progressIndicator.getChildren().addAll(backgroundCircle, progressCircleItem, percentageLabelText);
-        Label titleLabel = new Label(labelText);
-        titleLabel.setFont(Font.font("System", FontWeight.NORMAL, 14));
-        titleLabel.setTextFill(Color.BLACK);
-        progressBox.getChildren().addAll(progressIndicator, titleLabel);
+
+        Label titleLabelText = new Label(labelText);
+        titleLabelText.setFont(Font.font("System", FontWeight.NORMAL, 13));
+        titleLabelText.setTextFill(Color.web("#444444"));
+
+        progressBox.getChildren().addAll(progressIndicator, titleLabelText);
         return progressBox;
     }
 
     private VBox createCriteriaMetricsBox(Label awarenessVal, Label punctualityVal, Label homeworkScoreVal) {
-        VBox criteriaBox = new VBox(15);
-        criteriaBox.setAlignment(Pos.CENTER_LEFT);
+        VBox criteriaBox = new VBox(12);
+        criteriaBox.setAlignment(Pos.TOP_LEFT);
         criteriaBox.setPadding(new Insets(15));
-        criteriaBox.setStyle("-fx-background-color: white; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 10, 0, 0, 5); -fx-background-radius: 5;");
-        criteriaBox.setPrefWidth(300); criteriaBox.setPrefHeight(180);
+        criteriaBox.setStyle("-fx-background-color: white; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 8, 0, 2, 2); -fx-background-radius: 8px; -fx-border-color: #E0E0E0; -fx-border-width: 1px; -fx-border-radius: 8px;");
+        criteriaBox.setPrefWidth(280);
+        criteriaBox.setPrefHeight(180);
 
-        Label criteriaHeading = new Label("Tiêu chí đánh giá trung bình");
-        criteriaHeading.setFont(Font.font("System", FontWeight.BOLD, 16));
-        criteriaHeading.setTextFill(Color.BLACK);
-        criteriaHeading.setPrefWidth(Double.MAX_VALUE);
-        criteriaHeading.setAlignment(Pos.CENTER);
+        Label criteriaHeading = new Label("Tiêu chí đánh giá TB");
+        criteriaHeading.setFont(Font.font("System", FontWeight.BOLD, 15));
+        criteriaHeading.setTextFill(Color.web("#333333"));
+        criteriaHeading.setPadding(new Insets(0,0,5,0));
 
-        Label awarenessLabel = new Label("Ý thức học:");
-        awarenessLabel.setStyle("-fx-text-fill: black;");
+        String labelStyle = "-fx-font-size: 13px; -fx-text-fill: #555;";
+        // awarenessVal, punctualityVal, homeworkScoreVal đã được style ở createMetricsPanel
+
+        Label awarenessLabel = new Label("Ý thức học:"); awarenessLabel.setStyle(labelStyle);
         HBox awarenessBox = new HBox(5, awarenessLabel, awarenessVal);
         awarenessBox.setAlignment(Pos.CENTER_LEFT);
 
-        Label punctualityLabel = new Label("Đúng giờ:");
-        punctualityLabel.setStyle("-fx-text-fill: black;");
+        Label punctualityLabel = new Label("Đúng giờ:"); punctualityLabel.setStyle(labelStyle);
         HBox punctualityBox = new HBox(5, punctualityLabel, punctualityVal);
         punctualityBox.setAlignment(Pos.CENTER_LEFT);
 
-        Label homeworkScoreLabel = new Label("Kết quả BTVN:");
-        homeworkScoreLabel.setStyle("-fx-text-fill: black;");
+        Label homeworkScoreLabel = new Label("Điểm BTVN:"); homeworkScoreLabel.setStyle(labelStyle);
         HBox homeworkScoreBox = new HBox(5, homeworkScoreLabel, homeworkScoreVal);
         homeworkScoreBox.setAlignment(Pos.CENTER_LEFT);
 
-        ((Label)awarenessBox.getChildren().get(0)).setPrefWidth(100);
-        ((Label)punctualityBox.getChildren().get(0)).setPrefWidth(100);
-        ((Label)homeworkScoreBox.getChildren().get(0)).setPrefWidth(100);
+        double labelWidth = 90;
+        awarenessLabel.setPrefWidth(labelWidth);
+        punctualityLabel.setPrefWidth(labelWidth);
+        homeworkScoreLabel.setPrefWidth(labelWidth);
+
         criteriaBox.getChildren().addAll(criteriaHeading, awarenessBox, punctualityBox, homeworkScoreBox);
         return criteriaBox;
     }
@@ -273,60 +289,58 @@ public class ReportView extends BaseScreenView {
         reportTable = new TableView<>();
         VBox tableContainer = new VBox(10);
         tableContainer.setAlignment(Pos.TOP_CENTER);
-        tableContainer.setPadding(new Insets(15));
-        tableContainer.setStyle("-fx-background-color: white; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 10, 0, 0, 5); -fx-background-radius: 5;");
+        tableContainer.setStyle("-fx-background-color: white; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 8, 0, 2, 2); -fx-background-radius: 8px; -fx-border-color: #E0E0E0; -fx-border-width: 1px; -fx-border-radius: 8px; -fx-padding:15px;");
         Label tableTitle = new Label("Chi tiết tình hình học tập theo lớp");
-        tableTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
-        tableTitle.setTextFill(Color.BLACK);
-        tableTitle.setAlignment(Pos.CENTER);
-        tableTitle.setPrefWidth(Double.MAX_VALUE);
-        reportTable.setPlaceholder(new Label("Đang tải dữ liệu hoặc chưa có dữ liệu..."));
-        reportTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        tableTitle.setFont(Font.font("System", FontWeight.BOLD, 18));
+        tableTitle.setTextFill(Color.web("#2c3e50"));
+        tableTitle.setPadding(new Insets(0,0,10,0));
+        reportTable.setPlaceholder(new Label("Chọn khoảng thời gian và nhấn 'Lọc dữ liệu'."));
+        reportTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
 
         TableColumn<ClassReportData, Integer> sttCol = new TableColumn<>(); setBlackHeaderText(sttCol, "STT");
         sttCol.setCellValueFactory(new PropertyValueFactory<>("stt"));
-        sttCol.setStyle("-fx-alignment: CENTER;"); sttCol.setPrefWidth(50); sttCol.setMinWidth(50); sttCol.setMaxWidth(70);
+        sttCol.setStyle("-fx-alignment: CENTER;"); sttCol.setPrefWidth(50); sttCol.setMinWidth(40); sttCol.setMaxWidth(60);
 
         TableColumn<ClassReportData, String> classNameCol = new TableColumn<>(); setBlackHeaderText(classNameCol, "Tên lớp");
         classNameCol.setCellValueFactory(new PropertyValueFactory<>("className"));
-        classNameCol.setPrefWidth(180); classNameCol.setMinWidth(150);
+        classNameCol.setPrefWidth(200); classNameCol.setMinWidth(150); // Tăng độ rộng
 
-        TableColumn<ClassReportData, String> attendanceCol = new TableColumn<>(); setBlackHeaderText(attendanceCol, "Số buổi học (Học/Tổng)");
+        TableColumn<ClassReportData, String> attendanceCol = new TableColumn<>(); setBlackHeaderText(attendanceCol, "Chuyên cần (Có mặt/Tổng)");
         attendanceCol.setCellValueFactory(new PropertyValueFactory<>("attendance"));
         attendanceCol.setStyle("-fx-alignment: CENTER;"); attendanceCol.setPrefWidth(180); attendanceCol.setMinWidth(150);
 
-        TableColumn<ClassReportData, String> homeworkCol = new TableColumn<>(); setBlackHeaderText(homeworkCol, "Số bài tập về nhà (Làm/Tổng)");
+        TableColumn<ClassReportData, String> homeworkCol = new TableColumn<>(); setBlackHeaderText(homeworkCol, "Bài tập (Nộp/Giao)");
         homeworkCol.setCellValueFactory(new PropertyValueFactory<>("homework"));
-        homeworkCol.setStyle("-fx-alignment: CENTER;"); homeworkCol.setPrefWidth(200); homeworkCol.setMinWidth(180);
+        homeworkCol.setStyle("-fx-alignment: CENTER;"); homeworkCol.setPrefWidth(180); homeworkCol.setMinWidth(150);
 
-        TableColumn<ClassReportData, Double> awarenessCol = new TableColumn<>(); setBlackHeaderText(awarenessCol, "Ý thức học");
+        TableColumn<ClassReportData, Double> awarenessCol = new TableColumn<>(); setBlackHeaderText(awarenessCol, "Ý thức (Sao)");
         awarenessCol.setCellValueFactory(new PropertyValueFactory<>("awareness"));
         awarenessCol.setCellFactory(tc -> new TableCell<>() {
             @Override protected void updateItem(Double item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) { setText(null); setGraphic(null); }
-                // Hiển thị "Chưa có" nếu điểm awareness là 0 và có tên lớp (để phân biệt với dòng trống)
-                else if (item == 0 && getTableRow() != null && getTableRow().getItem() != null && ((ClassReportData)getTableRow().getItem()).getClassName() != null) { setText("Chưa có"); setTextFill(Color.GRAY); setGraphic(null); }
-                else if (item == 0) { setText(null); setGraphic(null); } // Nếu item là 0 mà không có row context, không hiển thị gì
-                else { try { int stars = (int) Math.round(item); HBox starContainer = new HBox(1); starContainer.setAlignment(Pos.CENTER); for (int i = 0; i < 5; i++) { Text star = new Text("★"); star.setFill(i < stars ? Color.GOLD : Color.LIGHTGRAY); starContainer.getChildren().add(star); } setGraphic(starContainer); setText(null); } catch (Exception e) { setText(String.format("%.1f",item)); setTextFill(Color.BLACK); setGraphic(null); } }
+                else if (item == 0 && getTableRow() != null && getTableRow().getItem() != null && ((ClassReportData)getTableRow().getItem()).getClassName() != null) { setText("Chưa có"); setTextFill(Color.GRAY); setGraphic(null);setAlignment(Pos.CENTER); }
+                else if (item == 0) { setText(null); setGraphic(null); }
+                else { try { int stars = (int) Math.round(item); HBox starContainer = new HBox(1); starContainer.setAlignment(Pos.CENTER); for (int i = 0; i < 5; i++) { Text star = new Text("★"); star.setFont(Font.font(14)); star.setFill(i < stars ? Color.GOLD : Color.LIGHTGRAY); starContainer.getChildren().add(star); } setGraphic(starContainer); setText(null); setAlignment(Pos.CENTER); } catch (Exception e) { setText(String.format("%.1f",item)); setTextFill(Color.BLACK); setGraphic(null); setAlignment(Pos.CENTER); } }
             }
         });
         awarenessCol.setStyle("-fx-alignment: CENTER;"); awarenessCol.setPrefWidth(120); awarenessCol.setMinWidth(100);
 
-        TableColumn<ClassReportData, Double> punctualityCol = new TableColumn<>(); setBlackHeaderText(punctualityCol, "Đúng giờ (điểm)");
+        TableColumn<ClassReportData, Double> punctualityCol = new TableColumn<>(); setBlackHeaderText(punctualityCol, "Đúng giờ (Điểm)");
         punctualityCol.setCellValueFactory(new PropertyValueFactory<>("punctuality"));
-        punctualityCol.setCellFactory(tc -> new TableCell<>() { @Override protected void updateItem(Double item, boolean empty) { super.updateItem(item, empty); if (empty || item == null) { setText(null); } else { setText(String.format("%.2f", item)); setTextFill(Color.BLACK); } } });
+        punctualityCol.setCellFactory(tc -> new TableCell<>() { @Override protected void updateItem(Double item, boolean empty) { super.updateItem(item, empty); if (empty || item == null) { setText(null); } else { setText(String.format("%.1f", item)); setTextFill(Color.BLACK); setAlignment(Pos.CENTER);} } });
         punctualityCol.setStyle("-fx-alignment: CENTER;"); punctualityCol.setPrefWidth(120); punctualityCol.setMinWidth(100);
 
         TableColumn<ClassReportData, String> homeworkScoreCol = new TableColumn<>(); setBlackHeaderText(homeworkScoreCol, "Điểm BTVN (TB)");
-        // homeworkScore trong ClassReportData là String, ví dụ "8.5/10" hoặc "7"
         homeworkScoreCol.setCellValueFactory(new PropertyValueFactory<>("homeworkScore"));
         homeworkScoreCol.setStyle("-fx-alignment: CENTER;"); homeworkScoreCol.setPrefWidth(120); homeworkScoreCol.setMinWidth(100);
+
         reportTable.getColumns().addAll(sttCol, classNameCol, attendanceCol, homeworkCol, awarenessCol, punctualityCol, homeworkScoreCol);
         tableContainer.getChildren().addAll(tableTitle, reportTable);
         VBox.setVgrow(reportTable, Priority.ALWAYS);
         return tableContainer;
     }
+
 
     @Override
     public void refreshView() {
@@ -340,67 +354,126 @@ public class ReportView extends BaseScreenView {
         }
     }
 
-    public void setClassStatusOptions(List<String> statuses) {
-        if (statusComboBox == null) { System.err.println("ReportView.setClassStatusOptions: statusComboBox is null!"); return; }
-        ObservableList<String> statusItems = FXCollections.observableArrayList(statuses != null ? statuses : new ArrayList<>());
-        String currentValue = statusComboBox.getValue();
-        statusComboBox.setItems(statusItems);
-        String defaultFilter = (controller != null) ? controller.getDefaultStatusFilter() : "Tất cả";
-        if (currentValue != null && statusItems.contains(currentValue)) { statusComboBox.setValue(currentValue); }
-        else if (statusItems.contains(defaultFilter)) { statusComboBox.setValue(defaultFilter); }
-        else if (!statusItems.isEmpty()) { statusComboBox.setValue(statusItems.get(0)); }
-        else { statusComboBox.setValue(null); statusComboBox.setPromptText("Không có trạng thái"); }
-    }
+    // XÓA PHƯƠNG THỨC setClassStatusOptions
+    // public void setClassStatusOptions(List<String> statuses) { ... }
 
     public void updateOverallMetrics(double attendancePercentage, double homeworkPercentage,
                                      double avgAwareness, double avgPunctuality, double avgHomeworkScore) {
-        if (this.metricsPanel == null || this.attendanceProgressBox == null || this.homeworkProgressBox == null ||
-                this.awarenessValue == null || this.punctualityValue == null || this.homeworkScoreValue == null) {
-            System.err.println("ReportView.updateOverallMetrics: UI components for metrics are not fully initialized. Update aborted."); return;
+        if (this.metricsPanel == null || this.awarenessValue == null || this.punctualityValue == null || this.homeworkScoreValue == null) {
+            System.err.println("ReportView.updateOverallMetrics: UI components for metrics are not fully initialized. Update aborted.");
+            return;
         }
+
+        // Cập nhật progress circles (chỉ cần gọi lại createProgressCircleBox nếu giá trị thay đổi đáng kể)
+        // Hoặc tốt hơn là có phương thức update riêng cho ProgressCircleBox
+        // Tạm thời tạo mới:
         VBox oldAttendanceBox = this.attendanceProgressBox;
-        this.attendanceProgressBox = createProgressCircleBox("Tỷ lệ đi học", attendancePercentage, "#4CAF50");
+        this.attendanceProgressBox = createProgressCircleBox("Chuyên cần", attendancePercentage, "#3498DB");
         replacePanelChild(this.metricsPanel, oldAttendanceBox, this.attendanceProgressBox, 0);
+
         VBox oldHomeworkBox = this.homeworkProgressBox;
-        this.homeworkProgressBox = createProgressCircleBox("Tiến trình làm bài tập", homeworkPercentage, "#5D62F9");
+        this.homeworkProgressBox = createProgressCircleBox("Bài tập VN", homeworkPercentage, "#9B59B6");
         replacePanelChild(this.metricsPanel, oldHomeworkBox, this.homeworkProgressBox, 1);
-        awarenessValue.setText(String.format("%.1f sao", avgAwareness)); // Avg awareness từ model
-        punctualityValue.setText(String.format("%.2f điểm", avgPunctuality)); // Avg punctuality từ model
-        homeworkScoreValue.setText(String.format("%.2f/10", avgHomeworkScore)); // Avg homework score từ model
+
+        // Đảm bảo các Node con khác (criteriaBox) không bị ảnh hưởng sai vị trí
+        // Nếu metricsPanel chỉ có 3 con, và chúng ta thay thế 2 con đầu, con thứ 3 (criteriaBox) sẽ giữ nguyên vị trí nếu replacePanelChild hoạt động đúng.
+
+
+        awarenessValue.setText(String.format("%.1f sao", avgAwareness));
+        punctualityValue.setText(String.format("%.1f điểm", avgPunctuality));
+        homeworkScoreValue.setText(String.format("%.2f/10", avgHomeworkScore));
     }
 
-    private void replacePanelChild(HBox panel, Node oldChild, Node newChild, int fallbackIndex) {
-        if (panel == null || newChild == null) { System.err.println("ReportView.replacePanelChild: Panel or newChild is null."); return; }
-        int index = -1; if (oldChild != null) { index = panel.getChildren().indexOf(oldChild); }
-        if (index != -1) { panel.getChildren().set(index, newChild); }
-        else { if (fallbackIndex >= 0 && fallbackIndex < panel.getChildren().size()) { panel.getChildren().add(fallbackIndex, newChild); } else { panel.getChildren().add(newChild); } }
+    private void replacePanelChild(HBox panel, Node oldChild, Node newChild, int expectedIndex) {
+        if (panel == null || newChild == null) {
+            System.err.println("ReportView.replacePanelChild: Panel or newChild is null.");
+            return;
+        }
+        int index = -1;
+        if (oldChild != null) {
+            index = panel.getChildren().indexOf(oldChild);
+        }
+
+        if (index != -1) {
+            panel.getChildren().set(index, newChild);
+        } else {
+            // Nếu không tìm thấy oldChild (ví dụ, lần đầu tiên hoặc cấu trúc panel thay đổi)
+            // Thêm newChild vào vị trí dự kiến nếu có thể, hoặc cuối cùng
+            if (expectedIndex >= 0 && expectedIndex < panel.getChildren().size()) {
+                // Cẩn thận: Nếu oldChild không có và chúng ta set vào expectedIndex,
+                // nó có thể ghi đè một Node khác nếu expectedIndex đã có Node.
+                // An toàn hơn là remove old (nếu có thể tìm bằng cách khác) rồi add new.
+                // Hoặc đảm bảo panel được cấu trúc lại hoàn toàn.
+                // Để đơn giản, nếu không tìm thấy oldChild, ta giả định có thể thêm vào cuối
+                // hoặc nếu panel có số con cố định, ta có thể thêm vào đúng index nếu biết chắc.
+                // Vì metricsPanel có 3 thành phần, nếu oldChild là con thứ nhất hoặc hai,
+                // ta có thể set trực tiếp bằng index nếu chắc chắn.
+                panel.getChildren().add(expectedIndex, newChild); // Thêm vào vị trí nếu chưa có gì ở đó
+                // hoặc chèn vào, đẩy các cái khác ra sau.
+                // Nếu muốn thay thế, phải remove trước.
+                // Hiện tại, logic này có thể gây lỗi nếu expectedIndex đã có node.
+                // Cách an toàn hơn khi oldChild không được tìm thấy:
+                // panel.getChildren().remove(oldChild); // Sẽ không làm gì nếu oldChild không có
+                // panel.getChildren().add(expectedIndex, newChild); // Có thể gây lỗi nếu index > size
+                // Đơn giản nhất là thêm vào cuối nếu không tìm thấy để thay thế:
+                // LOGGER.warning("replacePanelChild: oldChild not found. Adding newChild to panel. Index might be incorrect.");
+                // panel.getChildren().add(newChild);
+            } else if (expectedIndex >= 0 && expectedIndex == panel.getChildren().size()){
+                panel.getChildren().add(newChild); // Thêm vào cuối nếu index là vị trí cuối cùng + 1
+            }
+            else { // Fallback, thêm vào cuối
+                LOGGER.warning("replacePanelChild: oldChild not found and fallbackIndex issue. Adding newChild to panel. Index might be incorrect.");
+                panel.getChildren().add(newChild);
+            }
+        }
+        HBox.setHgrow(newChild, Priority.ALWAYS); // Đảm bảo Hgrow được áp dụng cho child mới
     }
+
 
     public void updateReportTable(ObservableList<ClassReportData> data) {
-        if (reportTable == null) { System.err.println("ReportView.updateReportTable: reportTable is null!"); if (controller != null) showError("Lỗi hiển thị: Bảng báo cáo chưa được khởi tạo."); return; }
+        if (reportTable == null) {
+            System.err.println("ReportView.updateReportTable: reportTable is null!");
+            if (controller != null) showError("Lỗi hiển thị: Bảng báo cáo chưa được khởi tạo.");
+            return;
+        }
         reportTable.setItems(data);
-        if (data == null || data.isEmpty()) { reportTable.setPlaceholder(new Label("Không có dữ liệu cho tiêu chí đã chọn.")); }
+        if (data == null || data.isEmpty()) {
+            reportTable.setPlaceholder(new Label("Không có dữ liệu cho tiêu chí đã chọn."));
+        }
     }
 
     public void showError(String message) {
         System.err.println("SHOWING ERROR DIALOG: " + message);
         Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Lỗi"); alert.setHeaderText(null); alert.setContentText(message);
+        alert.setTitle("Lỗi");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        if (root != null && root.getScene() != null && root.getScene().getWindow() != null) {
+            alert.initOwner(root.getScene().getWindow());
+        }
         alert.showAndWait();
     }
 
+    // Getters cho Controller
     public DatePicker getFromDatePicker() { return fromDatePicker; }
     public DatePicker getToDatePicker() { return toDatePicker; }
-    public ComboBox<String> getStatusComboBox() { return statusComboBox; }
+    // public ComboBox<String> getStatusComboBox() { return statusComboBox; } // ĐÃ BỎ
     public Button getSearchButton() { return searchButton; }
     public Button getExportPdfButton() { return exportPdfButton; }
     public Button getExportExcelButton() { return exportExcelButton; }
     public Button getPrintButton() { return printButton; }
-    public TableView<ClassReportData> getReportTable() { return reportTable; }
+
 
     private <S, T> void setBlackHeaderText(TableColumn<S, T> column, String title) {
-        Label headerLabel = new Label(title); headerLabel.setTextFill(Color.BLACK); headerLabel.setFont(Font.font("System"));
+        Label headerLabel = new Label(title);
+        headerLabel.setTextFill(Color.BLACK);
+        headerLabel.setFont(Font.font("System", FontWeight.NORMAL, 12)); // Font nhỏ hơn, không bold
+        // headerLabel.setAlignment(Pos.CENTER_LEFT); // Căn trái cho header
+        // headerLabel.setMaxWidth(Double.MAX_VALUE); // Cho phép label chiếm hết chiều rộng cột
+        // HBox headerBox = new HBox(headerLabel);
+        // headerBox.setAlignment(Pos.CENTER_LEFT);
+        // headerBox.setPadding(new Insets(5));
         column.setGraphic(headerLabel);
+        column.setText(""); // Quan trọng: Xóa text mặc định của header để chỉ graphic được hiển thị
     }
 }
-
