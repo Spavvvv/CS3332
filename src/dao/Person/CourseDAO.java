@@ -1,5 +1,6 @@
 package src.dao.Person;
 
+import src.dao.ClassSession.ClassSessionDAO;
 import src.dao.Notifications.RoomConflictException;
 import src.model.system.course.Course;
 import src.model.person.Student;
@@ -177,15 +178,36 @@ public class CourseDAO {
     }
 
     private boolean internalDelete(Connection conn, String courseId) throws SQLException {
-        // First, delete associated schedule days (due to ON DELETE CASCADE, this might be redundant if DB handles it)
+        // Bước 0: (Tùy chọn) Khởi tạo ClassSessionDAO nếu không được inject
+        // ClassSessionDAO classSessionDAOForDelete = new ClassSessionDAO(); // Hoặc lấy từ this.classSessionDAO
+
+        // Bước 1: Xóa tất cả các ClassSession liên quan đến courseId này.
+        // Giả sử ClassSessionDAO có phương thức deleteAllSessionsByCourseId(Connection conn, String courseId)
+        // và phương thức này tự quản lý việc xóa trong bảng class_sessions.
+        // Nếu phương thức đó chưa có, bạn cần tạo nó trong ClassSessionDAO.
+        // Bạn đã có hàm public int deleteAllSessionsByCourseId(Connection conn, String courseId) trong ClassSessionDAO.
+
+        // Để gọi được, bạn cần một instance của ClassSessionDAO.
+        // Cách 1: Tạo mới (nếu ClassSessionDAO không có dependency phức tạp)
+        ClassSessionDAO classSessionDAOInstance = new ClassSessionDAO();
+        int sessionsDeleted = classSessionDAOInstance.deleteAllSessionsByCourseId(conn, courseId);
+        System.out.println("Đã xóa " + sessionsDeleted + " buổi học liên quan đến khóa học ID: " + courseId);
+
+
+        // Bước 2: Xóa các bản ghi lịch trình (coursescheduledays)
+        // (Dòng này đã có trong code của bạn, giữ nguyên)
         String deleteScheduleSql = "DELETE FROM coursescheduledays WHERE course_id = ?";
         try (PreparedStatement deleteScheduleStmt = conn.prepareStatement(deleteScheduleSql)) {
             deleteScheduleStmt.setString(1, courseId);
             deleteScheduleStmt.executeUpdate();
         }
-        // Then, remove students from enrollment
-        removeAllStudentsFromCourse(conn, courseId); // Assuming this uses course_id for enrollment
-        // Finally, delete the course
+
+        // Bước 3: Xóa sinh viên khỏi các bản ghi danh (enrollment)
+        // (Dòng này đã có trong code của bạn, giữ nguyên)
+        removeAllStudentsFromCourse(conn, courseId);
+
+        // Bước 4: Xóa Khóa học (courses)
+        // (Dòng này đã có trong code của bạn, giữ nguyên)
         String sql = "DELETE FROM courses WHERE course_id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, courseId);

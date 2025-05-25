@@ -22,6 +22,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import src.model.person.Permission; // Import enum Permission (đảm bảo đường dẫn đúng)
 import src.model.person.RolePermissions;
+import src.model.system.course.Course;
 import src.view.components.Screen.BaseScreenView;
 
 import java.sql.PreparedStatement;
@@ -32,6 +33,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Màn hình Học viên
@@ -72,68 +74,86 @@ public class StudentListScreenView extends BaseScreenView {
     }
 
     private void initializeData() {
-        // Clear old data
-        students.clear();
+        students.clear(); // Xóa dữ liệu cũ trong ObservableList
+        // filteredStudents.clear(); // Cũng nên xóa filteredStudents nếu nó không tự động cập nhật
 
-        System.out.println("DEBUG: Starting initializeData method");
+        System.out.println("DEBUG: Starting initializeData method in StudentListScreenView");
 
         try {
-            // Instantiate the DAO and fetch data from the database
+            // Khởi tạo các DAO cần thiết
             StudentDAO studentDAO = new StudentDAO();
-            System.out.println("DEBUG: Created StudentDAO instance");
+            CourseDAO courseDAOForStudent = new CourseDAO(); // CourseDAO sẽ được inject vào StudentDAO
+            TeacherDAO teacherDAOForCourse = new TeacherDAO(); // TeacherDAO sẽ được inject vào CourseDAO
 
-            List<Student> studentList = studentDAO.getAllStudents(); // Fetch all students from the DB
-            System.out.println("DEBUG: Retrieved student list. Size: " + (studentList != null ? studentList.size() : "null"));
+            // Thiết lập dependencies
+            courseDAOForStudent.setTeacherDAO(teacherDAOForCourse); // CourseDAO cần TeacherDAO
+            studentDAO.setCourseDAO(courseDAOForStudent);          // StudentDAO cần CourseDAO
 
-            // Debug: Print student list details
-            if (studentList != null) {
-                for (Student s : studentList) {
-                    System.out.println("DEBUG: Student found - ID: " + s.getId() + ", Name: " + s.getName());
-                }
-            }
+            System.out.println("DEBUG: DAO instances created and dependencies set.");
 
-            // Transform and populate each student into the ObservableList
+            List<Student> studentListFromDB = studentDAO.getAllStudents(); // Lấy tất cả sinh viên từ DB
+            System.out.println("DEBUG: Retrieved student list from DB. Size: " + (studentListFromDB != null ? studentListFromDB.size() : "null"));
+
             int stt = 1;
-            if (studentList != null && !studentList.isEmpty()) {
-                for (Student student : studentList) {
-                    System.out.println("DEBUG: Processing student: " + student.getName());
+            if (studentListFromDB != null && !studentListFromDB.isEmpty()) {
+                for (Student student : studentListFromDB) {
+                    System.out.println("DEBUG: Processing student: " + student.getName() + " (ID: " + student.getId() + ")");
+
+                    // Lấy danh sách các khóa học mà sinh viên này đã đăng ký
+                    // StudentDAO.getCoursesForStudent(String studentId) tự quản lý connection
+                    List<Course> enrolledCourses = studentDAO.getCoursesForStudent(student.getId()); //
+
+                    String classNamesOutput = "Chưa có lớp"; // Giá trị mặc định
+                    if (enrolledCourses != null && !enrolledCourses.isEmpty()) {
+                        classNamesOutput = enrolledCourses.stream()
+                                .map(Course::getCourseName) // Lấy tên khóa học
+                                .filter(name -> name != null && !name.isEmpty()) // Bỏ qua tên null hoặc rỗng
+                                .collect(Collectors.joining(", "));
+                        if (classNamesOutput.isEmpty()){ // Nếu sau khi filter vẫn rỗng
+                            classNamesOutput = "Có đăng ký (tên lỗi)";
+                        }
+                    }
+                    System.out.println("DEBUG: Student " + student.getName() + " - Enrolled courses: " + classNamesOutput);
+
                     StudentInfo studentInfo = new StudentInfo(
                             stt++,
                             student.getName(),
                             student.getBirthday(),
-                            "Chưa có lớp",
+                            classNamesOutput, // Sử dụng danh sách tên khóa học đã lấy được
                             student.getContactNumber(),
-                            student.getStatus() != null ? student.getStatus().toUpperCase() : "Bảo lưu", // Gán trạng thái
-                            student.getEmail(),
+                            student.getStatus() != null ? student.getStatus().toUpperCase() : "Bảo lưu",
+                            student.getEmail(), // Giả sử Student model có getEmail()
                             student.getId(),
-                            student.getParentName() != null ? student.getParentName() : "Chưa điền",      // Gán Parent Name
-                            student.getParentPhoneNumber() != null ? student.getParentPhoneNumber() : "Chưa điền" // Gán Parent Phone
+                            student.getParentName() != null ? student.getParentName() : "Chưa điền",
+                            student.getParentPhoneNumber() != null ? student.getParentPhoneNumber() : "Chưa điền"
                     );
                     students.add(studentInfo);
-                    System.out.println("DEBUG: Added student to table: " + student.getName());
                 }
             } else {
-                System.out.println("DEBUG: Student list is empty or null");
+                System.out.println("DEBUG: Student list from DB is empty or null.");
             }
-        } catch (Exception e) {
-            System.err.println("ERROR: Error retrieving student data: " + e.getMessage());
+        } catch (Exception e) { // Bắt Exception chung để không làm crash UI
+            System.err.println("ERROR: Error retrieving and processing student data: " + e.getMessage());
             e.printStackTrace();
+            // Có thể hiển thị thông báo lỗi cho người dùng ở đây nếu cần
+            // showAlert(Alert.AlertType.ERROR, "Lỗi Tải Dữ Liệu", "Không thể tải danh sách học viên: " + e.getMessage());
         }
 
-        System.out.println("DEBUG: Final students list size: " + students.size());
+        System.out.println("DEBUG: Final students ObservableList size: " + students.size());
 
-        // Set the filteredStudents list
-        filteredStudents.setAll(students);
+        filteredStudents.setAll(students); // Cập nhật danh sách được lọc
         System.out.println("DEBUG: Set filteredStudents. Size: " + filteredStudents.size());
 
         if (studentsTable != null) {
-            studentsTable.setItems(filteredStudents);
-            System.out.println("DEBUG: Set items to table");
-            studentsTable.refresh();
-            System.out.println("DEBUG: Refreshed table");
+            studentsTable.setItems(filteredStudents); // Gán dữ liệu cho bảng
+            System.out.println("DEBUG: Set items to studentsTable.");
+            studentsTable.refresh(); // Yêu cầu bảng vẽ lại
+            System.out.println("DEBUG: Refreshed studentsTable.");
         } else {
-            System.out.println("DEBUG: studentsTable is null");
+            System.out.println("DEBUG: studentsTable is null, cannot set items or refresh.");
         }
+        // Cập nhật lại các thẻ thống kê sau khi tải dữ liệu
+        updateStatisticsDisplay();
     }
     private int calculateAge(String birthDate) {
         try {
