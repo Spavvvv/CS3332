@@ -704,5 +704,53 @@ public class ClassSessionDAO {
 
         return internalFindByDateTimeRange(conn, startTime, endTime);
     }
+
+    /**
+     * Tìm số thứ tự buổi học (session_number) lớn nhất cho một khóa học (courseId)
+     * mà ngày diễn ra (DATE(start_time)) nhỏ hơn hoặc bằng ngày hiện tại được cung cấp.
+     * Điều này đại diện cho "buổi học hiện tại" về mặt tiến độ.
+     *
+     * @param courseId ID của khóa học.
+     * @param currentDate Ngày hiện tại để so sánh.
+     * @return Optional chứa số buổi học hiện tại (có thể là 0 nếu không có buổi nào phù hợp),
+     * hoặc Optional.empty() nếu có lỗi.
+     */
+    public Optional<Integer> findCurrentSessionNumberByDate(String courseId, LocalDate currentDate) {
+        if (courseId == null || courseId.trim().isEmpty() || currentDate == null) {
+            LOGGER.log(Level.WARNING, "courseId hoặc currentDate không hợp lệ để tìm current session number.");
+            return Optional.of(0); // Trả về 0 nếu đầu vào không hợp lệ
+        }
+
+        // DATE(start_time) trong SQL sẽ trích xuất phần ngày từ cột timestamp start_time
+        String sql = "SELECT MAX(session_number) FROM class_sessions WHERE course_id = ? AND DATE(start_time) <= ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, courseId);
+            stmt.setDate(2, java.sql.Date.valueOf(currentDate)); // Chuyển LocalDate sang java.sql.Date
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    int maxSessionNumber = rs.getInt(1);
+                    // Nếu rs.getInt(1) trả về 0 và rs.wasNull() là true, nghĩa là không có dòng nào khớp
+                    // (MAX(column) trên tập rỗng trả về NULL trong SQL)
+                    if (rs.wasNull()) {
+                        return Optional.of(0); // Không có buổi học nào cho đến ngày này
+                    }
+                    return Optional.of(maxSessionNumber);
+                } else {
+                    // Điều này không nên xảy ra với MAX(), vì nó luôn trả về một dòng (có thể là NULL)
+                    return Optional.of(0);
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Lỗi khi tìm số buổi học hiện tại cho course ID: " + courseId + " theo ngày: " + currentDate, e);
+            // Trong trường hợp lỗi, bạn có thể quyết định trả về empty() hoặc một giá trị mặc định an toàn.
+            // Trả về empty() để lớp gọi có thể xử lý lỗi cụ thể hơn.
+            return Optional.empty();
+        }
+    }
+
 }
 

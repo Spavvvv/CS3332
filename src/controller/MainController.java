@@ -167,11 +167,10 @@ public class MainController {
      Xử lý đăng xuất
      */
     public void logout() {
-// Xóa thông tin người dùng hiện tại
+        // Xóa thông tin người dùng hiện tại
         this.currentUser = null;
-// TODO: Implement logout logic
-        navigateTo("login");
     }
+
     /**
      Lưu trữ thông tin chi tiết của một buổi học
      @param session Buổi học cần lưu trữ
@@ -290,6 +289,7 @@ public class MainController {
     public void setAttendanceController(AttendanceController attendanceController) {
         this.attendanceController = attendanceController;
     }
+
     /**
      Lấy danh sách điểm danh của buổi học hiện tại
      @return Danh sách điểm danh
@@ -297,6 +297,7 @@ public class MainController {
     public List<Attendance> getCurrentSessionAttendances() {
         return this.currentSessionAttendances;
     }
+
     /**
      Lấy ID lớp học của buổi học hiện tại
      @return ID lớp học hoặc -1 nếu không có buổi học nào được chọn
@@ -367,12 +368,13 @@ public class MainController {
         if (ui == null || currentUser == null) {
             return;
         }
-// Lấy thông tin người dùng
+        // Lấy thông tin người dùng
         String userName = currentUser.getName();
         String userDisplayRole = getUserDisplayRole();
-// Thiết lập quyền truy cập tương ứng với loại người dùng
+        // Thiết lập quyền truy cập tương ứng với loại người dùng
         setupAccessPermissions();
     }
+
     /**
      Lấy tên hiển thị của vai trò người dùng
      @return Tên hiển thị của vai trò
@@ -392,99 +394,5 @@ public class MainController {
         if (currentUser == null) return;
 
     }
-    /**
-     Lấy thông tin của một ClassSession từ cơ sở dữ liệu
-     @param sessionId ID của buổi học cần lấy thông tin
-     @return Đối tượng ClassSession hoặc null nếu không tìm thấy
-     */
-    public ClassSession getClassSessionDetails(String sessionId) {
-// Kiểm tra cache trước
-        if (currentSessionDetail != null && currentSessionDetail.getId() == sessionId) {
-            return currentSessionDetail;
-        }
-// TODO: Thực hiện truy vấn cơ sở dữ liệu ở đây
-        return null; // Trả về null nếu không tìm thấy
-    }
-    /**
-     Cập nhật thông tin của một ClassSession
-     @param session Thông tin ClassSession cần cập nhật
-     @return true nếu cập nhật thành công, false nếu thất bại
-     */
-    public boolean updateClassSession(ClassSession session) {
-        if (session == null) return false;
-        try {
-// TODO: Cập nhật trong cơ sở dữ liệu
-            // Cập nhật cache
-            if (currentSessionDetail != null && currentSessionDetail.getId() == session.getId()) {
-                currentSessionDetail = session;
-            }
 
-
-            return true;
-
-
-        } catch (Exception e) {
-            System.err.println("Lỗi khi cập nhật buổi học: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-    }
-    /**
-     Tạo mới một ClassSession
-     @param session Thông tin ClassSession cần tạo
-     @return ID của ClassSession mới tạo, hoặc -1 nếu thất bại
-     */
-    public String createClassSession(ClassSession session) {
-        if (session == null) return null;
-        try {
-        // TODO: Thêm vào cơ sở dữ liệu và lấy ID mới
-            // Giả lập ID cho môi trường phát triển
-            String newId = String.valueOf(System.currentTimeMillis());
-            session.setId(newId);
-
-
-            return newId;
-
-
-        } catch (Exception e) {
-            System.err.println("Lỗi khi tạo buổi học mới: " + e.getMessage());
-            e.printStackTrace();
-            return null;
-        }
-    }
-    /**
-     Lấy danh sách các ClassSession theo classId
-     @param classId ID của lớp học cần lấy danh sách buổi học
-     @return Danh sách các buổi học thuộc lớp
-     */
-    public List<ClassSession> getClassSessionsByClassId(long classId) {
-        try {
-// TODO: Truy vấn cơ sở dữ liệu để lấy danh sách các buổi học
-            // Giả lập dữ liệu cho môi trường phát triển
-            List<ClassSession> sessions = new ArrayList<>();
-            // Thêm các buổi học giả lập
-
-
-            return sessions;
-
-
-        } catch (Exception e) {
-            System.err.println("Lỗi khi lấy danh sách buổi học: " + e.getMessage());
-            e.printStackTrace();
-            return new ArrayList<>();
-        }
-    }
-    /**
-     Hiển thị cảnh báo
-     @param alertType Loại cảnh báo
-     @param title Tiêu đề cảnh báo
-     @param message Nội dung cảnh báo
-     */
-    private void showAlert(Alert.AlertType alertType, String title, String message) {
-        Alert alert = new Alert(alertType);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
-    }
 }

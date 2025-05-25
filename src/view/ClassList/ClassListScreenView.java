@@ -1,13 +1,15 @@
 package src.view.ClassList;
+
 import src.controller.MainController;
 import src.dao.Classrooms.ClassroomDAO;
 import src.dao.Person.CourseDAO;
 import src.dao.Person.StudentDAO;
 import src.dao.Person.TeacherDAO;
-import src.model.person.Person; // Import lớp Person (đảm bảo đường dẫn đúng với project của bạn)
-import src.model.person.Role; // Import enum Role (đảm bảo đường dẫn đúng)
-import src.model.person.Permission; // Import enum Permission (đảm bảo đường dẫn đúng)
-import src.model.person.RolePermissions; // Import lớp RolePermissions (đảm bảo đường dẫn đúng)
+import src.dao.ClassSession.ClassSessionDAO; // Đảm bảo đường dẫn này đúng
+import src.model.person.Person;
+import src.model.person.Role;
+import src.model.person.Permission;
+import src.model.person.RolePermissions;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -19,181 +21,235 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.Pair; // *** THÊM IMPORT CHO Pair ***
 import src.view.components.Screen.BaseScreenView;
 import src.model.system.course.Course;
 import src.view.ClassList.CreateClassScreenView;
 
-import java.io.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- Màn hình Lớp học
- Hiển thị danh sách các lớp học và cho phép quản lý lớp học
- */
 public class ClassListScreenView extends BaseScreenView {
     // Constants
-    private static final String PRIMARY_COLOR = "#5c6bc0"; // Indigo color for buttons and headers
-    private static final String GREEN_COLOR = "#4CAF50"; // Green color for progress
-    private static final String YELLOW_COLOR = "#FFC107"; // Yellow color for in progress
-    private static final String PURPLE_COLOR = "#673AB7"; // Purple color for stats
-    private static final String LIGHT_GRAY = "#f8f9fa"; // Light gray for background
-    private static final String WHITE_COLOR = "#FFFFFF"; // White color
-    private static final String BORDER_COLOR = "#e0e0e0"; // Border color
-    private static final String TEXT_COLOR = "#424242"; // Main text color
+    private static final String PRIMARY_COLOR = "#5c6bc0";
+    private static final String GREEN_COLOR = "#4CAF50";
+    private static final String YELLOW_COLOR = "#FFC107"; // *** THÊM LẠI YELLOW_COLOR ***
+    private static final String PURPLE_COLOR = "#673AB7";
+    private static final String WHITE_COLOR = "#FFFFFF";
+    private static final String BORDER_COLOR = "#e0e0e0";
+    private static final String TEXT_COLOR = "#424242";
+
     // UI Components
     private Label titleLabel;
-    private HBox statisticsContainer;
+    // private HBox statisticsContainer; // Bỏ nếu createStatisticsSection không gán cho nó nữa
     private TextField searchField;
-    private Label totalClassesCountLabel;
+    private Label totalClassesCountLabel; // Sẽ được cập nhật bởi createSingleStatCard
     private Button searchButton;
     private Button exportExcelButton;
-    private Button createClassButton; // Khai báo nút tạo lớp học ở cấp độ lớp
+    private Button createClassButton;
     private ComboBox<String> pageSizeComboBox;
     private ComboBox<String> filterComboBox;
     private TableView<ClassInfo> classesTable;
-    private CourseDAO courseDAO;
-    private MainController mainController; // Để tham chiếu đến MainController
-    private ClassroomDAO classroomDAO;
-    private ObservableList<ClassInfo> classes = FXCollections.observableArrayList();
 
-    // Data
-    private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    // DAOs
+    private CourseDAO courseDAO;
+    private ClassroomDAO classroomDAO;
+    private ClassSessionDAO classSessionDAO;
+
+    // private MainController mainController; // Giữ lại nếu dùng
+
+    private final ObservableList<ClassInfo> classes = FXCollections.observableArrayList();
+    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     public ClassListScreenView() {
         super("Lớp học", "classes");
 
-        // KHỞI TẠO CourseDAO và các dependency của nó
         StudentDAO studentDAO = new StudentDAO();
         TeacherDAO teacherDAO = new TeacherDAO();
 
         this.courseDAO = new CourseDAO();
-        this.courseDAO.setStudentDAO(studentDAO); // Quan trọng: inject dependency
-        this.courseDAO.setTeacherDAO(teacherDAO); // Quan trọng: inject dependency
-        // Nếu CourseDAO không có dependency, new CourseDAO() là đủ.
+        this.courseDAO.setStudentDAO(studentDAO);
+        this.courseDAO.setTeacherDAO(teacherDAO);
+
+        this.classSessionDAO = new ClassSessionDAO();
+        this.classroomDAO = new ClassroomDAO(); // Đảm bảo ClassroomDAO được khởi tạo
+
         initializeView();
-        initializeData(); // Gọi sau khi courseDAO đã sẵn sàng
+        initializeData();
     }
 
-
-
-    // Thay thế phương thức initializeData
     private void initializeData() {
-        // Thay vì: classes = FXCollections.observableArrayList();
-        // Hãy dùng:
-        this.classes.clear(); // Xóa tất cả các mục khỏi danh sách hiện tại
-
+        this.classes.clear();
         try {
             List<Course> coursesFromDb = courseDAO.findAll();
             if (coursesFromDb == null || coursesFromDb.isEmpty()) {
                 System.err.println("Không có khóa học nào được truy xuất từ cơ sở dữ liệu.");
             } else {
                 System.out.println("Đã tải các khóa học: " + coursesFromDb.size());
-            }
-
-            int stt = 1;
-            if (coursesFromDb != null) {
+                int stt = 1;
                 for (Course course : coursesFromDb) {
-                    addCourseToTableView(course, stt++); // Phương thức này sẽ gọi this.classes.add()
+                    addCourseToTableView(course, stt++);
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
-            // showInfo("Lỗi khi tải dữ liệu lớp học từ cơ sở dữ liệu: " + e.getMessage());
+            showInfo("Lỗi khi tải dữ liệu lớp học: " + e.getMessage());
         }
 
-        // Cập nhật label tổng số lớp
-        if (this.totalClassesCountLabel != null && this.classes != null) {
+        if (this.totalClassesCountLabel != null) {
             this.totalClassesCountLabel.setText(String.valueOf(this.classes.size()));
         }
-        // TableView sẽ tự động cập nhật vì nó đang "quan sát" cùng một đối tượng ObservableList classes
-        // mà bạn vừa clear() và add() vào.
     }
+
     @Override
     public void initializeView() {
-        // Clear root
         root.getChildren().clear();
-        // Setting up the root container
         root.setSpacing(0);
-        root.setPadding(new Insets(0));
+        root.setPadding(Insets.EMPTY);
         root.setStyle("-fx-background-color: " + WHITE_COLOR + ";");
 
-
-        // Tạo BorderPane làm layout chính
         BorderPane mainLayout = new BorderPane();
-
-
-        // Tạo VBox để chứa tất cả phần tử theo thứ tự từ trên xuống dưới
         VBox contentBox = new VBox(15);
         contentBox.setPadding(new Insets(15));
 
-
-        // Create title bar with export button
         HBox titleBar = createTitleBar();
-
-
-        // Create statistics section
-        statisticsContainer = createStatisticsSection();
-
-
-        // Create search and filter section
+        HBox statisticsContainer = createStatisticsSection(); // Gán lại cho biến cục bộ nếu không dùng ở đâu khác
         HBox searchAndFilterBar = createSearchAndFilterBar();
-
-
-        // Create table
         createClassesTable();
 
-
-        // Add components to contentBox in order
         contentBox.getChildren().addAll(
                 titleBar,
                 statisticsContainer,
                 searchAndFilterBar,
                 classesTable
         );
-
-
-        // Set VBox.setVgrow for table to make it fill available space
         VBox.setVgrow(classesTable, Priority.ALWAYS);
-
-
-        // Đặt contentBox vào phần CENTER của BorderPane
         mainLayout.setCenter(contentBox);
-
-
-        // Thêm mainLayout vào root
         root.getChildren().add(mainLayout);
-
-
-        // Đảm bảo mainLayout lấp đầy không gian có sẵn
         VBox.setVgrow(mainLayout, Priority.ALWAYS);
-
-
-        // Set up event handlers
         setupEventHandlers();
-
-
     }
-    /**
-     Creates the title bar with title and action buttons
-     */
+
+
+    private void addCourseToTableView(Course course, int stt) {
+        if (course == null) {
+            System.err.println("Không thể thêm khóa học null vào bảng.");
+            return;
+        }
+
+        int currentSessionNum = 0; // *** KHAI BÁO Ở NGOÀI ***
+        if (this.classSessionDAO != null && course.getCourseId() != null) {
+            try {
+                currentSessionNum = this.classSessionDAO.findCurrentSessionNumberByDate(course.getCourseId(), LocalDate.now())
+                        .orElse(0);
+            } catch (Exception e) {
+                System.err.println("Lỗi khi lấy số buổi học hiện tại cho khóa " + course.getCourseId() + ": " + e.getMessage());
+            }
+        } else {
+            System.err.println("Cảnh báo: classSessionDAO hoặc courseId là null. Số buổi hiện tại mặc định là 0.");
+        }
+
+        int totalSess = 0;
+        if (this.courseDAO != null && course.getClassId() != null) {
+            try {
+                Optional<Integer> totalSessionsOpt = this.courseDAO.findTotalSessionsForClass(course.getClassId());
+                if (totalSessionsOpt.isPresent() && totalSessionsOpt.get() > 0) {
+                    totalSess = totalSessionsOpt.get();
+                } else {
+                    System.out.println("Thông tin: total_sessions không tìm thấy cho classId " + course.getClassId() +
+                            " (hoặc <=0). Sử dụng course.getTotalSessions() làm fallback cho course: " + course.getCourseName());
+                    totalSess = course.getTotalSessions();
+                }
+            } catch (Exception e) {
+                System.err.println("Lỗi khi lấy tổng số buổi cho classId " + course.getClassId() + ": " + e.getMessage() +
+                        ". Sử dụng course.getTotalSessions() làm fallback.");
+                totalSess = course.getTotalSessions();
+            }
+        } else {
+            System.err.println("Cảnh báo: courseDAO hoặc classId là null cho khóa " + course.getCourseName() +
+                    ". Sử dụng course.getTotalSessions() làm fallback.");
+            totalSess = course.getTotalSessions();
+        }
+
+        if (totalSess <= 0) {
+            System.err.println("Cảnh báo: totalSess vẫn <= 0 sau tất cả các bước cho khóa: " + course.getCourseName());
+        }
+
+        String displayedProgressString;
+        float progressPercentage = 0f;
+
+        if (totalSess > 0) {
+            int effectiveCurrentSession = Math.min(currentSessionNum, totalSess);
+            progressPercentage = ((float) effectiveCurrentSession / totalSess) * 100f;
+            displayedProgressString = currentSessionNum + "/" + totalSess;
+        } else {
+            displayedProgressString = currentSessionNum + "/0";
+        }
+
+        course.setProgress(progressPercentage);
+        if (this.courseDAO != null && course.getCourseId() != null) {
+            try {
+                this.courseDAO.updateProgress(course.getCourseId(), progressPercentage);
+            } catch (Exception e) {
+                System.err.println("Lỗi khi cập nhật progress vào DB cho khóa " + course.getCourseId() + ": " + e.getMessage());
+            }
+        } else {
+            System.err.println("Cảnh báo: courseDAO hoặc courseId là null. Progress không được lưu vào DB.");
+        }
+
+        LocalDate actualStartDate = course.getStartDate();
+        LocalDate actualEndDate = course.getEndDate();
+        String teacherName = (course.getTeacher() != null && course.getTeacher().getName() != null)
+                ? course.getTeacher().getName() : "Chưa phân công";
+
+        String classDateDisplay = course.getDaysOfWeekAsString();
+        if (classDateDisplay == null || classDateDisplay.trim().isEmpty()) {
+            classDateDisplay = course.getDayOfWeek();
+        }
+        if (classDateDisplay == null || classDateDisplay.trim().isEmpty()) {
+            classDateDisplay = "N/A";
+        }
+
+        String courseStatus;
+        if (actualStartDate == null) {
+            courseStatus = "Chưa có lịch";
+        } else if (LocalDate.now().isBefore(actualStartDate)) {
+            courseStatus = "Sắp bắt đầu";
+        } else if (actualEndDate != null && LocalDate.now().isAfter(actualEndDate)) {
+            courseStatus = "Đã kết thúc";
+        } else {
+            courseStatus = "Đang học";
+        }
+
+        ClassInfo classInfo = new ClassInfo(
+                stt,
+                course.getCourseId(),
+                course.getCourseName(),
+                courseStatus,
+                actualStartDate,
+                actualEndDate,
+                teacherName,
+                classDateDisplay,
+                displayedProgressString
+        );
+        classes.add(classInfo);
+    }
+
     private HBox createTitleBar() {
         HBox titleBar = new HBox();
         titleBar.setPadding(new Insets(0, 0, 15, 0));
         titleBar.setAlignment(Pos.CENTER_LEFT);
         titleBar.setStyle("-fx-border-color: transparent transparent " + BORDER_COLOR + " transparent; -fx-border-width: 0 0 1 0; -fx-padding: 0 0 10 0;");
-        // Title
+
         titleLabel = new Label("Lớp học");
         titleLabel.setFont(Font.font("System", FontWeight.BOLD, 24));
         titleLabel.setTextFill(Color.web(PRIMARY_COLOR));
-        // Add a spacer to push the button to the right
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // Nút tạo lớp học mới
         createClassButton = new Button();
         createClassButton.setStyle(
                 "-fx-background-color: " + GREEN_COLOR + ";" +
@@ -203,31 +259,19 @@ public class ClassListScreenView extends BaseScreenView {
                         "-fx-cursor: hand;" +
                         "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 2, 0, 0, 1);"
         );
-
         Label plusIcon = new Label("➕");
         plusIcon.setTextFill(Color.WHITE);
-        HBox createContent = new HBox(7);
+        HBox createContent = new HBox(7, plusIcon, new Label("Tạo lớp học"));
         createContent.setAlignment(Pos.CENTER);
-        createContent.getChildren().addAll(plusIcon, new Label("Tạo lớp học"));
         createClassButton.setGraphic(createContent);
         createClassButton.setOnAction(e -> showCreateClassDialog());
+
         Person currentUser = getCurrentUser();
-
-// Kiểm tra quyền CREATE_CLASS
-        boolean canCreateClass = false;
-        if (currentUser != null && currentUser.getRole() != null) {
-            canCreateClass = RolePermissions.hasPermission(currentUser.getRole(), Permission.CREATE_CLASS);
-        } else {
-            canCreateClass = false; // Không cho phép nếu user hoặc role không hợp lệ
-        }
-
-// Ẩn hoặc hiện nút dựa trên quyền
+        boolean canCreateClass = currentUser != null && currentUser.getRole() != null &&
+                RolePermissions.hasPermission(currentUser.getRole(), Permission.CREATE_CLASS);
         createClassButton.setVisible(canCreateClass);
-        createClassButton.setManaged(canCreateClass); // Quan trọng để không chiếm không gian khi ẩn
-// ------------------------------------
+        createClassButton.setManaged(canCreateClass);
 
-
-        // Export Excel button
         exportExcelButton = new Button();
         exportExcelButton.setStyle(
                 "-fx-background-color: " + PRIMARY_COLOR + ";" +
@@ -237,18 +281,17 @@ public class ClassListScreenView extends BaseScreenView {
                         "-fx-cursor: hand;" +
                         "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 2, 0, 0, 1);"
         );
-        // Icon cho nút Export
         Label excelIcon = new Label("📊");
         excelIcon.setTextFill(Color.WHITE);
-        HBox exportContent = new HBox(7);
+        HBox exportContent = new HBox(7, excelIcon, new Label("Xuất Excel"));
         exportContent.setAlignment(Pos.CENTER);
-        exportContent.getChildren().addAll(excelIcon, new Label("Xuất Excel"));
         exportExcelButton.setGraphic(exportContent);
+        exportExcelButton.setOnAction(e -> exportToExcel());
 
         titleBar.getChildren().addAll(titleLabel, spacer, createClassButton, exportExcelButton);
         return titleBar;
     }
-    // src/view/components/ClassList/ClassListScreenView.java
+
     private VBox createSingleStatCard(String title, String color, String initialValue,
                                       String valueLabelText, String iconString) {
         VBox card = new VBox(10);
@@ -260,216 +303,102 @@ public class ClassListScreenView extends BaseScreenView {
                         "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0, 0, 2);"
         );
 
-        HBox titleBox = new HBox(10);
-        titleBox.setAlignment(Pos.CENTER_LEFT);
-
         Label iconLabel = new Label(iconString);
         iconLabel.setTextFill(Color.WHITE);
-        iconLabel.setFont(Font.font("System", 18)); // Sửa ở đây
+        iconLabel.setFont(Font.font("System", 18));
 
         Label titleTextLabel = new Label(title);
-        titleTextLabel.setFont(Font.font("System", FontWeight.BOLD, 16)); // Giữ nguyên FontWeight.BOLD nếu muốn đậm
+        titleTextLabel.setFont(Font.font("System", FontWeight.BOLD, 16));
         titleTextLabel.setTextFill(Color.WHITE);
-
-        titleBox.getChildren().addAll(iconLabel, titleTextLabel);
-
-        VBox statValueBox = new VBox(2);
-        statValueBox.setAlignment(Pos.CENTER_LEFT);
-        statValueBox.setPadding(new Insets(8, 0, 0, 0));
+        HBox titleBox = new HBox(10, iconLabel, titleTextLabel);
+        titleBox.setAlignment(Pos.CENTER_LEFT);
 
         this.totalClassesCountLabel = new Label(initialValue);
         this.totalClassesCountLabel.setFont(Font.font("System", FontWeight.BOLD, 32));
         this.totalClassesCountLabel.setTextFill(Color.WHITE);
 
         Label descriptionLabel = new Label(valueLabelText);
-        descriptionLabel.setFont(Font.font("System", 12)); // Sửa ở đây
+        descriptionLabel.setFont(Font.font("System", 12));
         descriptionLabel.setTextFill(Color.WHITE);
 
-        statValueBox.getChildren().addAll(this.totalClassesCountLabel, descriptionLabel);
+        VBox statValueBox = new VBox(2, this.totalClassesCountLabel, descriptionLabel);
+        statValueBox.setAlignment(Pos.CENTER_LEFT);
+        statValueBox.setPadding(new Insets(8, 0, 0, 0));
 
         card.getChildren().addAll(titleBox, statValueBox);
         return card;
     }
 
-    /**
-     Create statistics cards for the top of the screen
-     */
-    // src/view/components/ClassList/ClassListScreenView.java
-    /**
-     * Tạo phần thống kê - giờ chỉ có 1 card tổng số lớp học
-     */
     private HBox createStatisticsSection() {
-        HBox statsContainer = new HBox(0); // HBox chứa các thẻ thống kê
+        HBox statsContainer = new HBox(0);
         statsContainer.setPadding(new Insets(0, 0, 15, 0));
-        // Căn chỉnh cho HBox, ví dụ: căn trái hoặc căn giữa nếu chỉ có 1 card
-        statsContainer.setAlignment(Pos.CENTER_LEFT); // Hoặc Pos.CENTER
+        statsContainer.setAlignment(Pos.CENTER_LEFT);
         VBox totalClassesCard = createSingleStatCard(
-                "Tổng số Lớp học",   // Tiêu đề
-                PRIMARY_COLOR,        // Màu sắc (ví dụ: màu Indigo)
-                "0",                  // Giá trị ban đầu (sẽ được cập nhật)
-                "Lớp đang hoạt động", // Nhãn mô tả dưới con số
-                "📚"                  // Icon
+                "Tổng số Lớp học",
+                PRIMARY_COLOR,
+                "0",
+                "Lớp học", // Đổi label mô tả
+                "📚"
         );
-
-        // Đặt kích thước mong muốn cho card
-        totalClassesCard.setPrefWidth(280); // Điều chỉnh chiều rộng nếu cần
-        totalClassesCard.setMaxWidth(Region.USE_PREF_SIZE); // Để card không bị kéo giãn quá mức
-
+        totalClassesCard.setPrefWidth(280);
+        totalClassesCard.setMaxWidth(Region.USE_PREF_SIZE);
         statsContainer.getChildren().add(totalClassesCard);
         return statsContainer;
     }
-    /**
-     Create a single statistic card with icon
-     */
-    private VBox createStatCard(String title, String color, String value1, String value2,
-                                String label1, String label2, String icon) {
-        VBox card = new VBox(10);
-        card.setAlignment(Pos.CENTER_LEFT);
-        card.setPadding(new Insets(15, 20, 15, 20));
-        card.setStyle(
-                "-fx-background-color: " + color + ";" +
-                        "-fx-background-radius: 8;" +
-                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0, 0, 2);"
-        );
-        HBox.setHgrow(card, Priority.ALWAYS);
-        card.setPrefWidth(250);
-// Card title with icon
-        HBox titleBox = new HBox(10);
-        titleBox.setAlignment(Pos.CENTER_LEFT);
-        Label iconLabel = new Label(icon);
-        iconLabel.setTextFill(Color.WHITE);
-        iconLabel.setFont(Font.font("System", 18));
-        Label titleLabel = new Label(title);
-        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 16));
-        titleLabel.setTextFill(Color.WHITE);
-        titleBox.getChildren().addAll(iconLabel, titleLabel);
-// Stats container
-        HBox statsRow = new HBox(40);
-        statsRow.setAlignment(Pos.CENTER_LEFT);
-        statsRow.setPadding(new Insets(5, 0, 0, 0));
-// First stat
-        VBox stat1 = new VBox(5);
-        stat1.setAlignment(Pos.CENTER_LEFT);
-        Label value1Label = new Label(value1);
-        value1Label.setFont(Font.font("System", FontWeight.BOLD, 24));
-        value1Label.setTextFill(Color.WHITE);
-        Label label1Label = new Label(label1);
-        label1Label.setTextFill(Color.WHITE);
-        stat1.getChildren().addAll(value1Label, label1Label);
-// Second stat
-        VBox stat2 = new VBox(5);
-        stat2.setAlignment(Pos.CENTER_LEFT);
-        Label value2Label = new Label(value2);
-        value2Label.setFont(Font.font("System", FontWeight.BOLD, 24));
-        value2Label.setTextFill(Color.WHITE);
-        Label label2Label = new Label(label2);
-        label2Label.setTextFill(Color.WHITE);
-        stat2.getChildren().addAll(value2Label, label2Label);
-        statsRow.getChildren().addAll(stat1, stat2);
-        card.getChildren().addAll(titleBox, statsRow);
-        return card;
-    }
-    /**
-     * Creates a search and filter bar
-     */
+
     private HBox createSearchAndFilterBar() {
         HBox searchAndFilterBar = new HBox(15);
         searchAndFilterBar.setPadding(new Insets(15, 0, 15, 0));
         searchAndFilterBar.setAlignment(Pos.CENTER_LEFT);
-        // Left side - Filter options
-        HBox filterBox = new HBox(10);
+
+        Label filterLabel = new Label("Lọc theo:"); // Đổi "Từ khóa" thành "Lọc theo"
+        filterLabel.setStyle("-fx-text-fill: " + TEXT_COLOR + "; -fx-font-weight: bold;");
+        filterComboBox = new ComboBox<>();
+        filterComboBox.setPromptText("Tất cả trạng thái"); // Gợi ý rõ hơn
+        // filterComboBox.getItems().addAll("Tất cả", "Đang học", "Sắp bắt đầu", "Đã kết thúc"); // Thêm các lựa chọn lọc
+        filterComboBox.setPrefWidth(180); // Giảm độ rộng một chút
+        filterComboBox.setStyle("-fx-background-color: white; -fx-border-color: " + BORDER_COLOR + "; -fx-border-radius: 4;");
+        // filterComboBox.setOnAction(e -> filterClassesByStatus()); // Thêm event handler
+        HBox filterBox = new HBox(10, filterLabel, filterComboBox);
         filterBox.setAlignment(Pos.CENTER_LEFT);
 
-        Label filterLabel = new Label("Từ khóa:");
-        filterLabel.setStyle("-fx-text-fill: " + TEXT_COLOR + "; -fx-font-weight: bold;");
-
-        filterComboBox = new ComboBox<>();
-        filterComboBox.setPromptText("Từ khóa");
-        filterComboBox.setPrefWidth(250);
-        filterComboBox.setStyle(
-                "-fx-background-color: white;" +
-                        "-fx-border-color: " + BORDER_COLOR + ";" +
-                        "-fx-border-radius: 4;"
-        );
-
-        filterBox.getChildren().addAll(filterLabel, filterComboBox);
-
-        // Spacer
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // Right side - Search bar with page size
-        HBox rightSideBox = new HBox(15);
-        rightSideBox.setAlignment(Pos.CENTER_RIGHT);
-
-        // Page size selector with label
-        HBox pageSizeBox = new HBox(10);
+        Label pageSizeLabel = new Label("Hiển thị:"); // Đổi "Cỡ trang"
+        pageSizeLabel.setStyle("-fx-text-fill: " + TEXT_COLOR + ";");
+        pageSizeComboBox = new ComboBox<>();
+        pageSizeComboBox.getItems().addAll("10", "20", "50", "100", "Tất cả");
+        pageSizeComboBox.setValue("20");
+        pageSizeComboBox.setPrefWidth(90); // Tăng độ rộng
+        pageSizeComboBox.setStyle("-fx-background-color: white; -fx-border-color: " + BORDER_COLOR + "; -fx-border-radius: 4;");
+        HBox pageSizeBox = new HBox(10, pageSizeLabel, pageSizeComboBox);
         pageSizeBox.setAlignment(Pos.CENTER);
 
-        Label pageSizeLabel = new Label("Cỡ trang");
-        pageSizeLabel.setStyle("-fx-text-fill: " + TEXT_COLOR + ";");
-
-        pageSizeComboBox = new ComboBox<>();
-        pageSizeComboBox.getItems().addAll("10", "20", "50", "100");
-        pageSizeComboBox.setValue("20");
-        pageSizeComboBox.setPrefWidth(80);
-        pageSizeComboBox.setStyle(
-                "-fx-background-color: white;" +
-                        "-fx-border-color: " + BORDER_COLOR + ";" +
-                        "-fx-border-radius: 4;"
-        );
-
-        pageSizeBox.getChildren().addAll(pageSizeLabel, pageSizeComboBox);
-
-        // Search field with button
-        HBox searchBox = new HBox(0);
-        searchBox.setAlignment(Pos.CENTER);
-
         searchField = new TextField();
-        searchField.setPromptText("Tìm kiếm");
+        searchField.setPromptText("Tìm kiếm tên, mã lớp...");
         searchField.setPrefWidth(250);
-        searchField.setStyle(
-                "-fx-background-color: white;" +
-                        "-fx-border-color: " + BORDER_COLOR + ";" +
-                        "-fx-border-radius: 4 0 0 4;" +
-                        "-fx-padding: 7;"
-        );
+        searchField.setStyle("-fx-background-color: white; -fx-border-color: " + BORDER_COLOR + "; -fx-border-radius: 4 0 0 4; -fx-padding: 7;");
 
         searchButton = new Button();
-        searchButton.setStyle(
-                "-fx-background-color: " + PRIMARY_COLOR + ";" +
-                        "-fx-text-fill: white;" +
-                        "-fx-background-radius: 0 4 4 0;" +
-                        "-fx-cursor: hand;" +
-                        "-fx-padding: 7 15;"
-        );
-
-        // Add search icon
+        searchButton.setStyle("-fx-background-color: " + PRIMARY_COLOR + "; -fx-text-fill: white; -fx-background-radius: 0 4 4 0; -fx-cursor: hand; -fx-padding: 7 15;");
         Label searchIcon = new Label("🔍");
         searchIcon.setTextFill(Color.WHITE);
         searchButton.setGraphic(searchIcon);
+        HBox searchBox = new HBox(0, searchField, searchButton);
+        searchBox.setAlignment(Pos.CENTER);
 
-        searchBox.getChildren().addAll(searchField, searchButton);
+        HBox rightSideBox = new HBox(15, pageSizeBox, searchBox);
+        rightSideBox.setAlignment(Pos.CENTER_RIGHT);
 
-        rightSideBox.getChildren().addAll(pageSizeBox, searchBox);
-
-        // Add all components to the searchAndFilterBar
         searchAndFilterBar.getChildren().addAll(filterBox, spacer, rightSideBox);
-
         return searchAndFilterBar;
     }
 
-
-    /**
-     * Creates the table for classes
-     */
     private void createClassesTable() {
-        classesTable = new TableView<>();
+        classesTable = new TableView<>(classes);
         classesTable.setEditable(false);
-        classesTable.setItems(classes);
         classesTable.setPrefHeight(600);
-
-        // Styling the table
         classesTable.setStyle(
                 "-fx-background-color: white;" +
                         "-fx-border-color: " + BORDER_COLOR + ";" +
@@ -477,334 +406,246 @@ public class ClassListScreenView extends BaseScreenView {
                         "-fx-background-radius: 5;" +
                         "-fx-border-width: 1;"
         );
+        classesTable.setTableMenuButtonVisible(false);
 
-        // Selection column with checkboxes
         TableColumn<ClassInfo, Void> selectCol = new TableColumn<>();
-        selectCol.setPrefWidth(30);
+        selectCol.setPrefWidth(40);
+        selectCol.setResizable(false);
         selectCol.setCellFactory(col -> {
             TableCell<ClassInfo, Void> cell = new TableCell<>() {
                 private final CheckBox checkBox = new CheckBox();
                 {
+                    HBox hbox = new HBox(checkBox);
+                    hbox.setAlignment(Pos.CENTER);
+                    setGraphic(hbox);
                     checkBox.setOnAction(event -> {
-                        ClassInfo data = getTableView().getItems().get(getIndex());
-                        data.setSelected(checkBox.isSelected());
+                        if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                            ClassInfo data = getTableView().getItems().get(getIndex());
+                            data.setSelected(checkBox.isSelected());
+                        }
                     });
                 }
-
                 @Override
                 protected void updateItem(Void item, boolean empty) {
                     super.updateItem(item, empty);
-                    if (empty) {
+                    if (empty || getIndex() < 0 || getIndex() >= getTableView().getItems().size()) {
                         setGraphic(null);
                     } else {
                         ClassInfo data = getTableView().getItems().get(getIndex());
                         checkBox.setSelected(data.isSelected());
-                        setGraphic(checkBox);
+                        setGraphic(getGraphic()); // Giữ lại HBox chứa CheckBox
                     }
                 }
             };
             return cell;
         });
 
-        // STT column
         TableColumn<ClassInfo, Integer> sttCol = new TableColumn<>("STT");
         sttCol.setCellValueFactory(new PropertyValueFactory<>("stt"));
         sttCol.setPrefWidth(50);
-        sttCol.setStyle("-fx-alignment: CENTER-LEFT;");
+        sttCol.setStyle("-fx-alignment: CENTER;");
 
-        // Mã column
-        TableColumn<ClassInfo, String> codeCol = new TableColumn<>("Mã");
+        TableColumn<ClassInfo, String> codeCol = new TableColumn<>("Mã Lớp");
         codeCol.setCellValueFactory(new PropertyValueFactory<>("code"));
-        codeCol.setPrefWidth(150);
+        codeCol.setPrefWidth(120);
 
-        // Tên lớp column
-        TableColumn<ClassInfo, String> nameCol = new TableColumn<>("Tên lớp");
+        TableColumn<ClassInfo, String> nameCol = new TableColumn<>("Tên Lớp");
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
-        nameCol.setPrefWidth(180);
+        nameCol.setPrefWidth(200);
         nameCol.setCellFactory(column -> new TableCell<>() {
+            private final Label nameLabel = new Label();
+            private final Label statusLabelText = new Label(); // Đổi tên để tránh nhầm lẫn
+            private final VBox content = new VBox(3, nameLabel, statusLabelText);
+            {
+                nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + TEXT_COLOR + ";");
+                statusLabelText.setPadding(new Insets(2, 8, 2, 8));
+                statusLabelText.setStyle("-fx-background-radius: 4; -fx-font-size: 11px;");
+                content.setAlignment(Pos.CENTER_LEFT);
+            }
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setGraphic(null);
+                if (empty || item == null || getTableRow() == null || getTableRow().getItem() == null) {
+                    setText(null); setGraphic(null);
                 } else {
-                    VBox content = new VBox(3);
-                    content.setAlignment(Pos.CENTER_LEFT);
-                    Label nameLabel = new Label(item);
-                    nameLabel.setStyle("-fx-font-weight: bold;");
-                    Label statusLabel = new Label("Đang học");
-                    statusLabel.setPadding(new Insets(2, 8, 2, 8));
-                    statusLabel.setStyle(
-                            "-fx-background-color: " + GREEN_COLOR + "20;" +
-                                    "-fx-text-fill: " + GREEN_COLOR + ";" +
-                                    "-fx-background-radius: 4;" +
-                                    "-fx-font-size: 12px;"
+                    ClassInfo classInfo = getTableRow().getItem();
+                    nameLabel.setText(item);
+                    statusLabelText.setText(classInfo.getStatus());
+                    String statusColor = GREEN_COLOR;
+                    if ("Đã kết thúc".equalsIgnoreCase(classInfo.getStatus())) statusColor = "#757575";
+                    else if ("Sắp bắt đầu".equalsIgnoreCase(classInfo.getStatus())) statusColor = YELLOW_COLOR;
+                    else if ("Chưa có lịch".equalsIgnoreCase(classInfo.getStatus())) statusColor = "#BDBDBD";
+                    statusLabelText.setStyle(
+                            "-fx-background-color: " + statusColor + "20;" +
+                                    "-fx-text-fill: " + statusColor + ";" +
+                                    "-fx-background-radius: 4; -fx-font-size: 11px;"
                     );
-                    content.getChildren().addAll(nameLabel, statusLabel);
-                    setGraphic(content);
-                    setText(null);
+                    setGraphic(content); setText(null);
                 }
             }
         });
 
-        // Số buổi column
-        TableColumn<ClassInfo, String> progressCol = new TableColumn<>("Tiến độ"); // Đổi tên cột cho phù hợp
-        progressCol.setCellValueFactory(new PropertyValueFactory<>("displayedProgress")); // Liên kết với thuộc tính mới
-        progressCol.setPrefWidth(130); // Điều chỉnh độ rộng nếu cần
+        TableColumn<ClassInfo, String> progressCol = new TableColumn<>("Tiến độ");
+        progressCol.setCellValueFactory(new PropertyValueFactory<>("displayedProgress"));
+        progressCol.setPrefWidth(120);
         progressCol.setCellFactory(column -> new TableCell<>() {
+            private final ProgressBar progressBar = new ProgressBar();
+            private final Label progressLabelText = new Label(); // Đổi tên
+            private final HBox progressBox = new HBox(5, progressBar, progressLabelText);
+            {
+                progressBar.setPrefWidth(60); progressBar.setStyle("-fx-accent: " + GREEN_COLOR + ";");
+                progressLabelText.setStyle("-fx-text-fill: " + TEXT_COLOR + "; -fx-padding: 0 0 0 3;");
+                progressBox.setAlignment(Pos.CENTER_LEFT);
+            }
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null || item.equals("N/A") || !item.contains("/")) {
-                    setGraphic(null);
-                    setText(item); // Hiển thị "N/A" hoặc chuỗi gốc nếu không phân tích được
+                    setText(item); setGraphic(null);
                 } else {
-                    HBox progressBox = new HBox(5);
-                    progressBox.setAlignment(Pos.CENTER_LEFT);
                     try {
                         String[] parts = item.split("/");
-                        long current = Long.parseLong(parts[0]);
-                        long total = Long.parseLong(parts[1]);
-
-                        ProgressBar progressBar = new ProgressBar(total == 0 ? 0 : (double) current / total);
-                        progressBar.setPrefWidth(70); // Điều chỉnh độ rộng của ProgressBar
-                        // Bạn có thể thay GREEN_COLOR bằng màu khác nếu muốn
-                        progressBar.setStyle("-fx-accent: " + GREEN_COLOR + ";");
-
-                        Label progressLabel = new Label(item); // Hiển thị dạng "x/y"
-                        // Bạn có thể thay TEXT_COLOR bằng màu khác nếu muốn
-                        progressLabel.setStyle("-fx-text-fill: " + TEXT_COLOR + "; -fx-padding: 0 0 0 5;");
-
-                        progressBox.getChildren().addAll(progressBar, progressLabel);
-                        setGraphic(progressBox);
-                        setText(null);
-                    } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
-                        setText(item);
-                        setGraphic(null);
-                        System.err.println("Lỗi phân tích chuỗi tiến độ cho TableCell: " + item + " - " + e.getMessage());
+                        long current = Long.parseLong(parts[0].trim());
+                        long total = Long.parseLong(parts[1].trim());
+                        progressBar.setProgress(total == 0 ? 0 : (double) current / total);
+                        progressLabelText.setText(item);
+                        setGraphic(progressBox); setText(null);
+                    } catch (Exception e) {
+                        setText(item); setGraphic(null);
+                        System.err.println("Lỗi parse chuỗi tiến độ cho TableCell: '" + item + "' - " + e.getMessage());
                     }
                 }
             }
         });
 
-
-        // Ngày bắt đầu column
-        TableColumn<ClassInfo, String> startDateCol = new TableColumn<>("Ngày bắt đầu");
+        TableColumn<ClassInfo, String> startDateCol = new TableColumn<>("Bắt đầu");
         startDateCol.setCellValueFactory(new PropertyValueFactory<>("startDate"));
-        startDateCol.setPrefWidth(100);
+        startDateCol.setPrefWidth(90); startDateCol.setStyle("-fx-alignment: CENTER;");
 
-        // Ngày kết thúc column
-        TableColumn<ClassInfo, String> endDateCol = new TableColumn<>("Ngày kết thúc");
+        TableColumn<ClassInfo, String> endDateCol = new TableColumn<>("Kết thúc");
         endDateCol.setCellValueFactory(new PropertyValueFactory<>("endDate"));
-        endDateCol.setPrefWidth(100);
-        TableColumn<ClassInfo, String> dayOfWeekColumn = new TableColumn<>("Days");
-        dayOfWeekColumn.setCellValueFactory(new PropertyValueFactory<>("classDate"));
-        classesTable.getColumns().add(dayOfWeekColumn);
-        dayOfWeekColumn.setPrefWidth(100);
+        endDateCol.setPrefWidth(90); endDateCol.setStyle("-fx-alignment: CENTER;");
 
-        // Giáo viên column
         TableColumn<ClassInfo, String> teacherCol = new TableColumn<>("Giáo viên");
         teacherCol.setCellValueFactory(new PropertyValueFactory<>("teacher"));
-        teacherCol.setPrefWidth(120);
+        teacherCol.setPrefWidth(150);
         teacherCol.setCellFactory(col -> new TableCell<ClassInfo, String>() {
+            private final Button assignTeacherButton = new Button();
+            {
+                assignTeacherButton.setMinWidth(120);
+                assignTeacherButton.setOnAction(event -> {
+                    if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                        ClassInfo selectedClassInfo = getTableView().getItems().get(getIndex());
+                        Person currentUser = getCurrentUser();
+                        boolean canAddTeacher = currentUser != null && currentUser.getRole() != null &&
+                                RolePermissions.hasPermission(currentUser.getRole(), Permission.ADDTEACHER_INTOCOURSE);
+                        if (!canAddTeacher) {
+                            showInfo("Bạn không có quyền thực hiện thao tác này."); return;
+                        }
+                        Optional<Course> courseOpt = courseDAO.findById(selectedClassInfo.getCode());
+                        if (courseOpt.isEmpty()) {
+                            showInfo("Không thể tìm thấy lớp học."); return;
+                        }
+                        Course course = courseOpt.get();
+                        TeacherDAO teacherDAOInstance = courseDAO.getTeacherDAO();
+                        if (teacherDAOInstance == null) {
+                            System.err.println("Lỗi: TeacherDAO chưa được thiết lập trong CourseDAO.");
+                            showInfo("Lỗi: Không thể tải thông tin giáo viên."); return;
+                        }
+                        AddTeacherIntoCourse dialog = new AddTeacherIntoCourse(course, courseDAO, teacherDAOInstance);
+                        // *** SỬA LẠI dialog.show() NẾU AddTeacherIntoCourse KHÔNG PHẢI LÀ STAGE/DIALOG CHẶN ***
+                        dialog.show(); // Hoặc showAndWait() nếu nó là Stage/Dialog và bạn muốn chặn
+                        // Cân nhắc việc loadClasses() ở đây, hoặc nếu dialog có callback
+                        // loadClasses(); // Tải lại sau khi dialog đóng (có thể cần cơ chế callback tốt hơn)
+                    }
+                });
+            }
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-
-                if (empty || item == null || getTableRow() == null || getTableRow().getItem() == null) {
-                    setText(null);
-                    setGraphic(null);
+                if (empty || item == null || getIndex() < 0 || getIndex() >= getTableView().getItems().size()) {
+                    setText(null); setGraphic(null);
                 } else {
-                    Button assignTeacherButton = new Button(item.isEmpty() ? "Thêm GV" : item);
-                    assignTeacherButton.setStyle(item.isEmpty()
-                            ? "-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold;"
-                            : "-fx-background-color: #3f51b5; -fx-text-fill: white; -fx-font-weight: bold;");
-                    assignTeacherButton.setMinWidth(100);
-
-                    assignTeacherButton.setOnAction(event -> {
-                        Person currentUser = getCurrentUser(); // Lấy người dùng hiện tại từ BaseScreenView
-                        boolean canAddTeacher = false;
-                        if (currentUser != null && currentUser.getRole() != null) {
-                            canAddTeacher = RolePermissions.hasPermission(currentUser.getRole(), Permission.ADDTEACHER_INTOCOURSE);
-                        }
-
-                        if (!canAddTeacher) {
-                            showInfo("Bạn không có quyền thực hiện thao tác này.");
-                            return; // Dừng lại nếu không có quyền
-                        }
-                        ClassInfo selectedClassInfo = getTableRow().getItem();
-
-                        // Gọi CourseDAO và TeacherDAO (đảm bảo được khởi tạo sẵn)
-                        Course course = courseDAO.findById(selectedClassInfo.getCode()).orElse(null);
-                        if (course == null) {
-                            showInfo("Không thể tìm thấy lớp học.");
-                            return;
-                        }
-                        TeacherDAO teacherDAO = courseDAO.getTeacherDAO(); // Đảm bảo TeacherDAO đã được inject.
-
-                        // Gọi AddTeacherIntoCourse Dialog
-                        AddTeacherIntoCourse dialog = new AddTeacherIntoCourse(course, courseDAO, teacherDAO);
-                        dialog.show();
-
-                        // Làm mới dữ liệu sau thay đổi
-                        loadClasses(); // Hàm này phải gọi lại backend để refresh bảng
-                    });
-
-                    setGraphic(assignTeacherButton);
-                    setText(null);
+                    assignTeacherButton.setText(item.isEmpty() || "Chưa phân công".equalsIgnoreCase(item) || "Chưa có".equalsIgnoreCase(item) ? "Thêm GV" : item);
+                    assignTeacherButton.setStyle( (item.isEmpty() || "Chưa phân công".equalsIgnoreCase(item) || "Chưa có".equalsIgnoreCase(item))
+                            ? "-fx-background-color: " + GREEN_COLOR + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 4;"
+                            : "-fx-background-color: " + PRIMARY_COLOR + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 4;");
+                    setGraphic(assignTeacherButton); setText(null);
                 }
             }
         });
-        // Ngày học column
+
         TableColumn<ClassInfo, String> classDateCol = new TableColumn<>("Ngày học");
         classDateCol.setCellValueFactory(new PropertyValueFactory<>("classDate"));
-        classDateCol.setPrefWidth(150);
+        classDateCol.setPrefWidth(120);
         classDateCol.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setGraphic(null);
+                if (empty || item == null || "N/A".equals(item)) {
+                    setText(item); setGraphic(null);
                 } else {
-                    String[] days = item.split("\n");
-                    VBox daysBox = new VBox(3);
+                    String[] days = item.split(","); VBox daysBox = new VBox(1);
                     daysBox.setAlignment(Pos.CENTER_LEFT);
                     for (String day : days) {
-                        Label dayLabel = new Label(day);
-                        daysBox.getChildren().add(dayLabel);
+                        if (!day.trim().isEmpty()) {
+                            Label dayLabel = new Label(day.trim());
+                            dayLabel.setStyle("-fx-font-size: 11px;");
+                            daysBox.getChildren().add(dayLabel);
+                        }
                     }
-                    setGraphic(daysBox);
-                    setText(null);
+                    setGraphic(daysBox); setText(null);
                 }
             }
         });
 
-        // Học viên column with action button
         TableColumn<ClassInfo, Void> studentsCol = new TableColumn<>("Học viên");
-        studentsCol.setCellFactory(col -> {
-            TableCell<ClassInfo, Void> cell = new TableCell<>() {
-                private final Button btn = new Button();
-                {
-                    btn.setStyle(
-                            "-fx-background-color: " + PRIMARY_COLOR + ";" +
-                                    "-fx-text-fill: white;" +
-                                    "-fx-background-radius: 30;" +
-                                    "-fx-padding: 5 15;" +
-                                    "-fx-cursor: hand;"
-                    );
-                    HBox content = new HBox(5);
-                    content.setAlignment(Pos.CENTER);
-                    Label label = new Label("Học viên");
-                    label.setTextFill(Color.WHITE);
-                    Label arrow = new Label("→");
-                    arrow.setTextFill(Color.WHITE);
-                    content.getChildren().addAll(label, arrow);
-                    btn.setGraphic(content);
-                    btn.setOnAction(event -> {
+        studentsCol.setPrefWidth(100);
+        studentsCol.setCellFactory(col -> new TableCell<ClassInfo, Void>() {
+            private final Button btn = new Button("DS HV");
+            {
+                btn.setStyle("-fx-background-color: " + PRIMARY_COLOR + "; -fx-text-fill: white; -fx-background-radius: 4; -fx-padding: 5 10; -fx-cursor: hand; -fx-font-size: 11px;");
+                btn.setOnAction(event -> {
+                    if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
                         ClassInfo selectedClassInfo = getTableView().getItems().get(getIndex());
-                        if (selectedClassInfo != null) {
-                            AddStudentToCourseDialog dialog = new AddStudentToCourseDialog(selectedClassInfo);
-
-                            // Hiển thị dialog và chờ kết quả trả về
-                            dialog.showAndWait().ifPresent(result -> {
-                                System.out.println("Thêm học viên thành công: " + result.getKey() + " - " + result.getValue());
-                                // Làm mới danh sách lớp học sau khi thêm thành công
-                                classesTable.refresh();
-                            });
-                        }
-                    });
-                }
-
-                @Override
-                protected void updateItem(Void item, boolean empty) {
-                    super.updateItem(item, empty);
-                    if (empty) {
-                        setGraphic(null);
-                    } else {
-                        setGraphic(btn);
+                        // *** SỬA LẠI CONSTRUCTOR VÀ XỬ LÝ RESULT CỦA AddStudentToCourseDialog ***
+                        AddStudentToCourseDialog dialog = new AddStudentToCourseDialog(selectedClassInfo); // Giả sử constructor nhận ClassInfo
+                        dialog.showAndWait().ifPresent((Pair<String, String> pairResult) -> { // Xử lý Pair
+                            // Chỉ cần ifPresent được gọi là đủ để làm mới
+                            System.out.println("Dialog thêm/xóa học viên đã đóng, làm mới bảng...");
+                            System.out.println("Kết quả từ dialog: " + pairResult.getKey() + " - " + pairResult.getValue());
+                            loadClasses();
+                        });
                     }
-                }
-            };
-            return cell;
+                });
+            }
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty || getIndex() < 0 || getIndex() >= getTableView().getItems().size() ? null : btn);
+            }
         });
-        studentsCol.setPrefWidth(120);
 
-        // Khác column with action button
-        TableColumn<ClassInfo, Void> actionsCol = new TableColumn<>("Khác");
-        actionsCol.setCellFactory(col -> {
-            TableCell<ClassInfo, Void> cell = new TableCell<>() {
-                private final Button btn = new Button();
-                {
-                    btn.setStyle(
-                            "-fx-background-color: transparent;" +
-                                    "-fx-border-color: " + BORDER_COLOR + ";" +
-                                    "-fx-border-radius: 30;" +
-                                    "-fx-padding: 5 15;" +
-                                    "-fx-cursor: hand;"
-                    );
-                    Label gearIcon = new Label("⚙");
-                    gearIcon.setStyle("-fx-text-fill: " + TEXT_COLOR + ";");
-                    btn.setGraphic(gearIcon);
-                    btn.setOnAction(event -> {
-                        ClassInfo data = getTableView().getItems().get(getIndex());
-                        handleMoreActions(data);
-                    });
-                }
-
-                @Override
-                protected void updateItem(Void item, boolean empty) {
-                    super.updateItem(item, empty);
-                    if (empty) {
-                        setGraphic(null);
-                    } else {
-                        setGraphic(btn);
-                    }
-                }
-            };
-            return cell;
-        });
-        actionsCol.setPrefWidth(80);
-
-        // *** BEGIN MODIFICATION: Add Details Button Column ***
-        TableColumn<ClassInfo, Void> detailsDialogCol = new TableColumn<>("Chi Tiết");
-        detailsDialogCol.setPrefWidth(100); // Điều chỉnh độ rộng nếu cần
+        TableColumn<ClassInfo, Void> detailsDialogCol = new TableColumn<>("Chi tiết");
+        detailsDialogCol.setPrefWidth(80);
         detailsDialogCol.setCellFactory(param -> new TableCell<ClassInfo, Void>() {
             private final Button btnDetails = new Button("Xem");
             {
-                btnDetails.setStyle(
-                        "-fx-background-color: " + PURPLE_COLOR + ";" + // Hoặc màu khác tùy ý
-                                "-fx-text-fill: white;" +
-                                "-fx-background-radius: 4;" +
-                                "-fx-padding: 5 10;" +
-                                "-fx-cursor: hand;"
-                );
+                btnDetails.setStyle("-fx-background-color: " + PURPLE_COLOR + "; -fx-text-fill: white; -fx-background-radius: 4; -fx-padding: 5 10; -fx-cursor: hand; -fx-font-size: 11px;");
                 btnDetails.setOnAction(event -> {
-                    // 1. Lấy đối tượng ClassInfo của dòng được chọn
-                    ClassInfo selectedClassInfo = getTableView().getItems().get(getIndex());
-                    if (selectedClassInfo != null) {
-                        // 2. Lấy đối tượng Course đầy đủ từ courseDAO bằng courseId
-                        //    selectedClassInfo.getCode() chính là courseId
+                    if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                        ClassInfo selectedClassInfo = getTableView().getItems().get(getIndex());
                         Optional<Course> optionalCourse = courseDAO.findById(selectedClassInfo.getCode());
                         if (optionalCourse.isPresent()) {
-                            Course course = optionalCourse.get(); // Đây là đối tượng Course bạn cần
-                            // 3. Lấy đối tượng TeacherDAO từ courseDAO
-                            //    (Giả sử courseDAO có phương thức getTeacherDAO())
+                            Course course = optionalCourse.get();
                             TeacherDAO teacherDAOInstance = courseDAO.getTeacherDAO();
                             if (teacherDAOInstance == null) {
-                                // Xử lý trường hợp TeacherDAO chưa được khởi tạo trong CourseDAO
-                                // Ví dụ: Khởi tạo nó ở đây hoặc báo lỗi
                                 System.err.println("Lỗi: TeacherDAO chưa được thiết lập trong CourseDAO.");
-                                // Có thể hiển thị thông báo lỗi cho người dùng
-                                showInfo("Lỗi: Không thể tải thông tin giáo viên. Vui lòng liên hệ quản trị viên.");
-                                return;
+                                showInfo("Lỗi: Không thể tải thông tin giáo viên."); return;
                             }
-                            // 4. Gọi constructor của ClassDetailsDialog và truyền Course, TeacherDAO vào
                             ClassDetailsDialog detailsDialog = new ClassDetailsDialog(course, teacherDAOInstance);
                             detailsDialog.show();
                         } else {
-                            // Xử lý trường hợp không tìm thấy Course với ID tương ứng
                             showInfo("Không tìm thấy thông tin chi tiết cho lớp học này.");
                         }
                     }
@@ -813,224 +654,153 @@ public class ClassListScreenView extends BaseScreenView {
             @Override
             protected void updateItem(Void item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty) {
-                    setGraphic(null);
-                } else {
-                    setGraphic(btnDetails);
-                }
+                setGraphic(empty || getIndex() < 0 || getIndex() >= getTableView().getItems().size() ? null : btnDetails);
             }
         });
-        // *** END MODIFICATION ***
 
-        // Add all columns to the table
+        TableColumn<ClassInfo, Void> actionsCol = new TableColumn<>("Khác");
+        actionsCol.setPrefWidth(60);
+        actionsCol.setCellFactory(col -> new TableCell<ClassInfo, Void>() {
+            private final Button btn = new Button("⚙");
+            {
+                btn.setStyle("-fx-background-color: transparent; -fx-border-color: " + BORDER_COLOR + "; -fx-border-radius: 4; -fx-padding: 5 8; -fx-cursor: hand; -fx-font-size: 12px;");
+                btn.setOnAction(event -> {
+                    if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                        ClassInfo data = getTableView().getItems().get(getIndex());
+                        handleMoreActions(data, btn);
+                    }
+                });
+            }
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty || getIndex() < 0 || getIndex() >= getTableView().getItems().size() ? null : btn);
+            }
+        });
+
         classesTable.getColumns().addAll(
                 selectCol, sttCol, codeCol, nameCol, progressCol,
-                startDateCol, endDateCol, teacherCol,
-                classDateCol, studentsCol,
-                detailsDialogCol, // *** MODIFICATION: Added new column here ***
-                actionsCol
+                startDateCol, endDateCol, teacherCol, classDateCol,
+                studentsCol, detailsDialogCol, actionsCol
         );
 
-        // Customize table header style
-        classesTable.setTableMenuButtonVisible(false);
-
-        // Modern alternating row colors
         classesTable.setRowFactory(tv -> {
             TableRow<ClassInfo> row = new TableRow<>();
-            row.setStyle("-fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
             row.selectedProperty().addListener((obs, oldVal, newVal) -> {
+                String baseStyle = "-fx-border-color: " + BORDER_COLOR + " transparent " + BORDER_COLOR + " transparent; -fx-border-width: 0 0 1 0;";
                 if (newVal) {
-                    row.setStyle("-fx-background-color: #e3f2fd; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
+                    row.setStyle("-fx-background-color: #e3f2fd; " + baseStyle);
                 } else {
-                    if (row.getIndex() % 2 == 0) {
-                        row.setStyle("-fx-background-color: white; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
-                    } else {
-                        row.setStyle("-fx-background-color: #f8f9fa; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
-                    }
+                    row.setStyle((row.getIndex() % 2 == 0 ? "-fx-background-color: white; " : "-fx-background-color: #f8f9fa; ") + baseStyle);
                 }
             });
+            // Set initial style correctly
+            String baseStyle = "-fx-border-color: " + BORDER_COLOR + " transparent " + BORDER_COLOR + " transparent; -fx-border-width: 0 0 1 0;";
+            row.setStyle((row.getIndex() % 2 == 0 ? "-fx-background-color: white; " : "-fx-background-color: #f8f9fa; ") + baseStyle);
             return row;
         });
     }
 
-
-    /**
-     * Sets up event handlers for UI components
-     */
     private void setupEventHandlers() {
-        // Export Excel button
-        exportExcelButton.setOnAction(e -> exportToExcel());
-
-
-        // Search functionality
         searchButton.setOnAction(e -> searchClasses(searchField.getText()));
         searchField.setOnAction(e -> searchClasses(searchField.getText()));
-
-        // Page size change
         pageSizeComboBox.setOnAction(e -> updatePageSize());
-        if (createClassButton.isVisible()) {
-            createClassButton.setOnAction(e -> showCreateClassDialog());
-        }
     }
 
-
-    /**
-     * Update number of rows shown in table
-     */
     private void updatePageSize() {
         String selectedSize = pageSizeComboBox.getValue();
         if (selectedSize != null) {
-            // In a real app, you would update the pagination here
-            showInfo("Số dòng trên trang: " + selectedSize);
+            showInfo("Cỡ trang (chưa triển khai): " + selectedSize);
         }
     }
+
     private void loadClasses() {
-        initializeData(); // Gọi lại initializeData để tải lại toàn bộ dữ liệu
-        // Hoặc nếu bạn chỉ muốn cập nhật TableView mà không clear hoàn toàn:
-        // classesTable.refresh(); // Dòng này thường dùng nếu ObservableList tự động cập nhật
-        // nhưng để đảm bảo dữ liệu mới nhất từ DB, initializeData an toàn hơn.
+        initializeData();
     }
 
-
-    /**
-     * Export data to Excel
-     */
     private void exportToExcel() {
-        // This would integrate with an export service in a real implementation
-        showInfo("Đang xuất danh sách lớp học sang Excel...");
+        showInfo("Chức năng Xuất Excel đang được phát triển.");
     }
 
-
-    /**
-     * Search classes by keyword
-     */
     private void searchClasses(String keyword) {
-        // This would filter the table based on the search keyword
-        showInfo("Đang tìm kiếm: " + keyword);
+        // Tạm thời sẽ filter trên client, nếu dữ liệu lớn cần filter ở server
+        ObservableList<ClassInfo> allItems = FXCollections.observableArrayList();
+        // Tạo một bản sao của danh sách gốc để không làm mất dữ liệu gốc khi filter
+        // Hoặc tốt hơn là gọi lại initializeData() nếu muốn tìm kiếm từ DB.
+        // Để đơn giản, filter trên danh sách `classes` hiện tại.
+        // Cần một danh sách `originalClasses` để lưu trữ toàn bộ dữ liệu ban đầu.
+        // Trong initializeData(): this.originalClasses.setAll(this.classes);
+        // Sau đó filter từ this.originalClasses và set cho classesTable.setItems(filteredList);
+
+        // Ví dụ đơn giản filter trực tiếp trên `classes` (sẽ mất dữ liệu gốc nếu không backup)
+        // Tốt nhất là nên có một list gốc và một list hiển thị (đã filter)
+        if (keyword == null || keyword.trim().isEmpty()) {
+            // Nếu tìm kiếm từ DB, gọi lại initializeData() hoặc một phương thức tìm kiếm chuyên biệt
+            initializeData(); // Tạm thời tải lại toàn bộ
+            // classesTable.setItems(classes); // Nếu `classes` là list gốc không đổi
+            return;
+        }
+        String lowerCaseKeyword = keyword.toLowerCase();
+        ObservableList<ClassInfo> filteredList = FXCollections.observableArrayList();
+        // Cần có danh sách gốc để filter, ở đây tạm filter trên `this.classes`
+        // Điều này có nghĩa là nếu filter nhiều lần, nó sẽ filter trên kết quả filter trước đó.
+        // Đây là một điểm cần cải thiện bằng cách giữ 1 list gốc.
+        for (ClassInfo classInfo : this.classes) { // Nên filter từ 1 list gốc
+            if ((classInfo.getName() != null && classInfo.getName().toLowerCase().contains(lowerCaseKeyword)) ||
+                    (classInfo.getCode() != null && classInfo.getCode().toLowerCase().contains(lowerCaseKeyword)) ||
+                    (classInfo.getTeacher() != null && classInfo.getTeacher().toLowerCase().contains(lowerCaseKeyword))) {
+                filteredList.add(classInfo);
+            }
+        }
+        classesTable.setItems(filteredList); // Hiển thị danh sách đã lọc
     }
 
 
-    /**
-     * Handle view students action
-     */
-    private void handleViewStudents(ClassInfo classInfo) {
-        // Navigate to students list for this class
-        showInfo("Xem danh sách học viên của lớp: " + classInfo.getName());
-    }
-
-
-    /**
-     * Handle more actions for a class
-     */
-    private void handleMoreActions(ClassInfo classInfo) {
-        // Show a context menu with more actions
+    private void handleMoreActions(ClassInfo classInfo, Control anchorNode) {
         ContextMenu contextMenu = new ContextMenu();
         MenuItem editItem = new MenuItem("Chỉnh sửa");
         MenuItem deleteItem = new MenuItem("Xóa");
-        MenuItem detailsItem = new MenuItem("Xem chi tiết");
 
-        editItem.setOnAction(e -> showInfo("Chỉnh sửa lớp: " + classInfo.getName()));
-
+        editItem.setOnAction(e -> showInfo("Chỉnh sửa lớp (chưa triển khai): " + classInfo.getName()));
         deleteItem.setOnAction(e -> {
             Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
             confirmAlert.setTitle("Xác nhận xóa");
-            confirmAlert.setHeaderText("Xóa lớp học");
-            confirmAlert.setContentText("Bạn có chắc chắn muốn xóa lớp " + classInfo.getName() + "?");
-
+            confirmAlert.setHeaderText("Xóa lớp học: " + classInfo.getName());
+            confirmAlert.setContentText("Bạn có chắc chắn muốn xóa lớp học này?");
             Optional<ButtonType> result = confirmAlert.showAndWait();
             if (result.isPresent() && result.get() == ButtonType.OK) {
-                showInfo("Đã xóa lớp: " + classInfo.getName());
+                boolean deleted = courseDAO.delete(classInfo.getCode()); // Giả sử có phương thức delete
+                if(deleted){
+                    showInfo("Đã xóa lớp: " + classInfo.getName());
+                    loadClasses(); // Tải lại danh sách
+                } else {
+                    showInfo("Không thể xóa lớp: " + classInfo.getName());
+                }
             }
         });
-
-        detailsItem.setOnAction(e -> showInfo("Xem chi tiết lớp: " + classInfo.getName()));
-
-        contextMenu.getItems().addAll(editItem, deleteItem, new SeparatorMenuItem(), detailsItem);
-
-        Button source = (Button) ((HBox) classesTable.getScene().getFocusOwner()).getChildren().get(0);
-        contextMenu.show(source, javafx.geometry.Side.BOTTOM, 0, 0);
-    }
-    private void addCourseToTableView(Course course) {
-        addCourseToTableView(course, classes.size() + 1);
+        contextMenu.getItems().addAll(editItem, deleteItem);
+        contextMenu.show(anchorNode, javafx.geometry.Side.BOTTOM, 0, 0);
     }
 
-    // Thêm phương thức addCourseToTableView với tham số stt
-    // Trong ClassListScreenView.java
-    private void addCourseToTableView(Course course, int stt) {
-        String progress = "0/100"; // Mặc định
-        if (course.getProgress() > 0) {
-            progress = Math.round(course.getProgress()) + "/100";
-        }
-        LocalDate actualStartDate = course.getStartDate();
-        LocalDate actualEndDate = course.getEndDate();
-        // Sử dụng dateFormatter của lớp và kiểm tra null
-        String startDateStr = "N/A"; // Giá trị mặc định nếu null
-        if (course.getStartDate() != null) { // course.getDate().getStartDate() tương đương course.getStartDate()
-            startDateStr = course.getStartDate().format(this.dateFormatter); //Sử dụng this.dateFormatter
-        }
-
-        String endDateStr = "N/A"; // Giá trị mặc định nếu null
-        if (course.getEndDate() != null) { // course.getDate().getEndDate() tương đương course.getEndDate()
-            endDateStr = course.getEndDate().format(this.dateFormatter); // Sử dụng this.dateFormatter
-        }
-
-        String classDate = course.getDayOfWeek() != null ? course.getDayOfWeek() : "N/A";
-        String teacher = course.getTeacher() != null ? course.getTeacher().toString() : "Chưa phân công"; // Kiểm tra null cho teacher là tốt
-
-        ClassInfo classInfo = new ClassInfo(
-                stt,
-                course.getCourseId(),
-                course.getCourseName(),
-                "Đang học", // Trạng thái (có thể cần cập nhật động)
-                actualStartDate,    // Truyền LocalDate
-                actualEndDate,      // Truyền LocalDate
-                teacher,
-                classDate
-        );
-
-        classes.add(classInfo);
-        // classesTable.refresh(); // <<--- XÓA DÒNG NÀY
-    }
-    // Thêm phương thức loadCoursesFromFile (không phải static)
-    @SuppressWarnings("unchecked")
-    // Thêm phương thức showCreateClassDialog
     private void showCreateClassDialog() {
-        Person currentUser = getCurrentUser(); // Giả sử bạn có phương thức này
-        boolean canCreateClass = false;
-        if (currentUser != null && currentUser.getRole() != null) {
-            canCreateClass = RolePermissions.hasPermission(currentUser.getRole(), Permission.CREATE_CLASS);
-        }
+        Person currentUser = getCurrentUser();
+        boolean canCreateClass = currentUser != null && currentUser.getRole() != null &&
+                RolePermissions.hasPermission(currentUser.getRole(), Permission.CREATE_CLASS);
         if (!canCreateClass) {
             showInfo("Bạn không có quyền tạo lớp học mới.");
             return;
         }
-        // Đảm bảo courseDAO đã được khởi tạo và cấu hình đúng
-        // Nếu courseDAO chưa được khởi tạo ở constructor hoặc initializeData,
-        // bạn CẦN phải khởi tạo và cấu hình nó ở đây trước khi truyền đi.
-        // Ví dụ (NẾU CHƯA LÀM Ở CONSTRUCTOR):
-        if (this.classroomDAO == null) {
-            this.classroomDAO = new ClassroomDAO(); // Ensure ClassroomDAO is initialized
-        }
-        if (this.courseDAO == null) {
-            StudentDAO studentDAO = new StudentDAO(); // Cần khởi tạo thực tế
-            TeacherDAO teacherDAO = new TeacherDAO(); // Cần khởi tạo thực tế
-            this.courseDAO = new CourseDAO();
-            this.courseDAO.setStudentDAO(studentDAO);
-            this.courseDAO.setTeacherDAO(teacherDAO);
+        if (this.courseDAO == null || this.classroomDAO == null) {
+            System.err.println("Lỗi: CourseDAO hoặc ClassroomDAO chưa được khởi tạo.");
+            showInfo("Lỗi hệ thống: Không thể mở form tạo lớp.");
             return;
         }
-
-        // Truyền this.courseDAO vào constructor của CreateClassScreenView
         CreateClassScreenView createClassScreen = new CreateClassScreenView(
-                this.courseDAO,    // Pass existing CourseDAO
-                this.classroomDAO, // Pass existing ClassroomDAO
-                new CreateClassScreenView.CreateClassCallback() {
-                    @Override
-                    public void onCourseCreated(Course successfullySavedCourse) {
-                        // Add the newly created course to the table view
-                        addCourseToTableView(successfullySavedCourse, classes.size() + 1);
-                        showInfo("Đã tạo và lưu lớp học thành công: " + successfullySavedCourse.getCourseName());
-                    }
+                this.courseDAO,
+                this.classroomDAO,
+                successfullySavedCourse -> {
+                    loadClasses();
+                    showInfo("Đã tạo và lưu lớp học thành công: " + successfullySavedCourse.getCourseName());
                 }
         );
         createClassScreen.show();
@@ -1038,14 +808,10 @@ public class ClassListScreenView extends BaseScreenView {
 
     @Override
     public void refreshView() {
-        System.out.println(getViewId() + " đang làm mới dữ liệu từ cơ sở dữ liệu..."); // Thêm log để theo dõi
-        initializeData(); // Gọi initializeData để tải lại và làm mới toàn bộ
+        System.out.println(getViewId() + " đang làm mới dữ liệu từ cơ sở dữ liệu...");
+        initializeData();
     }
 
-
-    /**
-     * Show information in a dialog
-     */
     private void showInfo(String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Thông báo");
@@ -1054,10 +820,6 @@ public class ClassListScreenView extends BaseScreenView {
         alert.showAndWait();
     }
 
-
-    /**
-     * Class representing a row in the classes table
-     */
     public static class ClassInfo {
         private final SimpleStringProperty code;
         private final SimpleStringProperty name;
@@ -1067,125 +829,47 @@ public class ClassListScreenView extends BaseScreenView {
         private final SimpleStringProperty teacher;
         private final SimpleStringProperty manager;
         private final SimpleStringProperty classDate;
-        private final LocalDate actualStartDate;
-        private final LocalDate actualEndDate;
         private final SimpleStringProperty displayedProgress;
         private final int stt;
         private boolean selected;
-        private String statusLabel;
-
+        // private final LocalDate actualStartDate; // Giữ lại nếu còn dùng ở đâu đó
+        // private final LocalDate actualEndDate;   // Giữ lại nếu còn dùng ở đâu đó
 
         public ClassInfo(int stt, String code, String name, String status,
-                         LocalDate actualStartDate, LocalDate actualEndDate, // Sửa ở đây để nhận LocalDate
-                         String teacherName, String classDateString) { // Đổi tên tham số cho rõ ràng
+                         LocalDate actualStartDate, LocalDate actualEndDate,
+                         String teacherName, String classDateString,
+                         String progressDisplayString) {
             this.stt = stt;
             this.code = new SimpleStringProperty(code);
             this.name = new SimpleStringProperty(name);
             this.status = new SimpleStringProperty(status);
 
-            // Gán giá trị cho actualStartDate và actualEndDate TRƯỚC
-            this.actualStartDate = actualStartDate;
-            this.actualEndDate = actualEndDate;
+            // this.actualStartDate = actualStartDate; // Gán nếu cần giữ
+            // this.actualEndDate = actualEndDate;     // Gán nếu cần giữ
 
-            // Khởi tạo displayedProgress SAU KHI actualStartDate và actualEndDate đã có giá trị
-            this.displayedProgress = new SimpleStringProperty(calculateProgressDisplay());
-
-            // Khởi tạo các SimpleStringProperty cho ngày tháng để hiển thị
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-            this.startDate = new SimpleStringProperty(this.actualStartDate != null ? this.actualStartDate.format(formatter) : "N/A");
-            this.endDate = new SimpleStringProperty(this.actualEndDate != null ? this.actualEndDate.format(formatter) : "N/A");
+            this.startDate = new SimpleStringProperty(actualStartDate != null ? actualStartDate.format(formatter) : "N/A");
+            this.endDate = new SimpleStringProperty(actualEndDate != null ? actualEndDate.format(formatter) : "N/A");
 
-            this.teacher = new SimpleStringProperty(teacherName != null ? teacherName : "");
-            this.manager = new SimpleStringProperty(teacherName != null ? teacherName : ""); // Giả sử manager là teacher
-            this.classDate = new SimpleStringProperty(classDateString);
+            this.teacher = new SimpleStringProperty(teacherName != null && !teacherName.trim().isEmpty() ? teacherName : "Chưa có");
+            this.manager = new SimpleStringProperty(teacherName != null && !teacherName.trim().isEmpty() ? teacherName : "Chưa có");
+            this.classDate = new SimpleStringProperty(classDateString != null ? classDateString : "N/A");
             this.selected = false;
+            this.displayedProgress = new SimpleStringProperty(progressDisplayString);
         }
 
-        private String calculateProgressDisplay() {
-            if (actualStartDate == null || actualEndDate == null || actualStartDate.isAfter(actualEndDate)) {
-                return "N/A";
-            }
-            LocalDate today = LocalDate.now();
-            long totalWeeks = java.time.temporal.ChronoUnit.WEEKS.between(actualStartDate, actualEndDate);
-            if (totalWeeks < 0) totalWeeks = 0;
-            long totalSessions = totalWeeks + 1;
-            if (today.isBefore(actualStartDate)) return "0/" + totalSessions;
-            if (today.isAfter(actualEndDate) || today.isEqual(actualEndDate)) return totalSessions + "/" + totalSessions;
-            long weeksPassed = java.time.temporal.ChronoUnit.WEEKS.between(actualStartDate, today);
-            long currentSession = weeksPassed + 1;
-            if (currentSession > totalSessions) currentSession = totalSessions;
-            return currentSession + "/" + totalSessions;
-        }
-        public int getStt() {
-            return stt;
-        }
-        public String getDisplayedProgress() {
-            return displayedProgress.get();
-        }
-
-        public SimpleStringProperty displayedProgressProperty() {
-            return displayedProgress;
-        }
-
-        public String getCode() {
-            return code.get();
-        }
-
-
-        public String getName() {
-            return name.get();
-        }
-
-
-        public String getStatus() {
-            return status.get();
-        }
-
-        public void setStatusLabel(String statusLabel) {
-            this.statusLabel = statusLabel;
-        }
-
-        public String getStatusLabel() {
-            return statusLabel;
-        }
-
-
-
-
-        public String getStartDate() {
-            return startDate.get();
-        }
-
-
-        public String getEndDate() {
-            return endDate.get();
-        }
-
-
-        public String getTeacher() {
-            return teacher.get();
-        }
-
-
-        public String getManager() {
-            return manager.get();
-        }
-
-
-        public String getClassDate() {
-            return classDate.get();
-        }
-
-
-        public boolean isSelected() {
-            return selected;
-        }
-
-
-        public void setSelected(boolean selected) {
-            this.selected = selected;
-        }
+        public int getStt() { return stt; }
+        public String getCode() { return code.get(); }
+        public String getName() { return name.get(); }
+        public String getStatus() { return status.get(); }
+        public String getStartDate() { return startDate.get(); }
+        public String getEndDate() { return endDate.get(); }
+        public String getTeacher() { return teacher.get(); }
+        public String getManager() { return manager.get(); }
+        public String getClassDate() { return classDate.get(); }
+        public String getDisplayedProgress() { return displayedProgress.get(); }
+        public SimpleStringProperty displayedProgressProperty() { return displayedProgress; }
+        public boolean isSelected() { return selected; }
+        public void setSelected(boolean selected) { this.selected = selected; }
     }
-
-
 }

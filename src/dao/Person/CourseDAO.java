@@ -778,4 +778,46 @@ public class CourseDAO {
             return stmt.executeUpdate() > 0;
         }
     }
+
+    /**
+     * Tìm tổng số buổi học (total_sessions) cho một mã lớp (class_id).
+     * Thông tin này được lấy từ bảng 'classes'.
+     *
+     * @param classId ID của lớp (cohort/nhóm sinh viên).
+     * @return Optional chứa tổng số buổi học, hoặc Optional.empty() nếu không tìm thấy hoặc có lỗi.
+     */
+    public Optional<Integer> findTotalSessionsForClass(String classId) {
+        if (classId == null || classId.trim().isEmpty()) {
+            // Ghi log hoặc xử lý lỗi nếu classId không hợp lệ
+            System.err.println("[CourseDAO] findTotalSessionsForClass: classId không được null hoặc rỗng.");
+            return Optional.empty();
+        }
+
+        String sql = "SELECT total_sessions FROM classes WHERE class_id = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, classId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    // Cột total_sessions có thể là NULL trong CSDL
+                    int totalSessions = rs.getInt("total_sessions");
+                    if (rs.wasNull()) {
+                        // Nếu giá trị trong CSDL là NULL, trả về Optional.empty()
+                        // để phân biệt với trường hợp giá trị là 0.
+                        return Optional.empty();
+                    }
+                    return Optional.of(totalSessions);
+                }
+            }
+        } catch (SQLException e) {
+            // Ghi log lỗi
+            System.err.println("[CourseDAO] Lỗi SQL khi tìm tổng số buổi học cho class ID: " + classId + " - " + e.getMessage());
+            // LOGGER.log(Level.SEVERE, "Lỗi SQL khi tìm tổng số buổi học cho class ID: " + classId, e); // Nếu bạn dùng Logger
+        }
+        return Optional.empty(); // Trả về empty nếu không tìm thấy hoặc có lỗi
+    }
+
 }

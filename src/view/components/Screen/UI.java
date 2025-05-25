@@ -593,6 +593,7 @@ public class UI {
         button.setStyle("-fx-background-color: transparent; -fx-text-fill: #666; -fx-font-size: 13px; -fx-border-color: transparent;");
 
         // Hover effect
+
         button.setOnMouseEntered(e ->
                 button.setStyle("-fx-background-color: #e9e9e9; -fx-text-fill: #333; -fx-font-size: 13px;"));
 
@@ -609,81 +610,6 @@ public class UI {
         });
 
         return button;
-    }
-
-    /**
-     * Tạo nút điều hướng cho sidebar
-     * @param text Chữ hiển thị trên nút
-     * @param iconName Tên icon
-     * @param route Đường dẫn điều hướng
-     * @return Button đã được cấu hình
-     */
-    private Button createSidebarButton(String text, String iconName, String route) {
-        Button button = new Button(text);
-        button.setPadding(new Insets(15, 20, 15, 20));
-        button.setMaxWidth(Double.MAX_VALUE);
-        button.setAlignment(Pos.CENTER_LEFT);
-        button.setStyle("-fx-background-color: transparent; -fx-text-fill: #666; -fx-font-size: 14px; -fx-border-color: transparent;");
-
-        try {
-            ImageView icon = new ImageView(new Image(getClass().getResourceAsStream("/images/" + iconName + ".png")));
-            icon.setFitHeight(18);
-            icon.setFitWidth(18);
-            button.setGraphic(icon);
-        } catch (Exception e) {
-            // Nếu không tìm thấy icon, dùng emoji hoặc text
-            String emoji = "";
-            switch (iconName) {
-                case "message": emoji = "💬"; break;
-                case "training": emoji = "📚"; break;
-                case "student": emoji = "👥"; break;
-                case "report": emoji = "📊"; break;
-                case "manage": emoji = "⚙️"; break;
-                default: emoji = "•";
-            }
-            Label iconLabel = new Label(emoji);
-            iconLabel.setMinWidth(30);
-            button.setGraphic(iconLabel);
-        }
-
-        // Hover effect
-        button.setOnMouseEntered(e -> button.setStyle("-fx-background-color: #f5f5f5; -fx-text-fill: #333; -fx-font-size: 14px; -fx-border-color: transparent;"));
-        button.setOnMouseExited(e -> button.setStyle("-fx-background-color: transparent; -fx-text-fill: #666; -fx-font-size: 14px; -fx-border-color: transparent;"));
-
-        // Gắn sự kiện điều hướng
-        button.setOnAction(e -> {
-            if (navigationController != null) {
-                navigationController.navigateTo(route);
-                // Ẩn tất cả submenu khi chuyển đến route khác
-                hideAllSubmenus();
-                resetMenuHeaderStyles();
-                currentSelectedMenu = "";
-            }
-        });
-
-        return button;
-    }
-
-    /**
-     * Ẩn tất cả các submenu
-     */
-    private void hideAllSubmenus() {
-        if (trainingSubmenu != null) {
-            trainingSubmenu.setVisible(false);
-            trainingSubmenu.setManaged(false);
-        }
-        if (studentSubmenu != null) {
-            studentSubmenu.setVisible(false);
-            studentSubmenu.setManaged(false);
-        }
-        if (reportSubmenu != null) {
-            reportSubmenu.setVisible(false);
-            reportSubmenu.setManaged(false);
-        }
-        if (manageSubmenu != null) {
-            manageSubmenu.setVisible(false);
-            manageSubmenu.setManaged(false);
-        }
     }
 
     /**

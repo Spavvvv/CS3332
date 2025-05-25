@@ -187,6 +187,7 @@ public class UserProfileView extends BaseScreenView {
     private void handleLogout() {
         System.out.println("UserProfileView (" + this.hashCode() + "): Logging out...");
         if (getMainController() != null) {
+
             // Đóng cửa sổ hiện tại (cửa sổ chính của ứng dụng)
             Stage currentStage = (Stage) root.getScene().getWindow();
             currentStage.close();
