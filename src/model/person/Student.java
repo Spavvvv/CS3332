@@ -82,5 +82,6 @@ public class Student extends Person {
                 ", Parent Name: " + (parentName != null ? parentName : "None") +
                 ", Parent Phone: " + (parentPhoneNumber != null ? parentPhoneNumber : "None");
     }
+
 }
 

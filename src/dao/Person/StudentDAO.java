@@ -8,6 +8,8 @@ import src.model.system.course.Course;
 
 
 import src.utils.DatabaseConnection;
+
+import java.time.LocalDate;
 import java.util.UUID;
 import java.sql.*;
 import java.util.ArrayList;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * Data Access Object for Student entities
@@ -52,7 +55,9 @@ public class StudentDAO {
      * @throws SQLException if a database access error occurs
      */
     public boolean insertStudent(Student student) throws SQLException {
-        String sql = "INSERT INTO students (id, name, gender, contact_number, birthday, email, course_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO students (id, user_id, name, gender, contact_number, birthday, email, " +
+                "address, status, Parent_Name, Parent_PhoneNumber) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         // Assuming your students table has a class_id column. Adjust if needed.
 
         try (Connection conn = DatabaseConnection.getConnection();
@@ -240,12 +245,13 @@ public class StudentDAO {
      * @throws SQLException if a database access error occurs
      */
     public Student getStudentById(Connection conn, String studentId) throws SQLException {
-        String sql = "SELECT id, name, gender, contact_number, birthday, email, course_id, Parent_Name, Parent_PhoneNumber FROM students WHERE id = ?";
-        // Assuming students table has class_id
-
+        String sql = "SELECT s.id AS s_id, s.name AS s_name, s.gender AS s_gender, " +
+                "s.contact_number AS s_contact_number, s.birthday AS s_birthday, s.email AS s_email, " +
+                "s.Parent_Name AS s_parent_name, s.Parent_PhoneNumber AS s_parent_phone_number " +
+                // Thêm các cột khác từ bảng students với alias "s_" nếu extractStudentFromResultSet cần
+                "FROM students s WHERE s.id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, studentId);
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
                     return extractStudentFromResultSet(resultSet);
@@ -264,31 +270,32 @@ public class StudentDAO {
      * @return the Student object with basic details or null if not found
      * @throws SQLException if a database access error occurs
      */
-    public Student getStudentById(String studentId) throws SQLException {
+    public Student getStudentById(String studentId) throws SQLException { // Public wrapper
         try (Connection conn = DatabaseConnection.getConnection()) {
             return getStudentById(conn, studentId);
         }
     }
+
     public List<Student> getStudentsByIds(Connection conn, List<String> studentIds) throws SQLException {
         List<Student> students = new ArrayList<>();
         if (studentIds == null || studentIds.isEmpty()) {
             return students;
         }
 
-        String placeholders = String.join(",", studentIds.stream().map(id -> "?").toList());
-        String sql = "SELECT id, name, birthday, contact_number FROM students WHERE id IN (" + placeholders + ")";
+        String placeholders = studentIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        String sql = "SELECT s.id AS s_id, s.name AS s_name, s.gender AS s_gender, " +
+                "s.contact_number AS s_contact_number, s.birthday AS s_birthday, s.email AS s_email, " +
+                "s.Parent_Name AS s_parent_name, s.Parent_PhoneNumber AS s_parent_phone_number " +
+                // Thêm các cột khác từ bảng students với alias "s_" nếu extractStudentFromResultSet cần
+                "FROM students s WHERE s.id IN (" + placeholders + ")";
+
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             for (int i = 0; i < studentIds.size(); i++) {
                 statement.setString(i + 1, studentIds.get(i));
             }
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    Student student = new Student();
-                    student.setId(resultSet.getString("id"));
-                    student.setName(resultSet.getString("name"));
-                    student.setBirthday(resultSet.getString("birthday"));
-                    student.setContactNumber(resultSet.getString("contact_number"));
-                    students.add(student);
+                    students.add(extractStudentFromResultSet(resultSet));
                 }
             }
         }
@@ -340,7 +347,11 @@ public class StudentDAO {
      */
     public List<Student> getAllStudents() throws SQLException {
         List<Student> students = new ArrayList<>();
-        String sql = "SELECT id, name, gender, contact_number, birthday, Parent_Name, Parent_PhoneNumber FROM students";
+        String sql = "SELECT s.id AS s_id, s.name AS s_name, s.gender AS s_gender, " +
+                "s.contact_number AS s_contact_number, s.birthday AS s_birthday, s.email AS s_email, " +
+                "s.Parent_Name AS s_parent_name, s.Parent_PhoneNumber AS s_parent_phone_number " +
+                // Thêm các cột khác từ bảng students với alias "s_" nếu extractStudentFromResultSet cần
+                "FROM students s";
 
         try (Connection conn = DatabaseConnection.getConnection();
              Statement statement = conn.createStatement();
@@ -363,7 +374,10 @@ public class StudentDAO {
      */
     public List<Student> searchStudents(String searchTerm) throws SQLException {
         List<Student> students = new ArrayList<>();
-        String sql = "SELECT id, name, gender, contact_number, birthday, email, class_id FROM students WHERE name LIKE ? OR email LIKE ?";
+        String sql = "SELECT s.id AS s_id, s.name AS s_name, s.gender AS s_gender, " +
+                "s.contact_number AS s_contact_number, s.birthday AS s_birthday, s.email AS s_email, " +
+                "s.Parent_Name AS s_parent_name, s.Parent_PhoneNumber AS s_parent_phone_number " +
+                "FROM students s WHERE s.name LIKE ? OR s.email LIKE ?";
         // Assuming students table has class_id
 
         try (Connection conn = DatabaseConnection.getConnection();
@@ -389,10 +403,29 @@ public class StudentDAO {
      * @return true if successful
      * @throws SQLException if a database access error occurs
      */
-    private boolean enrollStudentInCourse(Connection conn, String studentId, String courseId) {
-        System.out.println("DEBUG: enrollStudentInCourse is currently not active. Skipping interaction.");
-        return true; // Return true nhưng không thực hiện gì liên quan tới DB
+    // Phương thức enrollStudentInCourse (để thêm vào bảng 'enrollment')
+    private boolean enrollStudentInCourse(Connection conn, String studentId, String courseId) throws SQLException {
+        String checkSql = "SELECT COUNT(*) FROM enrollment WHERE student_id = ? AND course_id = ?";
+        try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
+            checkStmt.setString(1, studentId);
+            checkStmt.setString(2, courseId);
+            try (ResultSet rs = checkStmt.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    LOGGER.info("Student " + studentId + " is already enrolled in course " + courseId);
+                    return true;
+                }
+            }
+        }
 
+        String sql = "INSERT INTO enrollment (enrollment_id, student_id, course_id, enrollment_date, status) VALUES (?, ?, ?, ?, ?)";
+        try (PreparedStatement statement = conn.prepareStatement(sql)) {
+            statement.setString(1, UUID.randomUUID().toString());
+            statement.setString(2, studentId);
+            statement.setString(3, courseId);
+            statement.setDate(4, java.sql.Date.valueOf(LocalDate.now()));
+            statement.setString(5, "ENROLLED");
+            return statement.executeUpdate() > 0;
+        }
     }
 
     public boolean enrollStudentInCourse(String studentId, String courseId) throws SQLException {
@@ -488,22 +521,23 @@ public class StudentDAO {
      */
 
     private Student extractStudentFromResultSet(ResultSet resultSet) throws SQLException {
-        String id = resultSet.getString("id");
-        String name = resultSet.getString("name");
-        String gender = resultSet.getString("gender");
-        String contactNumber = resultSet.getString("contact_number");
-        String birthday = resultSet.getString("birthday");
-        String parentName = resultSet.getString("Parent_Name"); // Thêm thông tin phụ huynh
-        String parentPhoneNumber = resultSet.getString("Parent_PhoneNumber"); // Thêm số ĐT phụ huynh
-
         Student student = new Student();
-        student.setId(id);
-        student.setName(name);
-        student.setGender(gender);
-        student.setContactNumber(contactNumber);
-        student.setBirthday(birthday);
-        student.setParentName(parentName); // Đặt thông tin phụ huynh
-        student.setParentPhoneNumber(parentPhoneNumber); // Đặt số ĐT phụ huynh
+        student.setId(resultSet.getString("s_id"));
+        student.setName(resultSet.getString("s_name"));
+        student.setGender(resultSet.getString("s_gender"));
+        student.setContactNumber(resultSet.getString("s_contact_number"));
+        student.setBirthday(resultSet.getString("s_birthday")); // Student model cần setter này
+        student.setEmail(resultSet.getString("s_email"));
+        // student.setCourseId(...); // Không còn cột này trong bảng students
+        student.setParentName(resultSet.getString("s_parent_name"));
+        student.setParentPhoneNumber(resultSet.getString("s_parent_phone_number"));
+
+        // Kiểm tra và lấy các cột tùy chọn khác nếu chúng tồn tại trong ResultSet
+        // (Cần một helper method 'hasColumn' hoặc kiểm tra metadata nếu các query khác nhau)
+        // Ví dụ (giả sử bạn có hàm hasColumn):
+        // if (hasColumn(resultSet, "s_user_id")) student.setUserId(resultSet.getString("s_user_id"));
+        // if (hasColumn(resultSet, "s_address")) student.setAddress(resultSet.getString("s_address"));
+        // if (hasColumn(resultSet, "s_status")) student.setStatus(resultSet.getString("s_status"));
         return student;
     }
 
@@ -576,30 +610,34 @@ public class StudentDAO {
         }
     }
 
-    public List<Student> findBySessionId(String sessionId) throws SQLException {
+    /**
+     * Finds all students ENROLLED in a specific course by querying the enrollment table.
+     * Manages its own connection.
+     * Cập nhật: Không còn lấy students.course_id nữa.
+     *
+     * @param courseIdToFilter The ID of the course to find enrolled students for.
+     * @return A list of students enrolled in the specified course.
+     */
+    public List<Student> findByCourseId(String courseIdToFilter) {
         List<Student> students = new ArrayList<>();
-        // This SQL assumes a direct link or an intermediate table like session_student or attendance
-        // If students are linked to sessions via their class, and sessions are linked to classes,
-        // the join might be more complex (e.g., students -> classes -> class_sessions).
-        // The current query assumes a table `session_student` links students directly to sessions.
-        // If your schema is different (e.g., students have a class_id, and sessions have a class_id),
-        // you would query students by the class_id associated with the session_id.
+        if (courseIdToFilter == null || courseIdToFilter.trim().isEmpty()) {
+            LOGGER.log(Level.WARNING, "findByCourseId (StudentDAO) called with null or empty courseIdToFilter.");
+            return students;
+        }
 
-        // Let's assume for now that students are linked to sessions via an "attendance" or "session_student" table.
-        // If students are primarily identified by their `class_id` for a session, it's better to first
-        // get the `class_id` for the `sessionId` and then use `findByClassId`.
-        // However, if a session can have students from multiple classes (unlikely for typical school structure)
-        // or if there's a direct `session_student` link, this query is okay.
-
-        String sql = "SELECT s.id, s.name, s.gender, s.contact_number, s.birthday, s.email, s.class_id " +
+        String sql = "SELECT s.id AS s_id, s.name AS s_name, s.gender AS s_gender, " +
+                "s.contact_number AS s_contact_number, s.birthday AS s_birthday, s.email AS s_email, " +
+                "s.Parent_Name AS s_parent_name, s.Parent_PhoneNumber AS s_parent_phone_number " +
+                // Thêm các cột khác từ bảng students với alias "s_" nếu extractStudentFromResultSet cần
+                // Ví dụ: ", s.user_id AS s_user_id, s.address AS s_address, s.status AS s_status "
                 "FROM students s " +
-                "JOIN attendance a ON s.id = a.student_id " + // Or session_student table
-                "WHERE a.session_id = ?";
+                "JOIN enrollment e ON s.id = e.student_id " +
+                "WHERE e.course_id = ?";
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement statement = conn.prepareStatement(sql)) {
 
-            statement.setString(1, sessionId);
+            statement.setString(1, courseIdToFilter);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
@@ -607,43 +645,7 @@ public class StudentDAO {
                 }
             }
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error finding students by session ID: " + sessionId, e);
-            throw e;
-        }
-        return students;
-    }
-  
-     //* Finds all students belonging to a specific class ID.
-     //* Manages its own connection.
-     //* Returns students with basic data only (including their class_id).
-     //*
-     //* @param classId The ID of the class.
-     //* @return A list of students belonging to the class. Returns an empty list if no students are found or on error.
-     //*/
-    public List<Student> findByCourseId(String course_id) {
-        List<Student> students = new ArrayList<>();
-        // Ensure your 'students' table has a 'class_id' column or similar foreign key to the 'classes' table.
-        String sql = "SELECT id, name, gender, contact_number, birthday, email, course_id, Parent_Name, Parent_PhoneNumber FROM students WHERE course_id = ?";
-
-        if (course_id == null || course_id.trim().isEmpty()) {
-            LOGGER.log(Level.WARNING, "findByClassId called with null or empty classId.");
-            return students; // Return empty list for invalid input
-        }
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement statement = conn.prepareStatement(sql)) {
-
-            statement.setString(1, course_id);
-
-            try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    // Uses the updated extractStudentFromResultSet which includes class_id
-                    students.add(extractStudentFromResultSet(resultSet));
-                }
-            }
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error finding students by class ID: " + course_id, e);
-            // Depending on desired behavior, you might throw e or just return empty list
+            LOGGER.log(Level.SEVERE, "Error finding students by course ID (via enrollment): " + courseIdToFilter, e);
         }
         return students;
     }
@@ -1012,60 +1014,5 @@ public class StudentDAO {
         return metricsHistory;
     }
 
-    /**
-     * Lấy danh sách nộp bài tập về nhà của học sinh cho một buổi học cụ thể.
-     *
-     * @param sessionId ID của buổi học cần lấy dữ liệu
-     * @return Danh sách HomeworkSubmissionModel chứa thông tin nộp bài tập
-     * @throws SQLException nếu có lỗi truy cập cơ sở dữ liệu
-     */
-    public List<HomeworkSubmissionModel> getAttendanceForSession(String sessionId) throws SQLException {
-        List<HomeworkSubmissionModel> studentData = new ArrayList<>();
-
-        String sql = "SELECT s.student_submission_id, s.student_id, s.homework_id, s.submitted, " +
-                "s.grade, s.submission_timestamp, s.evaluator_notes, s.checked_in_session_id, " +
-                "s.punctuality_rating, s.diligence_rating, s.final_score " +
-                "FROM student_homework_submissions s " +
-                "WHERE s.checked_in_session_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement statement = conn.prepareStatement(sql)) {
-
-            statement.setString(1, sessionId);
-
-            try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    HomeworkSubmissionModel submission = new HomeworkSubmissionModel(
-                            resultSet.getString("student_submission_id"),
-                            resultSet.getString("student_id"),
-                            resultSet.getString("homework_id"),
-                            resultSet.getBoolean("submitted"),
-                            resultSet.getDouble("grade"),
-                            resultSet.getTimestamp("submission_timestamp") != null ?
-                                    resultSet.getTimestamp("submission_timestamp").toLocalDateTime() : null,
-                            resultSet.getString("evaluator_notes"),
-                            resultSet.getString("checked_in_session_id")
-                    );
-
-                    // Đặt các giá trị đánh giá bổ sung
-                    Integer punctualityRating = resultSet.getObject("punctuality_rating") != null ?
-                            resultSet.getInt("punctuality_rating") : null;
-                    submission.setPunctualityRating(punctualityRating);
-
-                    Integer diligenceRating = resultSet.getObject("diligence_rating") != null ?
-                            resultSet.getInt("diligence_rating") : null;
-                    submission.setDiligenceRating(diligenceRating);
-
-                    Integer finalScore = resultSet.getObject("final_score") != null ?
-                            resultSet.getInt("final_score") : null;
-                    submission.setFinalScore(finalScore);
-
-                    studentData.add(submission);
-                }
-            }
-        }
-
-        return studentData;
-    }
 }
 

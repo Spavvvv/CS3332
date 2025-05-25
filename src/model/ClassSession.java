@@ -46,13 +46,12 @@ public class ClassSession {
      * Constructor for full manual setup.
      * @param courseName The name of the class/cohort (from classes.class_name).
      */
-    public ClassSession(String id, String courseId, String classId, String courseName, // This is cohort name
+    public ClassSession(String id, String courseId, String courseName, // This is cohort name
                         String teacherName, String roomName, LocalDate sessionDate,
                         LocalDateTime startTime, LocalDateTime endTime,
                         int sessionNumber) {
         this.id = id;
         this.courseId = courseId; // Academic course ID
-        this.classId = classId;   // Cohort/Group ID
         this.courseName = courseName; // This is the cohort name
         this.teacherName = teacherName;
         this.roomName = roomName;

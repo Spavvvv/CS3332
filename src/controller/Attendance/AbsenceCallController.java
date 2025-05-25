@@ -105,7 +105,7 @@ public class AbsenceCallController {
     }
 
     private void loadAbsenceRecordsForSession(ClassSession session) {
-        if (session == null || session.getId() == null || session.getClassId() == null) {
+        if (session == null || session.getId() == null || session.getCourseId() == null) {
             LOGGER.warning("Invalid session (null or missing ID/ClassID) provided for loading records.");
             absenceData.clear();
             if (view != null) view.refreshTable();
@@ -113,7 +113,7 @@ public class AbsenceCallController {
         }
 
         String sessionId = session.getId();
-        String classId = session.getClassId(); // ID of the class (e.g. "10A1")
+        String classId = session.getCourseId(); // ID of the class (e.g. "10A1")
         LocalDate sessionDate = session.getDate();
         // Assuming session.getCourseName() gives the subject or general course name,
         // and you want the specific class name (like "10A1") for the AbsenceRecord's className field.
