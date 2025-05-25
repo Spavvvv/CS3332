@@ -12,7 +12,6 @@ import src.model.system.course.Course;
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime; // Đã thêm
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,10 +74,14 @@ public class DashboardDAO {
                     courseForSession.setCourseId(actualCourseId);
                     courseForSession.setCourseName(courseNameFromSession);
 
+
                     ClassSession classSession = new ClassSession(sessionId, courseForSession, teacherNameFromSession, roomFromSession,
                             sessionDate, sessionStartTime, sessionEndTime,
                             actualCourseId, sessionNumber);
                     classes.add(classSession);
+
+                    //DEBUG
+                    //System.out.println("Course_Name: "+ classSession.getCourse().getCourseName());
                 }
             }
         } catch (SQLException e) {

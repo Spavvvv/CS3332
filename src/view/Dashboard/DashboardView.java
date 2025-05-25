@@ -448,7 +448,7 @@ public class DashboardView extends BaseScreenView {
 
 
         VBox classDetails = new VBox(2);
-        Label classNameLabel = new Label(session.getCourseName() != null ? session.getCourseName() : "N/A");
+        Label classNameLabel = new Label(session.getCourse().getCourseName() != null ? session.getCourse().getCourseName() : "N/A");
         classNameLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #2C3E50;");
         String timeString = (session.getStartTime() != null ? session.getStartTime().toLocalTime().format(TIME_FORMATTER) : "N/A") +
                 " - " +
@@ -649,7 +649,7 @@ public class DashboardView extends BaseScreenView {
                 alert.setTitle("Chi tiết Buổi học");
                 alert.setHeaderText("Thông tin buổi học ID: " + sessionId);
                 alert.setContentText(
-                        "Lớp: " + foundSession.getCourseName() + "\n" +
+                        "Lớp: " + foundSession.getCourse().getCourseName() + "\n" +
                                 "Giáo viên: " + foundSession.getTeacher() + "\n" +
                                 "Phòng: " + foundSession.getRoom() + "\n" +
                                 "Thời gian: " + (foundSession.getStartTime() != null ? foundSession.getStartTime().toLocalTime().format(TIME_FORMATTER) : "N/A") +

@@ -95,7 +95,7 @@ public class Course {
     }
 
     public String getCourseName() {
-        return courseName;
+        return this.courseName;
     }
 
     public void setCourseName(String courseName) {
