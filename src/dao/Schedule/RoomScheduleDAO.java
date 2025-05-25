@@ -3,6 +3,10 @@ package src.dao.Schedule;
 import src.model.system.schedule.RoomSchedule;
 import src.model.system.course.Course;
 import src.utils.DatabaseConnection;
+import src.dao.Person.CourseDAO; // THÊM IMPORT
+import src.dao.Person.TeacherDAO; // CourseDAO sẽ cần TeacherDAO, đảm bảo nó được thiết lập
+import src.dao.Person.StudentDAO; // CourseDAO sẽ cần StudentDAO, đảm bảo nó được thiết lập
+import src.utils.DaoManager; // Hoặc cách bạn quản lý DAO instances
 
 import java.sql.*;
 import java.time.LocalDateTime;
@@ -11,19 +15,23 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/**
- * DAO for RoomSchedule operations
- */
 public class RoomScheduleDAO {
 
     private static final Logger LOGGER = Logger.getLogger(RoomScheduleDAO.class.getName());
+    private CourseDAO courseDAO ;
+    //private final DaoManager DaoManager;
 
     /**
-     * Constructor.
+     * Constructor with CourseDAO dependency.
      */
     public RoomScheduleDAO() {
-        // No dependencies to inject for this DAO based on current implementation
+        //this.courseDAO = DaoManager.getInstance().getCourseDAO();
     }
+
+    public void setCourseDAO(CourseDAO courseDAO){
+        this.courseDAO = courseDAO;
+    }
+
 
     /**
      * Find a room schedule by ID
@@ -54,10 +62,7 @@ public class RoomScheduleDAO {
                             rs.getInt("capacity"),
                             rs.getString("room_type")
                     );
-
-                    // Load scheduled courses
                     loadScheduledCourses(connection, roomSchedule);
-
                     return roomSchedule;
                 }
             }
@@ -66,7 +71,6 @@ public class RoomScheduleDAO {
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error finding room schedule by ID: " + id, e);
         }
-
         return null;
     }
 
@@ -76,7 +80,9 @@ public class RoomScheduleDAO {
             LOGGER.log(Level.WARNING, "Attempted to load scheduled courses with null connection, roomSchedule, or room ID.");
             return;
         }
-        String query = "SELECT course_id, course_name, subject, start_date, end_date, room_id " +
+        // SỬA ĐỔI SQL: Lấy tất cả các cột cần thiết cho CourseDAO.extractCourseFromResultSet
+        String query = "SELECT course_id, course_name, subject, start_date, end_date, " +
+                "start_time, end_time, teacher_id, room_id, class_id, progress, total_sessions " +
                 "FROM courses WHERE room_id = ?";
 
         try (PreparedStatement stmt = connection.prepareStatement(query)) {
@@ -84,17 +90,12 @@ public class RoomScheduleDAO {
             try (ResultSet rs = stmt.executeQuery()) {
                 List<Course> scheduledCourses = new ArrayList<>();
                 while (rs.next()) {
-                    Course course = new Course(
-                            rs.getString("course_id"),
-                            rs.getString("course_name"),
-                            rs.getString("subject"),
-                            rs.getDate("start_date").toLocalDate(),
-                            rs.getDate("end_date").toLocalDate()
-                            // Assuming Course constructor or setters handle other fields if necessary
-                    );
-                    course.setRoomId(rs.getString("room_id"));
-
-                    scheduledCourses.add(course);
+                    // SỬA ĐỔI: Sử dụng courseDAO để tạo đối tượng Course đầy đủ
+                    // Đảm bảo rằng courseDAO đã được khởi tạo và các dependency của nó (TeacherDAO) cũng đã được set
+                    Course course = this.courseDAO.extractCourseFromResultSet(connection, rs);
+                    if (course != null) {
+                        scheduledCourses.add(course);
+                    }
                 }
                 roomSchedule.setScheduledCourses(scheduledCourses);
             }
@@ -130,10 +131,7 @@ public class RoomScheduleDAO {
                         rs.getInt("capacity"),
                         rs.getString("room_type")
                 );
-
-                // Load scheduled courses using the same connection
                 loadScheduledCourses(connection, roomSchedule);
-
                 roomSchedules.add(roomSchedule);
             }
         } catch (SQLException e) {
@@ -141,9 +139,18 @@ public class RoomScheduleDAO {
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Unexpected error finding all room schedules.", e);
         }
-
         return roomSchedules;
     }
+
+    // Các phương thức save, update, delete, findByRoomId, findAvailableRooms, assignCourseToRoom,
+    // findByRoomType, findByMinimumCapacity không trực tiếp tạo đối tượng Course từ ResultSet,
+    // nên chúng không cần thay đổi lớn liên quan đến cấu trúc Course.
+    // Phương thức assignCourseToRoom chỉ cập nhật room_id trong bảng courses.
+
+    // ... (Giữ nguyên các phương thức save, update, delete, findByRoomId, findAvailableRooms, assignCourseToRoom, findByRoomType, findByMinimumCapacity)
+    // Đảm bảo rằng các phương thức này không có lỗi tiềm ẩn nào khác liên quan đến Course.
+    // Ví dụ, nếu chúng có logic tạo đối tượng Course, logic đó cũng cần được xem xét.
+    // Tuy nhiên, dựa trên code bạn cung cấp, chúng chủ yếu thao tác với bảng schedules và room_schedules.
 
     /**
      * Save a room schedule
@@ -158,8 +165,10 @@ public class RoomScheduleDAO {
         String insertRoomScheduleSql = "INSERT INTO room_schedules (schedule_id, room_id, capacity, room_type) " +
                 "VALUES (?, ?, ?, ?)";
 
-        try (Connection connection = DatabaseConnection.getConnection()) {
-            connection.setAutoCommit(false); // Start transaction
+        Connection connection = null;
+        try {
+            connection = DatabaseConnection.getConnection();
+            connection.setAutoCommit(false);
 
             try (PreparedStatement stmtSchedule = connection.prepareStatement(insertScheduleSql)) {
                 stmtSchedule.setString(1, roomSchedule.getId());
@@ -180,7 +189,7 @@ public class RoomScheduleDAO {
                         int resultRoomSchedule = stmtRoomSchedule.executeUpdate();
 
                         if (resultRoomSchedule > 0) {
-                            connection.commit(); // Commit transaction
+                            connection.commit();
                             return true;
                         } else {
                             LOGGER.log(Level.SEVERE, "Inserting into room_schedules failed for ID: " + roomSchedule.getId() + ", rolling back.");
@@ -195,21 +204,43 @@ public class RoomScheduleDAO {
                 }
             } catch (SQLException e) {
                 LOGGER.log(Level.SEVERE, "SQL Error during saving room schedule with ID: " + roomSchedule.getId(), e);
-                connection.rollback(); // Rollback transaction on error
+                connection.rollback();
                 return false;
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Unexpected error during saving room schedule with ID: " + roomSchedule.getId(), e);
-                connection.rollback(); // Rollback transaction on error
-                return false;
-            } finally {
-                connection.setAutoCommit(true); // Restore default
             }
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Database connection error during saving room schedule.", e);
+            LOGGER.log(Level.SEVERE, "Database connection or transaction error during saving room schedule.", e);
+            // Rollback nếu connection đã được thiết lập và lỗi xảy ra trước khi rollback trong khối try-catch nội bộ
+            if (connection != null) {
+                try {
+                    if (!connection.getAutoCommit()) { // Chỉ rollback nếu transaction đang được quản lý thủ công
+                        connection.rollback();
+                    }
+                } catch (SQLException ex) {
+                    LOGGER.log(Level.SEVERE, "Error rolling back transaction on outer catch.", ex);
+                }
+            }
             return false;
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected database connection error during saving room schedule.", e);
+        } catch (Exception e) { // Bắt các lỗi không mong muốn khác
+            LOGGER.log(Level.SEVERE, "Unexpected error during saving room schedule with ID: " + (roomSchedule != null ? roomSchedule.getId() : "UNKNOWN"), e);
+            if (connection != null) {
+                try {
+                    if (!connection.getAutoCommit()) {
+                        connection.rollback();
+                    }
+                } catch (SQLException ex) {
+                    LOGGER.log(Level.SEVERE, "Error rolling back transaction on outer unexpected error catch.", ex);
+                }
+            }
             return false;
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.setAutoCommit(true);
+                    connection.close();
+                } catch (SQLException e) {
+                    LOGGER.log(Level.SEVERE, "Error restoring auto-commit or closing connection.", e);
+                }
+            }
         }
     }
 
@@ -225,9 +256,10 @@ public class RoomScheduleDAO {
                 "WHERE id = ?";
         String updateRoomScheduleSql = "UPDATE room_schedules SET room_id = ?, capacity = ?, room_type = ? " +
                 "WHERE schedule_id = ?";
-
-        try (Connection connection = DatabaseConnection.getConnection()) {
-            connection.setAutoCommit(false); // Start transaction
+        Connection connection = null;
+        try {
+            connection = DatabaseConnection.getConnection();
+            connection.setAutoCommit(false);
 
             try (PreparedStatement stmtSchedule = connection.prepareStatement(updateScheduleSql)) {
                 stmtSchedule.setString(1, roomSchedule.getName());
@@ -235,47 +267,47 @@ public class RoomScheduleDAO {
                 stmtSchedule.setTimestamp(3, Timestamp.valueOf(roomSchedule.getStartTime()));
                 stmtSchedule.setTimestamp(4, Timestamp.valueOf(roomSchedule.getEndTime()));
                 stmtSchedule.setString(5, roomSchedule.getId());
-
                 int resultSchedule = stmtSchedule.executeUpdate();
 
+                // Dù resultSchedule có thể là 0 (nếu không có gì thay đổi trong schedules),
+                // vẫn tiếp tục cập nhật room_schedules.
+                // Việc kiểm tra cả hai > 0 là để đảm bảo cả hai đều thành công nếu có thay đổi.
+                // Nếu chỉ một trong hai bảng cần cập nhật, logic này có thể cần điều chỉnh.
                 try (PreparedStatement stmtRoomSchedule = connection.prepareStatement(updateRoomScheduleSql)) {
                     stmtRoomSchedule.setString(1, roomSchedule.getRoomId());
                     stmtRoomSchedule.setInt(2, roomSchedule.getCapacity());
                     stmtRoomSchedule.setString(3, roomSchedule.getRoomType());
                     stmtRoomSchedule.setString(4, roomSchedule.getId());
-
                     int resultRoomSchedule = stmtRoomSchedule.executeUpdate();
 
-                    if (resultSchedule > 0 && resultRoomSchedule > 0) {
-                        connection.commit(); // Commit transaction
-                        return true;
-                    } else {
-                        LOGGER.log(Level.SEVERE, "Updating room schedule failed for ID: " + roomSchedule.getId() + ", resultSchedule: " + resultSchedule + ", resultRoomSchedule: " + resultRoomSchedule + ", rolling back.");
-                        connection.rollback();
-                        return false;
-                    }
+                    // Commit nếu ít nhất một trong hai câu lệnh update có tác động hoặc không có lỗi
+                    // Hoặc, nếu bạn muốn chỉ commit khi cả hai đều có result > 0 (nghĩa là cả hai đều thực sự update rows)
+                    // thì giữ nguyên: if (resultSchedule > 0 && resultRoomSchedule > 0)
+                    // Để an toàn hơn, có thể chỉ cần không có lỗi là commit, vì update không thay đổi row cũng không phải là lỗi
+                    connection.commit();
+                    return true; // Giả sử thành công nếu không có exception
+
                 } catch (SQLException e) {
-                    LOGGER.log(Level.SEVERE, "SQL Error updating room schedule with ID: " + roomSchedule.getId(), e);
-                    connection.rollback(); // Rollback transaction on error
+                    LOGGER.log(Level.SEVERE, "SQL Error updating room_schedules for ID: " + roomSchedule.getId(), e);
+                    connection.rollback();
                     return false;
                 }
             } catch (SQLException e) {
-                LOGGER.log(Level.SEVERE, "SQL Error updating base schedule for ID: " + roomSchedule.getId(), e);
-                connection.rollback(); // Rollback transaction on error
+                LOGGER.log(Level.SEVERE, "SQL Error updating schedules for ID: " + roomSchedule.getId(), e);
+                connection.rollback();
                 return false;
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Unexpected error updating room schedule with ID: " + roomSchedule.getId(), e);
-                connection.rollback(); // Rollback transaction on error
-                return false;
-            } finally {
-                connection.setAutoCommit(true); // Restore default
             }
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Database connection error during updating room schedule.", e);
+            LOGGER.log(Level.SEVERE, "Database connection or transaction error during updating room schedule.", e);
+            if (connection != null) { try { if (!connection.getAutoCommit()) connection.rollback(); } catch (SQLException ex) { LOGGER.log(Level.SEVERE, "Error rolling back.", ex); }}
             return false;
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected database connection error during updating room schedule.", e);
+            LOGGER.log(Level.SEVERE, "Unexpected error updating room schedule.", e);
+            if (connection != null) { try { if (!connection.getAutoCommit()) connection.rollback(); } catch (SQLException ex) { LOGGER.log(Level.SEVERE, "Error rolling back.", ex); }}
             return false;
+        }
+        finally {
+            if (connection != null) { try { connection.setAutoCommit(true); connection.close(); } catch (SQLException e) { LOGGER.log(Level.SEVERE, "Error restoring/closing conn.", e); }}
         }
     }
 
@@ -287,56 +319,48 @@ public class RoomScheduleDAO {
             LOGGER.log(Level.WARNING, "Attempted to delete room schedule with null or empty ID.");
             return false;
         }
+        // Order of deletion might matter based on foreign key constraints
+        // If schedules.id is FK in room_schedules, delete from room_schedules first.
         String deleteRoomScheduleSql = "DELETE FROM room_schedules WHERE schedule_id = ?";
-        String deleteScheduleSql = "DELETE FROM schedules WHERE id = ?";
-
-        try (Connection connection = DatabaseConnection.getConnection()) {
-            connection.setAutoCommit(false); // Start transaction
+        String deleteScheduleSql = "DELETE FROM schedules WHERE id = ? AND schedule_type = 'ROOM'"; // Ensure only ROOM type is deleted
+        Connection connection = null;
+        try {
+            connection = DatabaseConnection.getConnection();
+            connection.setAutoCommit(false);
 
             try (PreparedStatement stmtRoomSchedule = connection.prepareStatement(deleteRoomScheduleSql)) {
                 stmtRoomSchedule.setString(1, id);
-                stmtRoomSchedule.executeUpdate(); // Execute deletion in room_schedules
-
-                try (PreparedStatement stmtSchedule = connection.prepareStatement(deleteScheduleSql)) {
-                    stmtSchedule.setString(1, id);
-                    int resultSchedule = stmtSchedule.executeUpdate(); // Execute deletion in schedules
-
-                    if (resultSchedule > 0) {
-                        connection.commit(); // Commit transaction
-                        return true;
-                    } else {
-                        LOGGER.log(Level.SEVERE, "Deleting base schedule failed for ID: " + id + ", rolling back.");
-                        connection.rollback();
-                        return false;
-                    }
-                } catch (SQLException e) {
-                    LOGGER.log(Level.SEVERE, "SQL Error deleting base schedule for ID: " + id, e);
-                    connection.rollback(); // Rollback transaction on error
+                stmtRoomSchedule.executeUpdate(); // Có thể không có dòng nào bị xóa nếu không tồn tại, không phải lỗi
+            }
+            // Tiếp tục xóa trong bảng schedules ngay cả khi không có gì trong room_schedules
+            try (PreparedStatement stmtSchedule = connection.prepareStatement(deleteScheduleSql)) {
+                stmtSchedule.setString(1, id);
+                int resultSchedule = stmtSchedule.executeUpdate();
+                if (resultSchedule > 0) { // Chỉ thành công nếu bảng chính có dòng bị xóa
+                    connection.commit();
+                    return true;
+                } else {
+                    // Nếu không có gì trong schedules (ví dụ ID sai hoặc type sai), rollback
+                    // Hoặc nếu việc không tìm thấy bản ghi để xóa không được coi là lỗi, thì có thể commit.
+                    // Hiện tại, coi như phải xóa được từ bảng 'schedules' mới là thành công.
+                    LOGGER.log(Level.WARNING, "Deleting from schedules failed or ID not found: " + id + ", rolling back.");
+                    connection.rollback();
                     return false;
                 }
-            } catch (SQLException e) {
-                LOGGER.log(Level.SEVERE, "SQL Error deleting room schedule details for ID: " + id, e);
-                connection.rollback(); // Rollback transaction on error
-                return false;
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Unexpected error deleting room schedule with ID: " + id, e);
-                connection.rollback(); // Rollback transaction on error
-                return false;
-            } finally {
-                connection.setAutoCommit(true); // Restore default
             }
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Database connection error during deleting room schedule.", e);
+            LOGGER.log(Level.SEVERE, "SQL Error deleting room schedule ID: " + id, e);
+            if (connection != null) { try { if (!connection.getAutoCommit()) connection.rollback(); } catch (SQLException ex) { LOGGER.log(Level.SEVERE, "Error rolling back.", ex); }}
             return false;
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected database connection error during deleting room schedule.", e);
+            LOGGER.log(Level.SEVERE, "Unexpected error deleting room schedule.", e);
+            if (connection != null) { try { if (!connection.getAutoCommit()) connection.rollback(); } catch (SQLException ex) { LOGGER.log(Level.SEVERE, "Error rolling back.", ex); }}
             return false;
+        } finally {
+            if (connection != null) { try { connection.setAutoCommit(true); connection.close(); } catch (SQLException e) { LOGGER.log(Level.SEVERE, "Error restoring/closing conn.", e); }}
         }
     }
 
-    /**
-     * Find room schedules by room ID
-     */
     public List<RoomSchedule> findByRoomId(String roomId) {
         List<RoomSchedule> roomSchedules = new ArrayList<>();
         if (roomId == null || roomId.trim().isEmpty()) {
@@ -346,7 +370,7 @@ public class RoomScheduleDAO {
         String query = "SELECT s.id, s.name, s.description, s.start_time, s.end_time, rs.room_id, rs.capacity, rs.room_type " +
                 "FROM schedules s " +
                 "JOIN room_schedules rs ON s.id = rs.schedule_id " +
-                "WHERE rs.room_id = ?";
+                "WHERE rs.room_id = ? AND s.schedule_type = 'ROOM'"; // Thêm s.schedule_type
 
         try (Connection connection = DatabaseConnection.getConnection();
              PreparedStatement stmt = connection.prepareStatement(query)) {
@@ -364,48 +388,35 @@ public class RoomScheduleDAO {
                             rs.getInt("capacity"),
                             rs.getString("room_type")
                     );
-
-                    // Load scheduled courses using the same connection
                     loadScheduledCourses(connection, roomSchedule);
-
                     roomSchedules.add(roomSchedule);
                 }
             }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error finding room schedules by room ID: " + roomId, e);
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected error finding room schedules by room ID: " + roomId, e);
         }
-
         return roomSchedules;
     }
 
-    /**
-     * Find available room schedules for a specified time period
-     * This logic assumes that 'available' means the room schedule itself overlaps
-     * with the requested time period, NOT that no courses are scheduled within it.
-     * The original code had commented-out logic for checking courses, which was
-     * inconsistent with the SQL query filtering on the room schedule's times.
-     * This version returns room schedules that are 'active' during the time period.
-     * Further availability checks (e.g., no overlapping courses) would need separate logic.
-     */
     public List<RoomSchedule> findAvailableRooms(LocalDateTime startTime, LocalDateTime endTime) {
         List<RoomSchedule> availableRooms = new ArrayList<>();
-        if (startTime == null || endTime == null) {
-            LOGGER.log(Level.WARNING, "Attempted to find available rooms with null time period.");
+        if (startTime == null || endTime == null || endTime.isBefore(startTime)) {
+            LOGGER.log(Level.WARNING, "Attempted to find available rooms with invalid time period.");
             return availableRooms;
         }
+        // Câu lệnh này tìm các RoomSchedule có lịch hoạt động CHỒNG CHÉO với khoảng thời gian yêu cầu.
+        // Nó không kiểm tra xem có Course nào đã chiếm lịch trong RoomSchedule đó hay không.
         String query = "SELECT s.id, s.name, s.description, s.start_time, s.end_time, rs.room_id, rs.capacity, rs.room_type " +
                 "FROM schedules s " +
                 "JOIN room_schedules rs ON s.id = rs.schedule_id " +
                 "WHERE s.schedule_type = 'ROOM' " +
-                "AND s.start_time <= ? AND s.end_time >= ?"; // Room schedule is active during the period
+                "AND s.start_time < ? AND s.end_time > ?"; // Room schedule overlaps with [startTime, endTime]
 
         try (Connection connection = DatabaseConnection.getConnection();
              PreparedStatement stmt = connection.prepareStatement(query)) {
 
-            stmt.setTimestamp(1, Timestamp.valueOf(startTime));
-            stmt.setTimestamp(2, Timestamp.valueOf(endTime));
+            stmt.setTimestamp(1, Timestamp.valueOf(endTime)); // s.start_time < requestedEndTime
+            stmt.setTimestamp(2, Timestamp.valueOf(startTime)); // s.end_time > requestedStartTime
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -419,31 +430,16 @@ public class RoomScheduleDAO {
                             rs.getInt("capacity"),
                             rs.getString("room_type")
                     );
-
-                    // Load scheduled courses using the same connection
-                    loadScheduledCourses(connection, roomSchedule);
-
-                    // Note: The original logic for checking overlapping courses was commented out
-                    // If true availability (no overlapping courses) is needed, additional logic
-                    // or a different SQL query would be required here.
-                    // This current implementation returns rooms whose general schedule *overlaps*
-                    // the requested time, not necessarily rooms that are *free* during that time.
-
+                    loadScheduledCourses(connection, roomSchedule); // Tải các course đang dùng phòng này
                     availableRooms.add(roomSchedule);
                 }
             }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error finding available room schedules.", e);
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected error finding available room schedules.", e);
         }
-
         return availableRooms;
     }
 
-    /**
-     * Assign a course to a room (by updating the course's room_id)
-     */
     public boolean assignCourseToRoom(String courseId, String roomId) {
         if (courseId == null || courseId.trim().isEmpty() || roomId == null || roomId.trim().isEmpty()) {
             LOGGER.log(Level.WARNING, "Attempted to assign course to room with null or empty IDs.");
@@ -461,16 +457,11 @@ public class RoomScheduleDAO {
             return result > 0;
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error assigning course ID " + courseId + " to room ID " + roomId + ".", e);
-            return false;
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected error assigning course ID " + courseId + " to room ID " + roomId + ".", e);
-            return false;
         }
+        return false;
     }
 
-    /**
-     * Find rooms by type
-     */
+
     public List<RoomSchedule> findByRoomType(String roomType) {
         List<RoomSchedule> roomSchedules = new ArrayList<>();
         if (roomType == null || roomType.trim().isEmpty()) {
@@ -480,7 +471,7 @@ public class RoomScheduleDAO {
         String query = "SELECT s.id, s.name, s.description, s.start_time, s.end_time, rs.room_id, rs.capacity, rs.room_type " +
                 "FROM schedules s " +
                 "JOIN room_schedules rs ON s.id = rs.schedule_id " +
-                "WHERE rs.room_type = ?";
+                "WHERE rs.room_type = ? AND s.schedule_type = 'ROOM'"; // Thêm s.schedule_type
 
         try (Connection connection = DatabaseConnection.getConnection();
              PreparedStatement stmt = connection.prepareStatement(query)) {
@@ -498,25 +489,16 @@ public class RoomScheduleDAO {
                             rs.getInt("capacity"),
                             rs.getString("room_type")
                     );
-
-                    // Load scheduled courses using the same connection
                     loadScheduledCourses(connection, roomSchedule);
-
                     roomSchedules.add(roomSchedule);
                 }
             }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error finding rooms by type: " + roomType, e);
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected error finding rooms by type: " + roomType, e);
         }
-
         return roomSchedules;
     }
 
-    /**
-     * Find rooms by minimum capacity
-     */
     public List<RoomSchedule> findByMinimumCapacity(int minCapacity) {
         List<RoomSchedule> roomSchedules = new ArrayList<>();
         if (minCapacity < 0) {
@@ -526,7 +508,7 @@ public class RoomScheduleDAO {
         String query = "SELECT s.id, s.name, s.description, s.start_time, s.end_time, rs.room_id, rs.capacity, rs.room_type " +
                 "FROM schedules s " +
                 "JOIN room_schedules rs ON s.id = rs.schedule_id " +
-                "WHERE rs.capacity >= ?";
+                "WHERE rs.capacity >= ? AND s.schedule_type = 'ROOM'"; // Thêm s.schedule_type
 
         try (Connection connection = DatabaseConnection.getConnection();
              PreparedStatement stmt = connection.prepareStatement(query)) {
@@ -544,19 +526,13 @@ public class RoomScheduleDAO {
                             rs.getInt("capacity"),
                             rs.getString("room_type")
                     );
-
-                    // Load scheduled courses using the same connection
                     loadScheduledCourses(connection, roomSchedule);
-
                     roomSchedules.add(roomSchedule);
                 }
             }
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error finding rooms by minimum capacity: " + minCapacity, e);
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected error finding rooms by minimum capacity: " + minCapacity, e);
         }
-
         return roomSchedules;
     }
 }

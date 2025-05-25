@@ -197,7 +197,7 @@ public class SettingsView extends BaseScreenView {
                             course.getCourseName(),
                             course.getRoomId(),
                             durationStr,
-                            course.getDayOfWeek()
+                            course.getDaysOfWeekAsString()
                     ));
                 }
             } catch (Exception e) { // Bắt Exception chung hoặc SQLException cụ thể nếu CourseDAO ném

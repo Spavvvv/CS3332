@@ -82,7 +82,6 @@ public class DaoManager {
             teacherQuarterlyStatisticsDAO = new TeacherQuarterlyStatisticsDAO();
             teacherYearlyStatisticsDAO = new TeacherYearlyStatisticsDAO();
             homeworkDAO = new HomeworkDAO();
-            // Initialize the new HomeworkSubmissionDAO
             homeworkSubmissionDAO = new HomeworkSubmissionDAO();
 
         } catch (Exception e) {
@@ -105,6 +104,7 @@ public class DaoManager {
 
         teacherDAO.setCourseDAO(courseDAO);
 
+        roomScheduleDAO.setCourseDAO(courseDAO);
         // Wiring any dependencies needed for HomeworkSubmissionDAO
         // If HomeworkSubmissionDAO needs dependencies on other DAOs, set them here
         // For example:

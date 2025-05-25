@@ -70,29 +70,7 @@ public class ReportController {
             if(view!=null) view.showError("Lỗi khởi tạo: Model hoặc View không hợp lệ.");
             return;
         }
-        loadClassStatuses();
         loadReportData();
-    }
-
-    private void loadClassStatuses() {
-        try {
-            System.out.println("ReportController: Attempting to load class statuses from model.");
-            // Gọi phương thức từ model
-            List<String> statuses = model.getClassStatusesFromDAO();
-            // Model đã xử lý trả về ArrayList rỗng nếu có lỗi hoặc null từ DAO
-
-            if (!statuses.contains(DEFAULT_STATUS_FILTER) && DEFAULT_STATUS_FILTER.equals("Tất cả")) {
-                statuses.add(0, DEFAULT_STATUS_FILTER);
-            }
-            System.out.println("ReportController: Calling src.view.setClassStatusOptions with " + statuses.size() + " items.");
-            view.setClassStatusOptions(statuses);
-        } catch (Exception e) {
-            // Mặc dù model đã xử lý, thêm một lớp catch ở đây để phòng ngừa
-            System.err.println("Unexpected error loading class statuses in Controller: " + e.getMessage());
-            e.printStackTrace();
-            view.showError("Lỗi không mong muốn khi tải danh sách trạng thái: " + e.getMessage());
-            view.setClassStatusOptions(new ArrayList<>(List.of(DEFAULT_STATUS_FILTER))); // Cung cấp giá trị mặc định
-        }
     }
 
     public void loadReportData() {

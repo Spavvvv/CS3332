@@ -4,6 +4,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.chart.PieChart;
 import src.model.ClassSession;
+import src.model.report.ReportModel;
 import src.model.system.schedule.ScheduleItem;
 import src.utils.DatabaseConnection;
 import src.model.system.course.Course;
@@ -11,271 +12,358 @@ import src.model.system.course.Course;
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime; // Đã thêm
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+// Các import không cần thiết cho logger đã được lược bỏ nếu bạn có cấu hình chung
 
-/**
- * Data Access Object for retrieving Dashboard-related data.
- * Manages its own database connections per public operation.
- */
 public class DashboardDAO {
 
     private static final Logger LOGGER = Logger.getLogger(DashboardDAO.class.getName());
 
-    /**
-     * Constructor.
-     */
     public DashboardDAO() {
-        // No dependencies to inject for this DAO based on current implementation
+        LOGGER.info("DAO: DashboardDAO instance created.");
     }
 
-    /**
-     * Adds a new dashboard event (schedule item) to the database.
-     * Assumes the 'schedules' table exists with appropriate columns.
-     *
-     * @param scheduleItem The schedule item to add
-     * @return true if successful, false otherwise
-     */
     public boolean addDashboardEvent(ScheduleItem scheduleItem) {
-        // Query updated to match the actual table structure, assuming 'schedules' table
-        // has columns: name, description, start_time, end_time, schedule_type
         String query = "INSERT INTO schedules (name, description, start_time, end_time, schedule_type) VALUES (?, ?, ?, ?, ?)";
-
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
-
-            stmt.setString(1, scheduleItem.getTitle()); // Assuming getTitle() maps to 'name'
-            stmt.setString(2, scheduleItem.getDescription()); // Assuming getDescription() maps to 'description'
-
-            // Convert LocalDateTime to Timestamp for database
+            stmt.setString(1, scheduleItem.getTitle());
+            stmt.setString(2, scheduleItem.getDescription());
             stmt.setTimestamp(3, Timestamp.valueOf(scheduleItem.getStartTime()));
             stmt.setTimestamp(4, Timestamp.valueOf(scheduleItem.getEndTime()));
-
-            // Assuming a default type 'event' based on the query structure
             stmt.setString(5, "event");
-
-            int rowsAffected = stmt.executeUpdate();
-            return rowsAffected > 0;
+            return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error adding dashboard event: " + (scheduleItem != null ? scheduleItem.getTitle() : "null"), e);
+            LOGGER.log(Level.SEVERE, "Error adding dashboard event: " + (scheduleItem != null ? scheduleItem.getTitle() : "null event"), e);
             return false;
         }
     }
 
-    /**
-     * Retrieves today's class sessions from the database.
-     * Assumes 'class_sessions' table contains necessary denormalized fields.
-     *
-     * @return List of today's class sessions
-     */
     public List<ClassSession> getTodayClasses() {
-        // Adjusted query to select session_id explicitly and match column names used below
-        String query = "SELECT c.session_id, c.course_name, c.teacher_name, c.room, c.session_date, " +
-                "c.start_time, c.end_time, c.class_id, c.session_number FROM class_sessions c " +
-                "WHERE c.session_date = ?";
+        String query = "SELECT cs.session_id, cs.course_name, cs.teacher_name, cs.room, cs.session_date, " +
+                "cs.start_time, cs.end_time, cs.course_id as actual_course_id, cs.session_number " +
+                "FROM class_sessions cs " +
+                "WHERE cs.session_date = ?";
 
         List<ClassSession> classes = new ArrayList<>();
-
-        try (Connection conn = DatabaseConnection.getConnection(); // Assuming DatabaseConnection is correctly implemented
+        try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
 
             stmt.setDate(1, java.sql.Date.valueOf(LocalDate.now()));
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    // Retrieve data from the ResultSet, using correct column names
-                    String id = rs.getString("session_id"); // Match query column name
-                    String courseName = rs.getString("course_name");
-                    String teacher = rs.getString("teacher_name");
-                    String room = rs.getString("room");
-
-                    // Check for null dates and times before converting
+                    String sessionId = rs.getString("session_id");
+                    String courseNameFromSession = rs.getString("course_name");
+                    String teacherNameFromSession = rs.getString("teacher_name");
+                    String roomFromSession = rs.getString("room");
                     Date dateDb = rs.getDate("session_date");
-                    LocalDate date = (dateDb != null) ? dateDb.toLocalDate() : null;
+                    LocalDate sessionDate = (dateDb != null) ? dateDb.toLocalDate() : null;
+                    Timestamp startTimeDbTs = rs.getTimestamp("start_time");
+                    LocalDateTime sessionStartTime = (startTimeDbTs != null) ? startTimeDbTs.toLocalDateTime() : null;
+                    Timestamp endTimeDbTs = rs.getTimestamp("end_time");
+                    LocalDateTime sessionEndTime = (endTimeDbTs != null) ? endTimeDbTs.toLocalDateTime() : null;
+                    String actualCourseId = rs.getString("actual_course_id");
+                    int sessionNumber = rs.getInt("session_number");
 
-                    Time startTimeDb = rs.getTime("start_time");
-                    LocalDateTime startTime = (startTimeDb != null) ? LocalDateTime.from(startTimeDb.toLocalTime()) : null;
+                    Course courseForSession = new Course();
+                    courseForSession.setCourseId(actualCourseId);
+                    courseForSession.setCourseName(courseNameFromSession);
 
-                    Time endTimeDb = rs.getTime("end_time");
-                    LocalDateTime endTime = (endTimeDb != null) ? LocalDateTime.from(endTimeDb.toLocalTime()) : null;
-
-                    String classId = rs.getString("class_id"); // Assuming this links to Class/Course
-
-                    int SessionNumber = rs.getInt("session_number");
-
-                    // Create a minimal Course object with available information
-                    // Assuming class_id from the database maps to the Course ID or similar identifier
-                    Course course = new Course();
-                    course.setCourseId(classId); // Using class_id as a Course identifier
-                    course.setCourseName(courseName);
-
-                    // Create ClassSession object using the appropriate constructor
-                    // Assuming ClassSession has a constructor like:
-                    // ClassSession(String id, Course course, String teacher, String room, LocalDate date, LocalTime startTime, LocalTime endTime, String classId)
-                    ClassSession classSession = new ClassSession(id, course, teacher, room, date, startTime, endTime, classId, SessionNumber);
-
+                    ClassSession classSession = new ClassSession(sessionId, courseForSession, teacherNameFromSession, roomFromSession,
+                            sessionDate, sessionStartTime, sessionEndTime,
+                            actualCourseId, sessionNumber);
                     classes.add(classSession);
                 }
             }
-            return classes;
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error retrieving today's class sessions.", e);
-            return new ArrayList<>(); // Return empty list on error
         }
+        return classes;
     }
 
-
-    /**
-     * Gets the total number of students in the system with 'active' status.
-     * Assumes 'students' table has 'status' column.
-     *
-     * @return The total number of active students
-     */
     public int getTotalStudents() {
+        // Giả sử bảng students có cột status để chỉ sinh viên đang hoạt động
         String query = "SELECT COUNT(*) FROM students WHERE status = 'active'";
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
-
             if (rs.next()) {
                 return rs.getInt(1);
             }
-            return 0;
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error getting total active students.", e);
-            return 0; // Return 0 on error
         }
+        return 0;
     }
 
     /**
-     * Gets the total number of classes in the system with 'active' status.
-     * Assumes 'classes' table has 'status' column.
+     * Gets the total number of courses in the system.
      *
-     * @return The total number of active classes
+     * @return The total number of courses
      */
-    public int getTotalClasses() {
-        String query = "SELECT COUNT(*) FROM classes WHERE status = 'Active'";
+    public int getTotalCourses() { // Đổi tên phương thức cho rõ ràng
+        // SỬA ĐỔI: Đếm tất cả các khóa học từ bảng 'courses'
+        String query = "SELECT COUNT(*) FROM courses";
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
-
             if (rs.next()) {
                 return rs.getInt(1);
             }
-            return 0;
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error getting total active classes.", e);
-            return 0; // Return 0 on error
+            LOGGER.log(Level.SEVERE, "Error getting total courses.", e);
         }
+        return 0;
     }
 
-    /**
-     * Gets the attendance rate across all recorded attendance based on 'Present' status.
-     * Assumes 'attendance' table has 'status' column.
-     *
-     * @return The attendance rate as a percentage (0.0 if no attendance records)
-     */
     public double getAttendanceRate() {
         String query = "SELECT " +
-                "(SELECT COUNT(*) FROM attendance WHERE status = 'Có mặt') AS present_count, " + // Assuming 'Present' status
-                "(SELECT COUNT(*) FROM attendance) AS total_count";
-
+                "SUM(CASE WHEN status = 'Có mặt' THEN 1 ELSE 0 END) AS present_count, " +
+                "COUNT(*) AS total_count FROM attendance";
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
-
             if (rs.next()) {
                 int presentCount = rs.getInt("present_count");
                 int totalCount = rs.getInt("total_count");
-
                 if (totalCount > 0) {
-                    return ((double) presentCount / totalCount) * 100;
+                    return ((double) presentCount / totalCount) * 100.0;
                 }
             }
-            return 0.0;
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error getting attendance rate.", e);
-            return 0.0; // Return 0.0 on error
         }
+        return 0.0;
     }
 
     /**
-     * Gets the course distribution data for a pie chart.
-     * Assumes 'courses' table has 'course_name' and 'course_id' as PK,
-     * and 'class_sessions' table links via 'course_id'.
+     * Retrieves class report data from the database
      *
-     * @return ObservableList of PieChart.Data for the course distribution
+     * @param fromDate Starting date for the report period
+     * @param toDate   Ending date for the report period
+     * @return List of ClassReportData objects
      */
-    public ObservableList<PieChart.Data> getCourseDistribution() {
-        // Adjusted JOIN condition to use courses.course_id as primary key,
-        // assuming class_sessions links to courses via course_id column
-        String query = "SELECT c.course_name, COUNT(cs.course_id) as class_count " +
-                "FROM courses c " +
-                "JOIN class_sessions cs ON c.course_id = cs.course_id " + // Assumes courses PK is course_id and class_sessions foreign key is course_id
-                "GROUP BY c.course_name";
+    public List<ReportModel.ClassReportData> getClassReportData(LocalDate fromDate, LocalDate toDate) { // Bỏ tham số statusFilter
+        System.out.println("DEBUG SYSOUT: ReportDAO.getClassReportData called with fromDate: " + fromDate + ", toDate: " + toDate);
+        LOGGER.info("DAO: getClassReportData called with fromDate: " + fromDate + ", toDate: " + toDate);
+        List<ReportModel.ClassReportData> reportData = new ArrayList<>();
 
-        ObservableList<PieChart.Data> pieChartData = FXCollections.observableArrayList();
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-
-            while (rs.next()) {
-                String courseName = rs.getString("course_name");
-                int classCount = rs.getInt("class_count");
-
-                pieChartData.add(new PieChart.Data(courseName, classCount));
-            }
-
-            return pieChartData;
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error getting course distribution data.", e);
-            return FXCollections.observableArrayList(); // Return empty list on error
+        if (fromDate == null || toDate == null) {
+            LOGGER.log(Level.WARNING, "DAO: Attempted to get class report data with null dates. Returning empty list.");
+            return reportData;
         }
-    }
 
-    /**
-     * Gets upcoming schedule data for the dashboard.
-     * Assumes 'schedules' table has columns id, name, description, start_time, end_time, schedule_type.
-     * Retrieves events starting from the current timestamp.
-     *
-     * @param limit Maximum number of records to return
-     * @return List of Object arrays containing schedule data
-     */
-    public List<Object[]> getUpcomingSchedulesData(int limit) {
-        String query = "SELECT id, name, description, start_time, end_time, schedule_type " +
-                "FROM schedules " +
-                "WHERE start_time >= CURRENT_TIMESTAMP " +
-                "ORDER BY start_time " +
-                "LIMIT ?";
+        String fromDateStr = fromDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String toDateStr = toDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        LOGGER.info("DAO: Formatted fromDateStr: " + fromDateStr + ", toDateStr: " + toDateStr);
 
-        List<Object[]> scheduleData = new ArrayList<>();
+        // SỬA ĐỔI: Bỏ statusCondition và các logic liên quan đến status của course
+        StringBuilder queryBuilder = new StringBuilder();
+        queryBuilder.append("SELECT c.course_id, c.course_name, ")
+                .append("COUNT(DISTINCT cs.session_id) as total_sessions_held, ")
+                .append("c.total_sessions as total_course_sessions, ")
+                .append("SUM(CASE WHEN a.present = 1 THEN 1 ELSE 0 END) as present_count, ")
+                .append("COUNT(DISTINCT a.attendance_id) as total_attendance_records, ")
+                .append("COUNT(DISTINCT h.homework_id) as total_homework_assigned, ")
+                .append("SUM(CASE WHEN shs.is_submitted = 1 THEN 1 ELSE 0 END) as submitted_homework_count, ")
+                .append("AVG(sm.awareness_score) as awareness, ")
+                .append("AVG(sm.punctuality_score) as punctuality, ")
+                .append("AVG(shs.grade) as average_homework_grade, ")
+                .append("COUNT(DISTINCT e.student_id) as student_count ")
+                .append("FROM courses c ") // Đã đổi sang courses
+                .append("LEFT JOIN class_sessions cs ON c.course_id = cs.course_id AND cs.session_date BETWEEN ? AND ? ")
+                .append("LEFT JOIN attendance a ON cs.session_id = a.session_id ")
+                .append("LEFT JOIN homework h ON c.course_id = h.course_id AND h.assigned_date BETWEEN ? AND ? ")
+                .append("LEFT JOIN student_homework_submissions shs ON h.homework_id = shs.homework_id ")
+                .append("LEFT JOIN student_metrics sm ON c.course_id = sm.course_id AND sm.record_date BETWEEN ? AND ? ")
+                .append("LEFT JOIN enrollment e ON c.course_id = e.course_id ");
+        // KHÔNG CÒN WHERE c.status = ?
+
+        List<Object> parameters = new ArrayList<>();
+        parameters.add(fromDateStr);
+        parameters.add(toDateStr);
+        parameters.add(fromDateStr);
+        parameters.add(toDateStr);
+        parameters.add(fromDateStr);
+        parameters.add(toDateStr);
+        // Không còn tham số cho status
+
+        queryBuilder.append("GROUP BY c.course_id, c.course_name, c.total_sessions ")
+                .append("ORDER BY c.course_name");
+
+        String query = queryBuilder.toString();
+        LOGGER.info("DAO: SQL Query: " + query);
+        LOGGER.info("DAO: Query parameters: " + parameters);
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
 
-            stmt.setInt(1, limit);
+            for (int i = 0; i < parameters.size(); i++) {
+                stmt.setObject(i + 1, parameters.get(i));
+            }
 
             try (ResultSet rs = stmt.executeQuery()) {
+                int counter = 1;
                 while (rs.next()) {
-                    // Populate Object array matching the likely expectation (e.g., for TableView)
+                    String courseName = rs.getString("course_name");
+                    int studentCount = rs.getInt("student_count");
+                    int sessionsHeldInPeriod = rs.getInt("total_sessions_held");
+                    int presentCountRaw = rs.getInt("present_count");
+                    int totalPossibleAttendanceInPeriod = studentCount * sessionsHeldInPeriod;
+                    String attendanceStr = presentCountRaw + "/" + (totalPossibleAttendanceInPeriod > 0 ? totalPossibleAttendanceInPeriod : sessionsHeldInPeriod);
+
+                    int totalHomeworkAssignedInPeriod = rs.getInt("total_homework_assigned");
+                    int submittedHomeworkCountRaw = rs.getInt("submitted_homework_count");
+                    int totalHomeworkSubmissionsPossible = studentCount * totalHomeworkAssignedInPeriod;
+                    String homeworkStr = submittedHomeworkCountRaw + "/" + (totalHomeworkSubmissionsPossible > 0 ? totalHomeworkSubmissionsPossible : totalHomeworkAssignedInPeriod);
+
+                    double avgHomeworkGrade = rs.getDouble("average_homework_grade");
+                    if (rs.wasNull()) avgHomeworkGrade = 0.0;
+                    String formattedScore = String.format("%.2f/10", avgHomeworkGrade);
+
+                    double awareness = rs.getDouble("awareness");
+                    if (rs.wasNull()) awareness = 0.0;
+                    double punctuality = rs.getDouble("punctuality");
+                    if (rs.wasNull()) punctuality = 0.0;
+
+                    ReportModel.ClassReportData data = new ReportModel.ClassReportData(
+                            counter++,
+                            courseName,
+                            attendanceStr,
+                            homeworkStr,
+                            awareness,
+                            punctuality,
+                            formattedScore
+                    );
+                    reportData.add(data);
+                }
+                if (counter == 1 && reportData.isEmpty()) { // Kiểm tra thêm reportData.isEmpty() cho chắc
+                    LOGGER.info("DAO: ResultSet was empty. No data rows found for the given criteria.");
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "DAO: SQLException retrieving class report data.", e);
+            e.printStackTrace();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "DAO: Unexpected Exception retrieving class report data.", e);
+            e.printStackTrace();
+        }
+
+        LOGGER.info("DAO: getClassReportData finished. Returning " + reportData.size() + " records.");
+        return reportData;
+    }
+
+
+    public double getHomeworkPercentage(LocalDate fromDate, LocalDate toDate) {
+        LOGGER.info("DAO: getHomeworkPercentage called with fromDate: " + fromDate + ", toDate: " + toDate);
+        if (fromDate == null || toDate == null) {
+            LOGGER.log(Level.WARNING, "DAO: Null dates for homework percentage.");
+            return 0;
+        }
+        String fromDateStr = fromDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String toDateStr = toDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+
+        String query = "SELECT " +
+                "SUM(CASE WHEN h.status = 'completed' THEN 1 ELSE 0 END) as completed_count, " +
+                "COUNT(h.homework_id) as total_homework_assigned " +
+                "FROM homework h " +
+                "WHERE h.assigned_date BETWEEN ? AND ?";
+        LOGGER.info("DAO: Homework Percentage SQL Query: " + query);
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setString(1, fromDateStr);
+            stmt.setString(2, toDateStr);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    int completedCount = rs.getInt("completed_count");
+                    int totalHomeworkAssigned = rs.getInt("total_homework_assigned");
+                    double percentage = totalHomeworkAssigned > 0 ? (completedCount / (double) totalHomeworkAssigned) * 100 : 0;
+                    LOGGER.info("DAO: Homework - completedAssignments: " + completedCount + ", totalAssignments: " + totalHomeworkAssigned + ", percentage: " + percentage);
+                    return percentage;
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "DAO: SQLException calculating homework percentage.", e);
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    // SỬA ĐỔI: Xóa phương thức getDistinctClassStatuses vì bảng courses không có cột status
+    // public List<String> getDistinctClassStatuses() { ... }
+
+
+    public ObservableList<PieChart.Data> getCourseDistribution() {
+        String query = "SELECT c.course_name, COUNT(cs.session_id) as session_count " +
+                "FROM courses c " +
+                "LEFT JOIN class_sessions cs ON c.course_id = cs.course_id " +
+                "GROUP BY c.course_name " +
+                "HAVING COUNT(cs.session_id) > 0";
+
+        ObservableList<PieChart.Data> pieChartData = FXCollections.observableArrayList();
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            while (rs.next()) {
+                String courseName = rs.getString("course_name");
+                int sessionCount = rs.getInt("session_count");
+                pieChartData.add(new PieChart.Data(courseName, sessionCount));
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error getting course distribution data.", e);
+        }
+        return pieChartData;
+    }
+
+    public List<Object[]> getUpcomingSchedulesData(int limit) {
+        String query = "SELECT id, name, description, start_time, end_time, schedule_type " +
+                "FROM schedules " +
+                "WHERE start_time >= CURRENT_TIMESTAMP " +
+                "ORDER BY start_time ASC " +
+                "LIMIT ?";
+
+        List<Object[]> scheduleData = new ArrayList<>();
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setInt(1, limit);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
                     Object[] row = new Object[6];
-                    row[0] = rs.getString("id"); // Assuming id is String
+                    row[0] = rs.getString("id");
                     row[1] = rs.getString("name");
                     row[2] = rs.getString("description");
-                    row[3] = rs.getTimestamp("start_time"); // Timestamp for conversion to LocalDateTime
-                    row[4] = rs.getTimestamp("end_time");   // Timestamp for conversion to LocalDateTime
+                    Timestamp startTs = rs.getTimestamp("start_time");
+                    row[3] = (startTs != null) ? startTs.toLocalDateTime() : null;
+                    Timestamp endTs = rs.getTimestamp("end_time");
+                    row[4] = (endTs != null) ? endTs.toLocalDateTime() : null;
                     row[5] = rs.getString("schedule_type");
-
                     scheduleData.add(row);
                 }
             }
-            return scheduleData;
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error getting upcoming schedules data.", e);
-            return new ArrayList<>(); // Return empty list on error
         }
+        return scheduleData;
+    }
+
+    public int getTotalClasses() {
+        String query = "SELECT COUNT(*) FROM courses";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error getting total classes.", e);
+        }
+        return 0;
     }
 }
