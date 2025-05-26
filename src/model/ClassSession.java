@@ -17,7 +17,6 @@ import java.util.Objects;
 public class ClassSession {
     private String id; // session_id
     private String courseId; // Foreign key to Course (academic course)
-    private String classId; // ID of the class (e.g., student group or cohort) that this session belongs to
 
     // This field maps to class_sessions.course_name, which, per FK, is classes.class_name (cohort name)
     private String courseName; // Name of the Class/Cohort, denormalized from classes.class_name
@@ -69,7 +68,7 @@ public class ClassSession {
      * It needs to be set separately if creating a new session to be persisted.
      */
     public ClassSession(String id, Course course, String teacherName, String roomName, LocalDate sessionDate,
-                        LocalDateTime startTime, LocalDateTime endTime, String classId, int sessionNumber) {
+                        LocalDateTime startTime, LocalDateTime endTime, String courseId, int sessionNumber) {
         this.id = id;
         this.setCourse(course); // Sets this.course and this.courseId
         this.teacherName = teacherName;
@@ -77,7 +76,7 @@ public class ClassSession {
         this.sessionDate = sessionDate;
         this.setStartTime(startTime);
         this.setEndTime(endTime);
-        this.classId = classId;
+        this.courseId = courseId;
         this.sessionNumber = sessionNumber;
         this.students = new ArrayList<>();
         // this.courseName (cohort name) is NOT set here. It must be set via setCourseName() if needed for persistence.
@@ -135,13 +134,6 @@ public class ClassSession {
         this.courseId = courseId;
     }
 
-    public String getClassId() {
-        return classId;
-    }
-
-    public void setClassId(String classId) {
-        this.classId = classId;
-    }
 
     /**
      * Gets the name of the class/cohort (e.g., "Morning Batch A").
@@ -412,7 +404,6 @@ public class ClassSession {
         ClassSession copy = new ClassSession();
         copy.setId(this.id);
         copy.setCourseId(this.courseId);
-        copy.setClassId(this.classId);
         copy.setCourseName(this.courseName); // Copies the cohort name
         copy.setTeacher(this.teacherName);
         copy.setRoom(this.roomName);

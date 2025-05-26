@@ -450,12 +450,10 @@ public class CreateClassScreenView {
         String roomId = (selectedRoom != null) ? selectedRoom.getRoomId() : null;
         Teacher selectedTeacher = teacherComboBox.getSelectionModel().getSelectedItem();
         int totalSessions = totalSessionsSpinner.getValue();
-        String classIdFromUI = null; // Lấy từ UI nếu có trường nhập class_id cho Course
 
         Course newCourse = new Course(
                 courseId, courseName, subject, startDate, endDate,
                 startTime, endTimeValue, selectedDays, roomId,
-                classIdFromUI,
                 selectedTeacher,
                 totalSessions,
                 0.0f // progress ban đầu

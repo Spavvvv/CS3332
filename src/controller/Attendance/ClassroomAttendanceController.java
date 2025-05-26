@@ -3,14 +3,17 @@ package src.controller.Attendance;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
+
 import src.dao.ClassSession.ClassSessionDAO;
 import src.dao.Attendance.HomeworkDAO;
 import src.dao.Attendance.HomeworkSubmissionDAO;
 import src.dao.Person.StudentDAO;
+
 import src.model.ClassSession;
 import src.model.attendance.ClassAttendanceModel;
 import src.model.attendance.HomeworkSubmissionModel;
 import src.model.attendance.StudentAttendanceData;
+import src.model.homework.Homework;
 import src.model.person.Student;
 import src.view.Attendance.ClassroomAttendanceView;
 import src.utils.DaoManager;
@@ -34,6 +37,7 @@ public class ClassroomAttendanceController {
     private final ClassSessionDAO classSessionDAO;
     private final StudentDAO studentDAO;
     private final HomeworkSubmissionDAO homeworkSubmissionDAO;
+    private final HomeworkDAO homeworkDAO;
     private final ClassAttendanceModel attendanceModel;
     private List<ClassSession> classSessions; // Thêm biến lưu trữ danh sách buổi học
 
@@ -48,6 +52,7 @@ public class ClassroomAttendanceController {
         this.classSessionDAO = daoManager.getClassSessionDAO();
         this.studentDAO = daoManager.getStudentDAO();
         this.homeworkSubmissionDAO = daoManager.getHomeworkSubmissionDAO();
+        this.homeworkDAO = daoManager.getHomeworkDAO();
 
         // The model holding attendance data
         this.attendanceModel = new ClassAttendanceModel();
@@ -59,142 +64,91 @@ public class ClassroomAttendanceController {
      *
      * @param classId The class ID for which students should be loaded.
      */
-    public void loadContextForClass(String classId) {
+    public void loadContextForClass(String classId) { // classId ở đây có lẽ nên là courseId
         if (classId == null || classId.trim().isEmpty()) {
-            view.showError("Invalid class ID provided. Cannot load data.");
+            view.showError("Invalid ID provided. Cannot load data."); // Sửa thông báo chung hơn
             return;
         }
 
-        // Fetch students from the database based on classId
-        LOGGER.log(Level.INFO, "Fetching students for classId: {0}", classId);
-        List<Student> students = studentDAO.findByCourseId(classId);
-        LOGGER.log(Level.INFO, "Fetched {0} students for classId: {1}.", new Object[]{students.size(), classId});
+        // Đặt courseId cho attendanceModel ngay từ đầu
+        attendanceModel.setCourseId(classId); // Giả sử classId truyền vào thực chất là courseId
+
+        LOGGER.log(Level.INFO, "Fetching students for courseId: {0}", classId);
+        List<Student> students = studentDAO.findByCourseId(classId); // Giả sử findByCourseId là đúng
+        LOGGER.log(Level.INFO, "Fetched {0} students for courseId: {1}.", new Object[]{students.size(), classId});
 
         // Tải danh sách buổi học
-        loadSessionsForClass(classId);
+        loadSessionsForClass(classId); // Phương thức này đã gọi view.setAvailableSessions và cập nhật view/model cho session đầu tiên
 
-        // Lấy buổi học đầu tiên nếu có
-        String currentSessionId = null;
-        if (!classSessions.isEmpty()) {
-            ClassSession firstSession = classSessions.get(0);
-            currentSessionId = firstSession.getId();
-            attendanceModel.setSessionId(currentSessionId);
-            attendanceModel.setSessionDate(firstSession.getStartTime().toLocalDate());
+        // Sau khi loadSessionsForClass, attendanceModel.getSessionId() và attendanceModel.getSessionDate()
+        // đã được đặt cho buổi học đầu tiên (nếu có).
+        // Và view.setSessionNotes(), view.setSelectedDate() cũng đã được gọi trong loadSessionsForClass cho buổi đầu tiên.
+        // => KHÔNG CẦN LÀM GÌ THÊM Ở ĐÂY ĐỂ HIỂN THỊ NOTES CHO BUỔI ĐẦU TIÊN NỮA
+        // NẾU loadSessionsForClass đã làm đúng.
+
+        // Tuy nhiên, logic tải StudentAttendanceData hiện tại đang lấy "lịch sử metrics gần nhất"
+        // Nó nên lấy metrics và homework cho buổi học *hiện tại* (buổi đầu tiên mặc định)
+
+        // Gọi reloadDataForSelectedSession để tải dữ liệu chi tiết cho buổi học đầu tiên
+        if (attendanceModel.getSessionId() != null && !attendanceModel.getSessionId().isEmpty()) {
+            reloadDataForSelectedSession(attendanceModel.getSessionId(), attendanceModel.getCourseId());
+            view.showSuccess("Attendance data loaded successfully."); // Thông báo này có thể để ở cuối reloadDataForSelectedSession
+        } else {
+            // Không có buổi học nào, xóa dữ liệu bảng
+            attendanceModel.getAttendanceList().clear();
+            // view.setFilteredAttendanceList(... với danh sách rỗng ...); // Cần cập nhật view
+            FilteredList<StudentAttendanceData> emptyFilteredList = new FilteredList<>(attendanceModel.getAttendanceList(), p -> true);
+            view.setFilteredAttendanceList(emptyFilteredList);
+            view.showError("No sessions available for this course.");
         }
-
-        // Prepare the attendance data for each student
-        ObservableList<StudentAttendanceData> attendanceList = FXCollections.observableArrayList();
-
-        // Lấy dữ liệu bài tập về nhà cho buổi học hiện tại (nếu có)
-        Map<String, HomeworkSubmissionModel> homeworkMap = new HashMap<>();
-        if (currentSessionId != null) {
-            try {
-                List<HomeworkSubmissionModel> submissions = homeworkSubmissionDAO.getBySessionId(currentSessionId);
-                LOGGER.log(Level.INFO, "Loaded {0} homework submissions for sessionId: {1}",
-                        new Object[]{submissions.size(), currentSessionId});
-
-                // Tạo map để dễ tra cứu theo ID học sinh
-                for (HomeworkSubmissionModel submission : submissions) {
-                    homeworkMap.put(submission.getStudentId(), submission);
-                }
-            } catch (SQLException e) {
-                LOGGER.log(Level.SEVERE, "Error loading homework submissions", e);
-            }
-        }
-
-        for (Student student : students) {
-            // Lấy lịch sử metrics gần nhất từ database cho mỗi học sinh
-            List<StudentAttendanceData> metricsHistory = studentDAO.getStudentMetricsHistory(student.getId(), classId);
-
-            StudentAttendanceData studentData;
-
-            // Nếu có lịch sử, lấy bản ghi gần nhất
-            if (!metricsHistory.isEmpty()) {
-                studentData = metricsHistory.get(0);
-                LOGGER.log(Level.INFO, "Loaded latest metrics for student {0}: punctuality={1}, diligence={2}",
-                        new Object[]{student.getId(), studentData.getPunctualityRating(), studentData.getDiligenceRating()});
-            } else {
-                // Nếu không có lịch sử, tạo mới với các giá trị mặc định
-                studentData = new StudentAttendanceData(student);
-                LOGGER.log(Level.INFO, "No metrics history found for student: {0}, using default values", student.getId());
-            }
-
-            // Thêm thông tin bài tập về nhà (nếu có)
-            HomeworkSubmissionModel hwSubmission = homeworkMap.get(student.getId());
-            if (hwSubmission != null) {
-                // Điểm quan trọng: Sử dụng isSubmitted() từ model để xác định trạng thái checkbox
-                studentData.setHomeworkSubmitted(hwSubmission.isSubmitted());
-                studentData.setHomeworkGrade(hwSubmission.getGrade());
-                studentData.setSubmissionDate(hwSubmission.getSubmissionTimestamp());
-                LOGGER.log(Level.INFO, "Added homework data for student {0}: submitted={1}, grade={2}",
-                        new Object[]{student.getId(), hwSubmission.isSubmitted(), hwSubmission.getGrade()});
-            } else {
-                // Mặc định nếu không có thông tin bài tập
-                studentData.setHomeworkSubmitted(false);
-                studentData.setHomeworkGrade(0.0);
-                studentData.setSubmissionDate(null);
-            }
-
-            attendanceList.add(studentData);
-        }
-
-        // Set the list to the model and notify the src.view
-        attendanceModel.getAttendanceList().clear();
-        attendanceModel.getAttendanceList().addAll(attendanceList);
-        attendanceModel.setClassId(classId);
-
-        // Attach filtered list to the src.view
-        FilteredList<StudentAttendanceData> filteredList = new FilteredList<>(attendanceModel.getAttendanceList());
-        view.setFilteredAttendanceList(filteredList);
-
-        // Notify the src.view that the data loading is complete
-        view.showSuccess("Attendance data loaded successfully.");
     }
 
     /**
      * Tải danh sách buổi học cho lớp và cập nhật ComboBox số buổi.
      *
-     * @param classId ID của lớp cần tải buổi học
+     * @param courseId ID của lớp cần tải buổi học
      */
-    private void loadSessionsForClass(String classId) {
-        LOGGER.log(Level.INFO, "Loading sessions for classId: {0}", classId);
+    private void loadSessionsForClass(String courseId) { // Đổi classId thành courseId nếu đúng ngữ cảnh
+        LOGGER.log(Level.INFO, "Loading sessions for courseId: {0}", courseId);
         try {
-            // Lấy danh sách buổi học từ DB
-            classSessions = classSessionDAO.findByClassId(classId);
-            LOGGER.log(Level.INFO, "Loaded {0} sessions for classId: {1}",
-                    new Object[]{classSessions.size(), classId});
+            classSessions = classSessionDAO.findByCourseId(courseId); // Giả sử có findByCourseId
+            LOGGER.log(Level.INFO, "Loaded {0} sessions for courseId: {1}",
+                    new Object[]{classSessions.size(), courseId});
 
             if (classSessions.isEmpty()) {
-                // Nếu không có buổi học, thông báo và đặt list rỗng
-                LOGGER.log(Level.INFO, "No sessions found for classId: {0}", classId);
+                LOGGER.log(Level.INFO, "No sessions found for courseId: {0}", courseId);
                 view.setAvailableSessions(FXCollections.observableArrayList(), null);
+                // Xóa thông tin session cũ trên view
+                view.setSessionNotes("");
+                view.setSelectedDate(null);
+                attendanceModel.setSessionId(null);
+                attendanceModel.setSessionDate(null);
                 return;
             }
 
-            // Tạo danh sách số buổi (1, 2, 3,...) dựa trên số lượng buổi học
             ObservableList<Integer> sessionNumbers = FXCollections.observableArrayList(
                     IntStream.rangeClosed(1, classSessions.size())
                             .boxed()
                             .collect(Collectors.toList())
             );
+            Integer defaultSessionNumber = sessionNumbers.isEmpty() ? null : sessionNumbers.get(0);
+            view.setAvailableSessions(sessionNumbers, defaultSessionNumber);
 
-            // Chọn buổi đầu tiên là mặc định
-            Integer defaultSession = sessionNumbers.isEmpty() ? null : sessionNumbers.get(0);
-
-            // Cập nhật ComboBox trong src.view
-            view.setAvailableSessions(sessionNumbers, defaultSession);
-
-            // Nếu có buổi học, tải thông tin buổi đầu tiên
-            if (defaultSession != null) {
-                ClassSession firstSession = classSessions.get(0);
+            if (defaultSessionNumber != null) {
+                ClassSession firstSession = classSessions.get(0); // Buổi học đầu tiên (index 0)
                 attendanceModel.setSessionId(firstSession.getId());
                 attendanceModel.setSessionDate(firstSession.getStartTime().toLocalDate());
-                view.setSessionNotes(firstSession.getCourseName());
+
+                String notesForFirstSession = firstSession.getSessionNotes();
+                view.setSessionNotes(notesForFirstSession != null ? notesForFirstSession : "");
                 view.setSelectedDate(firstSession.getStartTime().toLocalDate());
+
+                view.setSelectedDate(firstSession.getStartTime().toLocalDate());
+                LOGGER.log(Level.INFO, "Default session (ID: {0}) info set to view. Notes: ''{1}''", new Object[]{firstSession.getId(), notesForFirstSession});
             }
 
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error loading sessions for classId: " + classId, e);
+            LOGGER.log(Level.SEVERE, "Error loading sessions for courseId: " + courseId, e);
             view.showError("Failed to load class sessions: " + e.getMessage());
         }
     }
@@ -204,65 +158,128 @@ public class ClassroomAttendanceController {
      */
     public void saveInformation() {
         try {
-            LOGGER.log(Level.INFO, "Saving attendance information for classId: {0}", attendanceModel.getClassId());
+            LOGGER.log(Level.INFO, "Saving all information for courseId: {0}, sessionId: {1}",
+                    new Object[]{attendanceModel.getCourseId(), attendanceModel.getSessionId()});
 
-            // Lấy thông tin lớp và ngày từ model
-            String classId = attendanceModel.getClassId();
+            // Lấy thông tin lớp, buổi học và ngày từ model
+            String courseId = attendanceModel.getCourseId();
             String sessionId = attendanceModel.getSessionId();
-            LocalDate recordDate = attendanceModel.getSessionDate();
+            LocalDate recordDate = attendanceModel.getSessionDate(); // Ngày của buổi học đang xử lý
             List<StudentAttendanceData> attendanceList = attendanceModel.getAttendanceList();
 
-            // Lưu thông tin điểm chuyên cần, đúng giờ và ghi chú
-            HomeworkDAO homeworkDAO = DaoManager.getInstance().getHomeworkDAO();
+            // Lấy nội dung ghi chú buổi học từ View
+            String notesFromView = view.getSessionNotes();
 
-            // Trước hết, lấy tất cả các metrics hiện có cho các học sinh trong lớp này
-            Map<String, Long> existingMetricsMap = new HashMap<>();
-            List<Map<String, Object>> existingMetrics = homeworkDAO.getStudentMetricsForClass(classId);
-            for (Map<String, Object> metric : existingMetrics) {
-                String studentId = (String) metric.get("student_id");
-                Long metricId = (Long) metric.get("metric_id");
-                existingMetricsMap.put(studentId, metricId);
-            }
-
-            List<Map<String, Object>> metricsDataList = new ArrayList<>();
-
-            // Duyệt qua danh sách điểm danh và tạo dữ liệu để lưu
-            for (StudentAttendanceData data : attendanceList) {
-                String studentId = data.getStudent().getId();
-
-                // Xử lý dữ liệu metrics (chuyên cần và đúng giờ)
-                Map<String, Object> metrics = new HashMap<>();
-                metrics.put("studentId", studentId);
-                metrics.put("classId", classId);
-                metrics.put("recordDate", java.sql.Date.valueOf(recordDate));
-                metrics.put("awarenessScore", data.getDiligenceRating());
-                metrics.put("punctualityScore", data.getPunctualityRating());
-                metrics.put("notes", data.getStudentSessionNotes());
-
-                // Thêm metric_id nếu đã tồn tại cho học sinh này
-                if (existingMetricsMap.containsKey(studentId)) {
-                    metrics.put("metricId", existingMetricsMap.get(studentId));
+            // === BƯỚC 1: LƯU GHI CHÚ BUỔI HỌC (SESSION NOTES) ===
+            if (sessionId != null && !sessionId.isEmpty()) {
+                ClassSession sessionToUpdate = null;
+                if (this.classSessions != null) { // Đảm bảo classSessions đã được tải
+                    for (ClassSession cs : this.classSessions) {
+                        if (cs.getId() != null && cs.getId().equals(sessionId)) {
+                            sessionToUpdate = cs;
+                            break;
+                        }
+                    }
                 }
 
-                metricsDataList.add(metrics);
+                if (sessionToUpdate != null) {
+                    // Giả sử ClassSession model có phương thức setSessionNotes()
+                    // và bảng class_sessions có cột tương ứng để lưu ghi chú này.
+                    sessionToUpdate.setSessionNotes(notesFromView); // Cập nhật ghi chú vào đối tượng ClassSession
+
+                    // Giả sử ClassSessionDAO có phương thức update(ClassSession session)
+                    boolean notesUpdated = classSessionDAO.update(sessionToUpdate);
+                    if (notesUpdated) {
+                        LOGGER.log(Level.INFO, "Session notes updated successfully for sessionId: {0}", sessionId);
+                    } else {
+                        LOGGER.log(Level.WARNING, "Failed to update session notes for sessionId: {0} (DAO returned false). Session object might not have been found by DAO or no changes made.", sessionId);
+                        // Bạn có thể cân nhắc hiển thị một cảnh báo nhỏ cho người dùng ở đây nếu cần
+                        // view.showWarning("Could not save session notes details.");
+                    }
+                } else {
+                    LOGGER.log(Level.WARNING, "Could not find ClassSession object in controller's list for current sessionId: {0}. Session notes not saved.", sessionId);
+                    // Điều này có thể xảy ra nếu danh sách classSessions không được đồng bộ hoặc sessionId không hợp lệ
+                }
+            } else {
+                LOGGER.log(Level.WARNING, "SessionId is null or empty, cannot save session notes.");
+            }
+            // =======================================================
+
+            // === BƯỚC 2: LƯU STUDENT METRICS (Chuyên cần, Đúng giờ, Ghi chú HV) ===
+            // Trước hết, lấy tất cả các metrics hiện có cho các học sinh trong lớp này để update nếu có
+            Map<String, String> existingMetricsMap = new HashMap<>();
+            // Giả sử homeworkDAO.getStudentMetricsForCourse trả về List<Map<String, Object>>
+            // với key "student_id" và "metric_id" (là String)
+            if (courseId != null && !courseId.isEmpty()) { // Chỉ lấy metrics nếu courseId hợp lệ
+                List<Map<String, Object>> existingMetrics = homeworkDAO.getStudentMetricsForCourse(courseId);
+                for (Map<String, Object> metric : existingMetrics) {
+                    String studentId = (String) metric.get("student_id");
+                    String metricId = (String) metric.get("metric_id"); // metric_id là String
+                    if (studentId != null && metricId != null) {
+                        existingMetricsMap.put(studentId, metricId);
+                    }
+                }
             }
 
-            // Lưu dữ liệu metrics vào database
-            int metricsCount = homeworkDAO.saveStudentMetricsBatch(metricsDataList);
-            LOGGER.log(Level.INFO, "Saved {0} student metrics records.", metricsCount);
 
-            // Lưu dữ liệu điểm danh thông thường (gốc)
-            attendanceModel.saveAttendanceData();
+            List<Map<String, Object>> metricsDataList = new ArrayList<>();
+            if (recordDate == null) { // Cần recordDate để lưu metrics
+                LOGGER.log(Level.SEVERE, "Record date is null. Cannot save student metrics.");
+                view.showError("Session date is not set. Cannot save student metrics.");
+                // Không nên tiếp tục nếu không có recordDate
+            } else {
+                for (StudentAttendanceData data : attendanceList) {
+                    String studentId = data.getStudent().getId();
 
-            // Gọi saveHomeworkSubmissions() riêng để lưu thông tin bài tập về nhà
-            saveHomeworkSubmissions();
+                    Map<String, Object> metrics = new HashMap<>();
+                    metrics.put("studentId", studentId);
+                    metrics.put("courseId", courseId); // courseId của buổi học
+                    metrics.put("recordDate", java.sql.Date.valueOf(recordDate)); // Ngày ghi nhận metrics
+                    metrics.put("awarenessScore", data.getDiligenceRating()); // Điểm chuyên cần
+                    metrics.put("punctualityScore", data.getPunctualityRating()); // Điểm đúng giờ
+                    metrics.put("notes", data.getStudentSessionNotes()); // Ghi chú của riêng học viên đó
 
-            // Thông báo thành công
-            view.showSuccess("All data saved to the database successfully!");
-            LOGGER.log(Level.INFO, "All attendance and related data saved successfully.");
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Failed to save attendance data: " + e.getMessage(), e);
-            view.showError("Failed to save attendance data: " + e.getMessage());
+                    // Thêm metric_id nếu đã tồn tại cho học sinh này (để DAO biết update thay vì insert)
+                    if (existingMetricsMap.containsKey(studentId)) {
+                        metrics.put("metricId", existingMetricsMap.get(studentId));
+                    }
+                    metricsDataList.add(metrics);
+                }
+
+                if (!metricsDataList.isEmpty()) {
+                    try {
+                        int metricsCount = homeworkDAO.saveStudentMetricsBatch(metricsDataList);
+                        LOGGER.log(Level.INFO, "Saved/Updated {0} student metrics records.", metricsCount);
+                    } catch (SQLException e) {
+                        LOGGER.log(Level.SEVERE, "Error saving student metrics batch", e);
+                        view.showError("Error saving student metrics: " + e.getMessage());
+                        // Quyết định xem có ném lại lỗi hoặc dừng ở đây không
+                    }
+                }
+            }
+            // ==========================================================
+
+            // === BƯỚC 3: LƯU HOMEWORK SUBMISSIONS (Bài tập về nhà) ===
+            // (Phương thức saveHomeworkSubmissions đã được bạn viết và gọi ở nơi khác,
+            // hoặc nếu bạn muốn gọi nó ở đây thì đảm bảo nó không gây xung đột)
+            // Nếu saveHomeworkSubmissions được gọi riêng biệt thì không cần gọi lại ở đây.
+            // Nếu nó là một phần của "Lưu thông tin" tổng thể thì gọi ở đây:
+            try {
+                saveHomeworkSubmissions(); // Đảm bảo phương thức này xử lý lỗi nội bộ hoặc ném để catch ở ngoài
+            } catch (Exception e) { // Bắt Exception chung nếu saveHomeworkSubmissions có thể ném nhiều loại
+                LOGGER.log(Level.SEVERE, "Error during saveHomeworkSubmissions call within saveInformation", e);
+                view.showError("Error saving homework data: " + e.getMessage());
+            }
+            // =======================================================
+
+            // attendanceModel.saveAttendanceData(); // Gọi nếu phương thức này có nhiệm vụ khác chưa được xử lý
+
+            view.showSuccess("All information saving process completed.");
+            LOGGER.log(Level.INFO, "All information saving process completed.");
+
+        } catch (Exception e) { // Bắt Exception chung cho toàn bộ quá trình
+            LOGGER.log(Level.SEVERE, "Failed to save all information: " + e.getMessage(), e);
+            view.showError("Failed to save all information: " + e.getMessage());
         }
     }
 
@@ -279,7 +296,7 @@ public class ClassroomAttendanceController {
         LOGGER.log(Level.INFO, "Updating session date to: {0}", selectedDate);
         // Update the date in the attendance model
         attendanceModel.setSessionDate(selectedDate);
-        view.showSuccess("Session date updated to: " + selectedDate);
+        //view.showSuccess("Session date updated to: " + selectedDate);
     }
 
     public void saveHomeworkSubmissions() {
@@ -289,58 +306,128 @@ public class ClassroomAttendanceController {
             return;
         }
 
+        String sessionId = attendanceModel.getSessionId();
+        String courseId = attendanceModel.getCourseId();
+
+        if (courseId == null || courseId.isEmpty()) {
+            view.showError("No course ID found for the session. Cannot save homework submissions.");
+            LOGGER.log(Level.WARNING, "Cannot save homework submissions because courseId is null or empty for session: " + sessionId);
+            return;
+        }
+
+        // Biến để lưu homework object, sẽ được dùng để cập nhật điểm trung bình
+        Homework homeworkToUpdate = null;
+        String determinedHomeworkId = null;
+
         try {
-            LOGGER.log(Level.INFO, "Saving homework submissions for sessionId: {0}", attendanceModel.getSessionId());
+            LOGGER.log(Level.INFO, "Attempting to save homework submissions for sessionId: {0}", sessionId);
 
-            // Trước tiên, lấy tất cả các bản ghi hiện có của buổi học này để giữ ID
-            Map<String, HomeworkSubmissionModel> existingSubmissions = new HashMap<>();
-            List<HomeworkSubmissionModel> currentSubmissions = homeworkSubmissionDAO.getBySessionId(attendanceModel.getSessionId());
-
-            for (HomeworkSubmissionModel submission : currentSubmissions) {
-                // Tạo key bằng cách kết hợp studentId và homeworkId
-                String key = submission.getStudentId() + "_" + submission.getHomeworkId();
-                existingSubmissions.put(key, submission);
+            // Bước 1: Đảm bảo bản ghi Homework tồn tại và lấy ID
+            // (Giữ nguyên logic getOrCreateHomeworkForSession của bạn)
+            LocalDate sessionActualDate = attendanceModel.getSessionDate();
+            if (sessionActualDate == null) {
+                LOGGER.log(Level.SEVERE, "Session actual date is null. Cannot proceed with saving homework submissions for session: " + sessionId);
+                view.showError("Session date not available. Cannot save homework submissions.");
+                return;
             }
+            String homeworkTitle = "Bài tập buổi " + sessionActualDate.toString();
+            // Sử dụng assignedDate từ sessionActualDate cho getOrCreateHomeworkForSession
+            homeworkToUpdate = homeworkDAO.getOrCreateHomeworkForSession(sessionId, homeworkTitle, courseId, sessionActualDate);
 
+            if (homeworkToUpdate == null || homeworkToUpdate.getHomeworkId() == null || homeworkToUpdate.getHomeworkId().isEmpty()) {
+                LOGGER.log(Level.SEVERE, "Failed to get or create a valid homework record for session: " + sessionId);
+                view.showError("Could not establish a valid homework entry for this session.");
+                return;
+            }
+            determinedHomeworkId = homeworkToUpdate.getHomeworkId();
+            LOGGER.log(Level.INFO, "Using homework_id: {0} for session: {1}", new Object[]{determinedHomeworkId, sessionId});
+
+            // Bước 2: Lấy các bản ghi nộp bài hiện có cho homework_id này (để so sánh và chuẩn bị update/insert)
+            Map<String, HomeworkSubmissionModel> existingSubmissionsMap = new HashMap<>();
+            List<HomeworkSubmissionModel> submissionsForThisHomeworkFromDb = homeworkSubmissionDAO.getSubmissionsByHomeworkId(determinedHomeworkId);
+            for (HomeworkSubmissionModel sub : submissionsForThisHomeworkFromDb) {
+                existingSubmissionsMap.put(sub.getStudentId(), sub);
+            }
+            LOGGER.log(Level.INFO, "Fetched {0} existing submissions for homework_id: {1}", new Object[]{existingSubmissionsMap.size(), determinedHomeworkId});
+
+            // Bước 3: Chuẩn bị danh sách các bài nộp cần lưu (tạo mới hoặc cập nhật)
             List<HomeworkSubmissionModel> submissionsToSave = new ArrayList<>();
             for (StudentAttendanceData data : attendanceModel.getAttendanceList()) {
                 String studentId = data.getStudent().getId();
-                String homeworkId = attendanceModel.getSessionId();
-                String key = studentId + "_" + homeworkId;
+                HomeworkSubmissionModel submission = existingSubmissionsMap.get(studentId);
 
-                // Kiểm tra xem có submission hiện có không
-                HomeworkSubmissionModel submission = existingSubmissions.containsKey(key)
-                        ? existingSubmissions.get(key)
-                        : new HomeworkSubmissionModel();
-
-                // Nếu là submission mới, cần tạo ID
-                if (submission.getStudentSubmissionId() == null || submission.getStudentSubmissionId().isEmpty()) {
-                    submission.setStudentSubmissionId(UUID.randomUUID().toString());
+                if (submission == null) {
+                    submission = new HomeworkSubmissionModel();
+                    // student_submission_id sẽ được tạo trong saveOrUpdateBatch nếu cần
+                    submission.setStudentId(studentId);
+                    submission.setHomeworkId(determinedHomeworkId);
                 }
-
-                // Cập nhật các thông tin khác
-                submission.setStudentId(studentId);
-                submission.setHomeworkId(homeworkId);
-                submission.setSubmitted(data.isHomeworkSubmitted());  // Sử dụng trường này với is_submitted trong DB
+                // Cập nhật thông tin từ StudentAttendanceData
+                submission.setSubmitted(data.isHomeworkSubmitted());
                 submission.setGrade(data.getHomeworkGrade());
                 submission.setSubmissionTimestamp(data.getSubmissionDate() != null
                         ? data.getSubmissionDate()
-                        : LocalDateTime.now());
-                submission.setCheckedInSessionId(attendanceModel.getSessionId());
+                        : (data.isHomeworkSubmitted() ? LocalDateTime.now() : null));
+                submission.setCheckedInSessionId(sessionId);
+                // submission.setEvaluatorNotes(...); // Nếu có trường này trong StudentAttendanceData
 
                 submissionsToSave.add(submission);
-
-                LOGGER.log(Level.INFO, "Prepared submission for studentId: {0} with homeworkId: {1}, submissionId: {2}",
-                        new Object[]{studentId, homeworkId, submission.getStudentSubmissionId()});
             }
 
-            // Save or update the homework submissions in batch
-            homeworkSubmissionDAO.saveOrUpdateBatch(submissionsToSave);
-            LOGGER.log(Level.INFO, "Saved {0} homework submissions to the database.", submissionsToSave.size());
-            view.showSuccess("Homework submissions saved successfully.");
+            // Bước 4: Lưu hoặc cập nhật các bài nộp theo lô
+            if (!submissionsToSave.isEmpty()) {
+                // Giả sử saveOrUpdateBatch trong HomeworkSubmissionDAO đã được sửa để tự tạo student_submission_id
+                homeworkSubmissionDAO.saveOrUpdateBatch(submissionsToSave);
+                LOGGER.log(Level.INFO, "Successfully processed {0} homework submissions for homework_id: {1}.",
+                        new Object[]{submissionsToSave.size(), determinedHomeworkId});
+
+                // === BƯỚC 5: TÍNH TOÁN VÀ CẬP NHẬT ĐIỂM TRUNG BÌNH CHO HOMEWORK ===
+                // Lấy lại tất cả các bài nộp (đã được cập nhật) cho homework này để tính điểm TB
+                List<HomeworkSubmissionModel> updatedSubmissions = homeworkSubmissionDAO.getSubmissionsByHomeworkId(determinedHomeworkId);
+                double totalScore = 0;
+                int submittedCount = 0;
+                for (HomeworkSubmissionModel sub : updatedSubmissions) {
+                    if (sub.isSubmitted() && sub.getGrade() != 0) { // Chỉ tính những bài đã nộp và có điểm
+                        totalScore += sub.getGrade();
+                        submittedCount++;
+                    }
+                }
+
+                Double averageScore = null;
+                if (submittedCount > 0) {
+                    averageScore = totalScore / submittedCount;
+                    // Làm tròn đến 1 chữ số thập phân nếu muốn
+                    // averageScore = Math.round(averageScore * 10.0) / 10.0;
+                }
+
+                // Cập nhật đối tượng homeworkToUpdate (đã lấy ở Bước 1)
+                homeworkToUpdate.setScore(averageScore); // Cột 'score' trong bảng 'homework' giờ là điểm trung bình
+                homeworkToUpdate.setSubmissionDate(LocalDateTime.now()); // Thời gian hoàn tất việc cập nhật điểm này
+                // Bạn có thể cập nhật status của homework nếu cần, ví dụ: "Graded"
+                // homeworkToUpdate.setStatus("Graded");
+
+                boolean homeworkUpdated = homeworkDAO.update(homeworkToUpdate); // Gọi DAO để cập nhật bảng homework
+                if (homeworkUpdated) {
+                    LOGGER.log(Level.INFO, "Homework table updated with average score: {0} for homework_id: {1}",
+                            new Object[]{averageScore, determinedHomeworkId});
+                } else {
+                    LOGGER.log(Level.WARNING, "Failed to update homework table with average score for homework_id: {0}", determinedHomeworkId);
+                }
+                // ================================================================
+
+                view.showSuccess("Homework submissions and average score saved successfully.");
+
+            } else {
+                LOGGER.log(Level.INFO, "No homework submissions to save for homework_id: {0}.", determinedHomeworkId);
+                view.showSuccess("No changes in homework submissions to save.");
+            }
+
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Failed to save homework submissions.", e);
+            LOGGER.log(Level.SEVERE, "Failed to save homework submissions for session " + sessionId, e);
             view.showError("Failed to save homework submissions: " + e.getMessage());
+        } catch (Exception e) { // Bắt các lỗi khác có thể xảy ra
+            LOGGER.log(Level.SEVERE, "An unexpected error occurred while saving homework submissions for session " + sessionId, e);
+            view.showError("An unexpected error occurred: " + e.getMessage());
         }
     }
 
@@ -350,39 +437,46 @@ public class ClassroomAttendanceController {
     public void handleSessionChange() {
         Integer sessionNumber = view.getSelectedSessionNumber();
         if (sessionNumber == null) {
-            view.showError("No session selected.");
-            LOGGER.log(Level.WARNING, "No session selected during session change.");
+            // view.showError("No session selected."); // Có thể không cần báo lỗi nếu đây là trạng thái bình thường
+            LOGGER.log(Level.WARNING, "No session selected during session change or list is empty.");
+            // Xóa dữ liệu trên bảng nếu không có session nào được chọn
+            attendanceModel.getAttendanceList().clear();
+            view.setFilteredAttendanceList(new FilteredList<>(attendanceModel.getAttendanceList(), p -> true));
+            view.setSessionNotes("");
+            view.setSelectedDate(null); // Hoặc một ngày mặc định
             return;
         }
 
         LOGGER.log(Level.INFO, "Handling session change for session number: {0}", sessionNumber);
-
-        // Tính toán index của session (số buổi học bắt đầu từ 1 nhưng index bắt đầu từ 0)
         int sessionIndex = sessionNumber - 1;
 
-        // Kiểm tra index có hợp lệ không
         if (sessionIndex < 0 || sessionIndex >= classSessions.size()) {
             LOGGER.log(Level.WARNING, "Invalid session index: {0}, total sessions: {1}",
                     new Object[]{sessionIndex, classSessions.size()});
             view.showError("Invalid session number selected.");
+            attendanceModel.getAttendanceList().clear(); // Xóa dữ liệu cũ
             return;
         }
 
-        // Lấy thông tin buổi học từ danh sách đã lưu
-        ClassSession session = classSessions.get(sessionIndex);
-        LOGGER.log(Level.INFO, "Loaded session details: {0}", session.toString());
+        ClassSession selectedSession = classSessions.get(sessionIndex);
+        LOGGER.log(Level.INFO, "Selected session details: ID={0}, Date={1}",
+                new Object[]{selectedSession.getId(), selectedSession.getStartTime().toLocalDate()});
 
-        // Cập nhật thông tin buổi học vào model và src.view
-        view.setSessionNotes(session.getCourseName());
-        view.setSelectedDate(session.getStartTime().toLocalDate());
-        attendanceModel.setSessionDate(session.getStartTime().toLocalDate());
-        attendanceModel.setSessionId(session.getId());
+        // Cập nhật thông tin chung của buổi học lên Model và View
+        attendanceModel.setSessionId(selectedSession.getId());
+        attendanceModel.setSessionDate(selectedSession.getStartTime().toLocalDate());
+        //attendanceModel.setCourseId(...); // Đảm bảo courseId trong attendanceModel cũng đúng nếu cần
 
-        // Tải dữ liệu bài tập về nhà cho buổi học này nếu cần
-        LOGGER.log(Level.INFO, "Calling loadHomeworkSubmissionsForSession with sessionId: {0}", session.getId());
-        loadHomeworkSubmissionsForSession(session.getId());
+        // Cập nhật View với thông tin của buổi học mới
+        // view.setSessionNotes(selectedSession.getNotes()); // Lấy notes của session nếu có
+        // Hoặc nếu bạn muốn hiển thị tên khóa học ở phần notes của view:
+        view.setSessionNotes(selectedSession.getSessionNotes()); // Giả sử ClassSession có getTopicOrDescription()
+        view.setSelectedDate(selectedSession.getStartTime().toLocalDate());
 
-        view.refreshView();
+        // Tải lại TOÀN BỘ dữ liệu học sinh (bao gồm metrics và BTVN) cho buổi học mới này
+        reloadDataForSelectedSession(selectedSession.getId(), attendanceModel.getCourseId());
+
+        view.refreshView(); // Đảm bảo view được cập nhật sau khi model thay đổi
     }
 
     /**
@@ -422,7 +516,7 @@ public class ClassroomAttendanceController {
     public void applyFilters() {
         int punctualityFilter = view.getPunctualityFilterValue();
         int diligenceFilter = view.getDiligenceFilterValue();
-        String classId = view.getMainController().getCurrentClassId();
+        String classId = view.getMainController().getCurrentCourseId();
         if (classId == null || classId.isEmpty()) {
             LOGGER.log(Level.WARNING, "Cannot apply filters: No class selected");
             view.showError("Vui lòng chọn một lớp học trước khi lọc");
@@ -519,6 +613,153 @@ public class ClassroomAttendanceController {
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Lỗi khi tải dữ liệu bài tập về nhà", e);
             view.showError("Đã xảy ra lỗi khi tải dữ liệu bài tập về nhà: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Tải lại toàn bộ dữ liệu điểm danh, metrics, và bài tập về nhà cho tất cả học sinh
+     * của một courseId cụ thể, cho một sessionId cụ thể.
+     *
+     * @param sessionId ID của buổi học cần tải dữ liệu.
+     * @param courseId  ID của khóa học.
+     */
+    private void reloadDataForSelectedSession(String sessionId, String courseId) {
+        //LOGGER.log(Level.INFO, "---- ENTERING reloadDataForSelectedSession ---- sessionId: {0}, courseId: {1}", new Object[]{sessionId, courseId});
+        if (sessionId == null || courseId == null || sessionId.isEmpty() || courseId.isEmpty()) {
+            //LOGGER.log(Level.WARNING, "reloadData: Session ID or Course ID is null/empty. Aborting. SessionId: ''{0}'', CourseId: ''{1}''", new Object[]{sessionId, courseId});
+            attendanceModel.getAttendanceList().clear();
+            // Cập nhật view với danh sách rỗng
+            FilteredList<StudentAttendanceData> emptyFilteredList = new FilteredList<>(attendanceModel.getAttendanceList(), p -> true);
+            view.setFilteredAttendanceList(emptyFilteredList);
+            // view.refreshTable(); // Không cần nếu setFilteredAttendanceList đã refresh
+            return;
+        }
+
+        try {
+            // 1. Lấy danh sách học sinh của khóa học
+            List<Student> students = studentDAO.findByCourseId(courseId);
+            //LOGGER.log(Level.INFO, "reloadData: studentDAO.findByCourseId(''{0}'') returned {1} students.", new Object[]{courseId, students.size()});
+
+            if (students.isEmpty()) {
+                //LOGGER.log(Level.INFO, "reloadData: No students found for courseId: {0}. Clearing attendance list.", courseId);
+                attendanceModel.getAttendanceList().clear();
+                FilteredList<StudentAttendanceData> emptyFilteredList = new FilteredList<>(attendanceModel.getAttendanceList(), p -> true);
+                view.setFilteredAttendanceList(emptyFilteredList);
+                return;
+            }
+
+            // 2. Chuẩn bị dữ liệu cho homework của session này
+            LocalDate sessionActualDate = attendanceModel.getSessionDate();
+            //LOGGER.log(Level.INFO, "reloadData: Using sessionActualDate from attendanceModel: {0} for sessionId: {1}", new Object[]{sessionActualDate, sessionId});
+            if (sessionActualDate == null) {
+                //LOGGER.log(Level.SEVERE, "reloadData: sessionActualDate is NULL. Cannot fetch metrics or create/get homework. Aborting for sessionId: {0}", sessionId);
+                attendanceModel.getAttendanceList().clear();
+                FilteredList<StudentAttendanceData> emptyFilteredList = new FilteredList<>(attendanceModel.getAttendanceList(), p -> true);
+                view.setFilteredAttendanceList(emptyFilteredList);
+                return;
+            }
+
+            Homework homeworkForSession = homeworkDAO.getOrCreateHomeworkForSession(
+                    sessionId,
+                    "Bài tập buổi " + sessionActualDate.toString(),
+                    courseId,
+                    sessionActualDate
+            );
+            String actualHomeworkId = null;
+            if (homeworkForSession != null && homeworkForSession.getHomeworkId() != null) {
+                actualHomeworkId = homeworkForSession.getHomeworkId();
+                //LOGGER.log(Level.INFO, "reloadData: Determined actualHomeworkId: {0} for sessionId: {1}", new Object[]{actualHomeworkId, sessionId});
+            } else {
+                //LOGGER.log(Level.WARNING, "reloadData: homeworkForSession or its ID is null for sessionId: {0}. Homework related data might be missing.", sessionId);
+                // Quyết định xem có nên dừng ở đây không nếu không có homeworkId.
+                // Hiện tại, code sẽ tiếp tục và homeworkSubmissionsMap sẽ rỗng.
+            }
+
+
+            // 3. Lấy tất cả homework submissions cho homework_id này một lần để tối ưu
+            Map<String, HomeworkSubmissionModel> homeworkSubmissionsMap = new HashMap<>();
+            if (actualHomeworkId != null && !actualHomeworkId.isEmpty()) {
+                List<HomeworkSubmissionModel> submissions = homeworkSubmissionDAO.getSubmissionsByHomeworkId(actualHomeworkId);
+                for (HomeworkSubmissionModel sub : submissions) {
+                    homeworkSubmissionsMap.put(sub.getStudentId(), sub);
+                }
+                //LOGGER.log(Level.INFO, "reloadData: Fetched {0} submissions for actualHomeworkId: {1}", new Object[]{homeworkSubmissionsMap.size(), actualHomeworkId});
+            } else {
+                //LOGGER.log(Level.INFO, "reloadData: actualHomeworkId is null or empty, skipping fetch for homework submissions.");
+            }
+
+            // 4. Tạo danh sách StudentAttendanceData mới
+            ObservableList<StudentAttendanceData> newAttendanceDataList = FXCollections.observableArrayList();
+            for (Student student : students) {
+                StudentAttendanceData sad = new StudentAttendanceData(student);
+                //LOGGER.log(Level.INFO, "reloadData [LOOP START]: Processing studentId: {0}, Name: {1}", new Object[]{student.getId(), student.getName()});
+
+                // 4a. Lấy Student Metrics (Punctuality, Diligence, Notes) cho session này
+                Optional<Map<String, Object>> metricsOpt = homeworkDAO.findStudentMetrics(
+                        student.getId(),
+                        courseId,
+                        java.sql.Date.valueOf(sessionActualDate) // Chuyển LocalDate sang java.sql.Date
+                );
+
+                if (metricsOpt.isPresent()) {
+                    Map<String, Object> metrics = metricsOpt.get();
+                    Integer punctualityScoreVal = metrics.get("punctualityScore") != null ? ((Number) metrics.get("punctualityScore")).intValue() : 0;
+                    Integer awarenessScoreVal = metrics.get("awarenessScore") != null ? ((Number) metrics.get("awarenessScore")).intValue() : 0;
+                    String studentNotesVal = (String) metrics.get("notes");
+
+                    sad.punctualityRatingProperty().set(punctualityScoreVal);
+                    sad.diligenceRatingProperty().set(awarenessScoreVal);
+                    sad.setStudentSessionNotes(studentNotesVal);
+                    //LOGGER.log(Level.INFO, "reloadData [LOOP]: Metrics LOADED for student {0}: P={1}, D={2}, Notes=''{3}''", new Object[]{student.getId(), punctualityScoreVal, awarenessScoreVal, studentNotesVal});
+                } else {
+                    sad.punctualityRatingProperty().set(0); // Giá trị mặc định
+                    sad.diligenceRatingProperty().set(0); // Giá trị mặc định
+                    sad.setStudentSessionNotes("");     // Giá trị mặc định
+                    //LOGGER.log(Level.INFO, "reloadData [LOOP]: No metrics found for student {0} on {1}. Using defaults (P=0, D=0, Notes='').", new Object[]{student.getId(), sessionActualDate});
+                }
+
+                // 4b. Lấy Homework Submission cho homework_id của session này
+                HomeworkSubmissionModel hwSubmission = homeworkSubmissionsMap.get(student.getId());
+                if (hwSubmission != null) {
+                    sad.setHomeworkSubmitted(hwSubmission.isSubmitted());
+                    sad.setHomeworkGrade(hwSubmission.getGrade());
+                    sad.setSubmissionDate(hwSubmission.getSubmissionTimestamp());
+                    //LOGGER.log(Level.INFO, "reloadData [LOOP]: HW Sub LOADED for student {0}: Submitted={1}, Grade={2}", new Object[]{student.getId(), sad.isHomeworkSubmitted(), sad.getHomeworkGrade()});
+                } else {
+                    sad.setHomeworkSubmitted(false);
+                    sad.setHomeworkGrade(0.0); // Hoặc 0.0 nếu bạn muốn mặc định là số
+                    sad.setSubmissionDate(null);
+                    //LOGGER.log(Level.INFO, "reloadData [LOOP]: No HW Sub for student {0} for homeworkId: {1}.", new Object[]{student.getId(), actualHomeworkId});
+                }
+                // Gán homeworkId hiện tại vào StudentAttendanceData để biết nó thuộc bài tập nào (nếu cần)
+                if (actualHomeworkId != null) {
+                    // sad.setCurrentHomeworkId(actualHomeworkId); // Bỏ comment nếu bạn có trường này trong StudentAttendanceData
+                }
+
+                newAttendanceDataList.add(sad);
+                //LOGGER.log(Level.INFO, "reloadData [LOOP END]: Added/Updated StudentAttendanceData for studentId: {0}", student.getId());
+            }
+
+            // 5. Cập nhật model chính và thông báo cho view
+            //LOGGER.log(Level.INFO, "reloadData: Prepared {0} StudentAttendanceData objects in newAttendanceDataList.", newAttendanceDataList.size());
+            attendanceModel.getAttendanceList().setAll(newAttendanceDataList);
+            //LOGGER.log(Level.INFO, "reloadData: attendanceModel.getAttendanceList() updated with {0} items.", attendanceModel.getAttendanceList().size());
+
+        } catch (SQLException e) {
+            //LOGGER.log(Level.SEVERE, "reloadData: SQL Error for session: " + sessionId, e);
+            view.showError("Failed to load data for new session: " + e.getMessage());
+            attendanceModel.getAttendanceList().clear(); // Xóa dữ liệu nếu có lỗi
+        } catch (Exception e) { // Bắt các lỗi runtime khác có thể xảy ra
+            //LOGGER.log(Level.SEVERE, "reloadData: Unexpected error for session: " + sessionId, e);
+            view.showError("An unexpected error occurred while loading session data: " + e.getMessage());
+            attendanceModel.getAttendanceList().clear();
+        }
+        finally {
+            // Luôn cập nhật view, ngay cả khi danh sách rỗng hoặc có lỗi (để xóa dữ liệu cũ)
+            FilteredList<StudentAttendanceData> newFilteredList = new FilteredList<>(attendanceModel.getAttendanceList(), p -> true);
+            view.setFilteredAttendanceList(newFilteredList);
+            // view.refreshTable(); // Có thể không cần thiết nếu setFilteredAttendanceList đủ
+            //LOGGER.log(Level.INFO, "---- EXITING reloadDataForSelectedSession ---- List size in view: {0}", newFilteredList.size());
         }
     }
 

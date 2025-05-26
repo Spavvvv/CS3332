@@ -34,7 +34,6 @@ public class ReportView extends BaseScreenView {
 
     private DatePicker fromDatePicker;
     private DatePicker toDatePicker;
-    // private ComboBox<String> statusComboBox; // ĐÃ BỎ
     private Button searchButton;
     private Button exportPdfButton;
     private Button exportExcelButton;
@@ -53,35 +52,8 @@ public class ReportView extends BaseScreenView {
 
     public ReportView() {
         super("Báo cáo tình hình học tập", "learning-reports");
-        System.out.println("ReportView constructor: START");
-
         this.model = new ReportModel();
-        System.out.println("ReportView constructor: ReportModel created.");
-
         this.controller = new ReportController(this.model, this);
-        System.out.println("ReportView constructor: ReportController created and linked.");
-
-        System.out.println("ReportView constructor: Calling initializeView()...");
-        initializeView();
-        System.out.println("ReportView constructor: initializeView() completed.");
-
-        System.out.println("ReportView constructor: Calling controller.initializeEventHandlers()...");
-        if (this.controller != null) {
-            this.controller.initializeEventHandlers();
-        } else {
-            System.err.println("ReportView constructor: CRITICAL - Controller is null BEFORE calling initializeEventHandlers!");
-        }
-        System.out.println("ReportView constructor: controller.initializeEventHandlers() completed (if controller was not null).");
-
-        System.out.println("ReportView constructor: Calling controller.loadInitialData()...");
-        if (this.controller != null) {
-            this.controller.loadInitialData();
-        } else {
-            System.err.println("ReportView constructor: CRITICAL - Controller is null BEFORE calling loadInitialData!");
-        }
-        System.out.println("ReportView constructor: controller.loadInitialData() completed (if controller was not null).");
-
-        System.out.println("ReportView constructor: END");
     }
 
     @Override
@@ -111,7 +83,8 @@ public class ReportView extends BaseScreenView {
         }
         VBox.setVgrow(tableContainer, Priority.ALWAYS);
 
-        System.out.println("ReportView.initializeView() UI construction part completed.");
+        this.controller.initializeEventHandlers();
+        this.controller.loadInitialData();
     }
 
 

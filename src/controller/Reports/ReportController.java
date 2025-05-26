@@ -1,17 +1,13 @@
-
-
-package src.controller.Reports; // Hoặc package tương ứng của bạn
+package src.controller.Reports;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import src.model.report.ReportModel;
 import src.model.report.ReportModel.ClassReportData;
 // Import ReportView để controller có thể tương tác
-import src.view.Report.ReportView; // Điều chỉnh package nếu cần
+import src.view.Report.ReportView;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
 
 public class ReportController {
     private static final String DEFAULT_STATUS_FILTER = "Tất cả";
@@ -42,6 +38,8 @@ public class ReportController {
         }
 
         if (view.getSearchButton() != null) {
+            System.out.println(">>>> SearchButton ACTION: Clicked! Attempting to call loadReportData(). <<<<");
+            System.out.println("SearchButton ACTION: Clicked! Attempting to call loadReportData().");
             view.getSearchButton().setOnAction(e -> loadReportData());
         } else {
             System.err.println("ReportController.initializeEventHandlers: SearchButton is null in View.");
@@ -74,6 +72,7 @@ public class ReportController {
     }
 
     public void loadReportData() {
+
         System.out.println("ReportController.loadReportData() CALLED.");
         if (model == null || view == null) {
             System.err.println("ReportController.loadReportData: Model or View is null. Aborting.");

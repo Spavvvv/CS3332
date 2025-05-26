@@ -79,7 +79,7 @@ public class ClassroomAttendanceView extends BaseScreenView {
                 createBottomBar()
         );
 
-        activateWithContext(mainController.getCurrentClassId());
+        activateWithContext(mainController.getCurrentCourseId());
     }
 
     /**
@@ -176,13 +176,6 @@ public class ClassroomAttendanceView extends BaseScreenView {
         bottomBar.setAlignment(Pos.CENTER_RIGHT);
         bottomBar.setPadding(new Insets(5, 0, 0, 0));
 
-        Button saveHomeworkButton = new Button("Lưu điểm bài tập");
-        saveHomeworkButton.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
-        saveHomeworkButton.setOnAction(e -> {
-            if (controller != null) controller.saveHomeworkSubmissions();
-        });
-
-        bottomBar.getChildren().add(saveHomeworkButton);
         return bottomBar;
     }
 
@@ -241,6 +234,7 @@ public class ClassroomAttendanceView extends BaseScreenView {
         });
         nameCol.setPrefWidth(180);
 
+        // --- Cột BTVN (CheckBox) ---
         TableColumn<StudentAttendanceData, Boolean> homeworkCol = new TableColumn<>();
         Label btvnLabel = new Label("BTVN");
         btvnLabel.setStyle(blackBoldTextStyle);
@@ -251,24 +245,21 @@ public class ClassroomAttendanceView extends BaseScreenView {
         VBox homeworkHeader = new VBox(5, homeworkHeaderCheckbox, btvnLabel);
         homeworkHeader.setAlignment(Pos.CENTER);
         homeworkCol.setGraphic(homeworkHeader);
-
-        // Thay đổi: Sửa cách thiết lập cellValueFactory để sử dụng BooleanProperty
         homeworkCol.setCellValueFactory(cellData ->
-                cellData.getValue().homeworkSubmittedProperty());
-
-        // Thay đổi: Sử dụng cách khởi tạo CheckBoxTableCell đúng
+                cellData.getValue().homeworkSubmittedProperty()); // Quan trọng: homeworkSubmittedProperty() phải trả về BooleanProperty
         homeworkCol.setCellFactory(CheckBoxTableCell.forTableColumn(index ->
                 tableView.getItems().get(index).homeworkSubmittedProperty()));
-
         homeworkCol.setEditable(true);
         homeworkCol.setPrefWidth(100);
         homeworkCol.setStyle("-fx-alignment: CENTER;");
 
+        // --- Cột Đúng giờ (StarRating) ---
         TableColumn<StudentAttendanceData, Integer> punctualityCol = createStarRatingColumn(
-                "Đúng giờ", StudentAttendanceData::punctualityRatingProperty,
+                "Đúng giờ", StudentAttendanceData::punctualityRatingProperty, // Quan trọng: punctualityRatingProperty() phải trả về IntegerProperty
                 combo -> this.punctualityFilterCombo = combo);
         punctualityCol.setPrefWidth(140);
 
+        // --- Cột Điểm BTVN (TextField) ---
         TableColumn<StudentAttendanceData, Double> homeworkGradeCol = new TableColumn<>();
         Label diemBtvnLabel = new Label("Điểm BTVN");
         diemBtvnLabel.setStyle(blackBoldTextStyle);
@@ -277,41 +268,70 @@ public class ClassroomAttendanceView extends BaseScreenView {
         VBox homeworkGradeHeader = new VBox(5, diemBtvnLabel, rangeLabel);
         homeworkGradeHeader.setAlignment(Pos.CENTER);
         homeworkGradeCol.setGraphic(homeworkGradeHeader);
-        homeworkGradeCol.setCellValueFactory(new PropertyValueFactory<>("homeworkGrade"));
+        homeworkGradeCol.setCellValueFactory(new PropertyValueFactory<>("homeworkGrade")); // Cần homeworkGradeProperty() hoặc get/setHomeworkGrade
         homeworkGradeCol.setCellFactory(TextFieldTableCell.forTableColumn(new StringConverter<Double>() {
             @Override public String toString(Double object) { return object == null ? "" : String.format("%.1f", object); }
             @Override public Double fromString(String string) {
                 try {
+                    if (string == null || string.trim().isEmpty()) return null; // Cho phép xóa để thành null
                     double val = Double.parseDouble(string.replace(",", "."));
-                    return Math.max(0.0, Math.min(10.0, val));
-                } catch (NumberFormatException e) { return 0.0; }
+                    return Math.max(0.0, Math.min(10.0, val)); // Ràng buộc giá trị
+                } catch (NumberFormatException e) { return null; /* Hoặc giá trị mặc định nếu không muốn null */ }
             }
         }));
+        // <<<< THÊM onEditCommit CHO homeworkGradeCol >>>>
+        homeworkGradeCol.setOnEditCommit(
+                (TableColumn.CellEditEvent<StudentAttendanceData, Double> event) -> {
+                    StudentAttendanceData data = event.getRowValue();
+                    data.setHomeworkGrade(event.getNewValue()); // Cập nhật model
+                    // Bạn có thể muốn gọi controller.markDataAsChanged() hoặc tương tự ở đây nếu cần
+                }
+        );
         homeworkGradeCol.setEditable(true);
         homeworkGradeCol.setPrefWidth(100);
         homeworkGradeCol.setStyle("-fx-alignment: CENTER;");
 
+        // --- Cột Chuyên cần (StarRating) ---
         TableColumn<StudentAttendanceData, Integer> diligenceCol = createStarRatingColumn(
-                "Chuyên cần", StudentAttendanceData::diligenceRatingProperty,
+                "Chuyên cần", StudentAttendanceData::diligenceRatingProperty, // Quan trọng: diligenceRatingProperty() phải trả về IntegerProperty
                 combo -> this.diligenceFilterCombo = combo);
         diligenceCol.setPrefWidth(140);
 
+        // --- Cột Ghi chú HV (TextField) ---
         TableColumn<StudentAttendanceData, String> studentNotesCol = new TableColumn<>();
         studentNotesCol.setGraphic(createStyledHeaderLabel("Ghi chú HV"));
-        studentNotesCol.setCellValueFactory(new PropertyValueFactory<>("studentSessionNotes"));
+        studentNotesCol.setCellValueFactory(new PropertyValueFactory<>("studentSessionNotes")); // Cần studentSessionNotesProperty() hoặc get/setStudentSessionNotes
         studentNotesCol.setCellFactory(TextFieldTableCell.forTableColumn());
+        // <<<< THÊM onEditCommit CHO studentNotesCol >>>>
+        studentNotesCol.setOnEditCommit(
+                (TableColumn.CellEditEvent<StudentAttendanceData, String> event) -> {
+                    StudentAttendanceData data = event.getRowValue();
+                    data.setStudentSessionNotes(event.getNewValue()); // Cập nhật model
+                }
+        );
         studentNotesCol.setEditable(true);
         studentNotesCol.setPrefWidth(180);
 
+        // --- Cột Điểm TK (TextField) ---
         TableColumn<StudentAttendanceData, Integer> finalScoreCol = new TableColumn<>();
         finalScoreCol.setGraphic(createStyledHeaderLabel("Điểm TK"));
-        finalScoreCol.setCellValueFactory(new PropertyValueFactory<>("finalNumericScore"));
+        finalScoreCol.setCellValueFactory(new PropertyValueFactory<>("finalNumericScore")); // Cần finalNumericScoreProperty() hoặc get/setFinalNumericScore
         finalScoreCol.setCellFactory(TextFieldTableCell.forTableColumn(new StringConverter<Integer>() {
             @Override public String toString(Integer object) { return object == null ? "" : object.toString(); }
             @Override public Integer fromString(String string) {
-                try { return Integer.parseInt(string); } catch (NumberFormatException e) { return 0; }
+                try {
+                    if (string == null || string.trim().isEmpty()) return null; // Cho phép xóa để thành null
+                    return Integer.parseInt(string);
+                } catch (NumberFormatException e) { return null; /* Hoặc giá trị mặc định */ }
             }
         }));
+        // <<<< THÊM onEditCommit CHO finalScoreCol >>>>
+        finalScoreCol.setOnEditCommit(
+                (TableColumn.CellEditEvent<StudentAttendanceData, Integer> event) -> {
+                    StudentAttendanceData data = event.getRowValue();
+                    data.setFinalNumericScore(event.getNewValue()); // Cập nhật model
+                }
+        );
         finalScoreCol.setEditable(true);
         finalScoreCol.setPrefWidth(80);
         finalScoreCol.setStyle("-fx-alignment: CENTER;");

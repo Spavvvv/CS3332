@@ -64,7 +64,7 @@ public class ClassSessionDAO {
         ClassSession session = new ClassSession();
         session.setId(rs.getString("session_id"));
         session.setCourseId(rs.getString("course_id")); // Lấy course_id từ bảng
-        session.setClassId(rs.getString("course_id"));
+        session.setCourseId(rs.getString("course_id"));
         session.setCourseName(rs.getString("course_name"));
 
         Timestamp dbStartTime = rs.getTimestamp("start_time");
@@ -80,12 +80,8 @@ public class ClassSessionDAO {
         session.setRoom(rs.getString("room"));
         session.setTeacher(rs.getString("teacher_name"));
         session.setSessionNumber(rs.getInt("session_number"));
+        session.setSessionNotes(rs.getString("session_notes"));
 
-        // Đọc session_notes từ ResultSet
-        if (hasColumn(rs, "session_notes")) {
-            // Giả sử ClassSession model có phương thức setSessionNotes(String notes)
-            // session.setSessionNotes(rs.getString("session_notes"));
-        }
         return session;
     }
 
@@ -103,7 +99,7 @@ public class ClassSessionDAO {
         if (includeIdInValues) { // Cho INSERT
             stmt.setString(paramIndex++, session.getId());
             stmt.setString(paramIndex++, session.getCourseId());
-            stmt.setString(paramIndex++, session.getClassId()); // class_id
+            stmt.setString(paramIndex++, session.getCourseId());
             stmt.setString(paramIndex++, session.getCourseName());
 
             if (session.getStartTime() != null) {
@@ -128,7 +124,7 @@ public class ClassSessionDAO {
             // }
         } else { // Cho UPDATE (không bao gồm session_id trong phần SET)
             stmt.setString(paramIndex++, session.getCourseId());
-            stmt.setString(paramIndex++, session.getClassId()); // class_id
+            stmt.setString(paramIndex++, session.getCourseId()); // class_id
             stmt.setString(paramIndex++, session.getCourseName());
 
             if (session.getStartTime() != null) {
@@ -248,7 +244,7 @@ public class ClassSessionDAO {
             stmt.setString(paramIndex++, session.getRoom());
             stmt.setString(paramIndex++, session.getTeacher());
             stmt.setInt(paramIndex++, session.getSessionNumber());
-            // stmt.setString(paramIndex++, session.getSessionNotes()); // session_notes
+            stmt.setString(paramIndex++, session.getSessionNotes()); // session_notes
 
             stmt.setString(paramIndex++, session.getId()); // Cho WHERE clause
 
@@ -401,7 +397,7 @@ public class ClassSessionDAO {
 
                     newSession.setId(generatedSessionId);
                     newSession.setCourseId(course.getCourseId());
-                    newSession.setClassId(course.getClassId()); // Lấy classId từ Course object
+                    newSession.setCourseId(course.getCourseId()); // Lấy classId từ Course object
                     newSession.setCourseName(course.getCourseName());
                     newSession.setStartTime(actualSessionStartDateTime); // Gán cả ngày và giờ
                     newSession.setEndTime(actualSessionEndDateTime);   // Gán cả ngày và giờ
@@ -482,7 +478,7 @@ public class ClassSessionDAO {
     private String getBaseSelectClassSessionSQL() {
         // Các cột từ hình ảnh: session_id, session_date, start_time, end_time,
         // teacher_name, course_name, room, course_id, session_number, session_notes
-        return "SELECT session_id, course_id, course_name, " + // Bỏ class_id nếu không có cột riêng
+        return "SELECT session_id, course_id, course_name, " +
                 "start_time, end_time, room, teacher_name, " +
                 "session_number, session_date, session_notes" +
                 " FROM class_sessions";
@@ -883,6 +879,46 @@ public class ClassSessionDAO {
                 LOGGER.log(Level.WARNING, "Phát hiện chuỗi ngày viết tắt không hợp lệ: {0}", shortDay);
                 return null;
         }
+    }
+
+    /**
+     * TÌM CÁC BUỔI HỌC CỦA MỘT GIÁO VIÊN (THEO TÊN) TRONG MỘT KHOẢNG NGÀY.
+     *
+     * @param teacherName Tên của giáo viên.
+     * @param startDate Ngày bắt đầu của khoảng thời gian.
+     * @param endDate Ngày kết thúc của khoảng thời gian.
+     * @return Danh sách các ClassSession.
+     * @throws SQLException
+     */
+    public List<ClassSession> findByTeacherNameAndDateRange(String teacherName, LocalDate startDate, LocalDate endDate) throws SQLException {
+        List<ClassSession> sessions = new ArrayList<>();
+        if (teacherName == null || teacherName.trim().isEmpty() || startDate == null || endDate == null) {
+            LOGGER.warning("Invalid parameters for findByTeacherNameAndDateRange.");
+            return sessions;
+        }
+
+        // Đảm bảo getBaseSelectClassSessionSQL() lấy tất cả các cột cần thiết
+        // và bảng class_sessions có cột "teacher_name"
+        String sql = getBaseSelectClassSessionSQL() +
+                " WHERE teacher_name = ? AND session_date BETWEEN ? AND ? " + // Sử dụng session_date và teacher_name
+                "ORDER BY start_time ASC"; // Sắp xếp theo thời gian bắt đầu
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, teacherName);
+            stmt.setDate(2, java.sql.Date.valueOf(startDate));
+            stmt.setDate(3, java.sql.Date.valueOf(endDate));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    sessions.add(mapResultSetToClassSession(rs));
+                }
+            }
+        }
+        LOGGER.log(Level.INFO, "Found {0} sessions for teacher ''{1}'' between {2} and {3}",
+                new Object[]{sessions.size(), teacherName, startDate, endDate});
+        return sessions;
     }
 
 }

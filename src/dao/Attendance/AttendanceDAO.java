@@ -9,11 +9,10 @@ import src.model.person.Student;
 import src.utils.DatabaseConnection;
 
 import java.sql.*;
+import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -589,6 +588,60 @@ public class AttendanceDAO {
     }
 
     /**
+     * Lấy tất cả các bản ghi điểm danh cho một danh sách các ID buổi học cụ thể.
+     * Thực hiện một truy vấn SQL duy nhất để tối ưu hóa.
+     *
+     * @param sessionIds Danh sách các ID của buổi học.
+     * @return Map với key là session_id và value là List các Attendance cho session đó.
+     * Trả về map rỗng nếu sessionIds là null, rỗng, hoặc không có dữ liệu.
+     * @throws SQLException Nếu có lỗi truy vấn CSDL.
+     */
+    public Map<String, List<Attendance>> getAttendancesForMultipleSessionIds(List<String> sessionIds) throws SQLException {
+        Map<String, List<Attendance>> resultMap = new HashMap<>();
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            DAO_LOGGER.info("getAttendancesForMultipleSessionIds called with null or empty sessionIds list.");
+            return resultMap;
+        }
+
+        // Xây dựng phần placeholders cho IN clause: (?, ?, ...)
+        String placeholders = String.join(",", Collections.nCopies(sessionIds.size(), "?"));
+        String sql = "SELECT * FROM attendance WHERE session_id IN (" + placeholders + ") ORDER BY session_id, student_id";
+
+        Connection conn = null;
+        try {
+            conn = DatabaseConnection.getConnection(); // Lấy connection mới
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                int index = 1;
+                for (String sessionId : sessionIds) {
+                    pstmt.setString(index++, sessionId);
+                }
+
+                DAO_LOGGER.log(Level.INFO, "Executing query for multiple session attendances. Query: {0} with {1} params.", new Object[]{sql.replaceFirst("\\(.*\\)", "(...values...)" ), sessionIds.size()});
+
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    while (rs.next()) {
+                        // Chú ý: Nếu mapResultSetToAttendance gọi các public DAO.findById()
+                        // thì nó sẽ tạo connection mới cho mỗi lần gọi, điều này không tối ưu.
+                        // Lý tưởng nhất là mapResultSetToAttendance không thực hiện thêm truy vấn
+                        // hoặc sử dụng 'conn' được truyền vào nếu các DAO khác có phương thức internal.
+                        // Hiện tại, chúng ta giữ nguyên logic mapResultSetToAttendance của bạn.
+                        Attendance attendance = mapResultSetToAttendance(rs, conn); // Truyền conn vào, dù có thể nó không dùng hiệu quả
+                        resultMap.computeIfAbsent(attendance.getSessionId(), k -> new ArrayList<>()).add(attendance);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            DAO_LOGGER.log(Level.SEVERE, "Error fetching attendances for multiple session IDs. IDs: " + sessionIds.toString(), e);
+            throw e; // Ném lại để lớp gọi xử lý
+        } finally {
+            DatabaseConnection.closeConnection(conn); // Đóng connection
+        }
+
+        DAO_LOGGER.log(Level.INFO, "Fetched attendances for {0} session IDs, resulting in {1} map entries.", new Object[]{sessionIds.size(), resultMap.size()});
+        return resultMap;
+    }
+
+    /**
      * Helper class to store attendance statistics
      */
     public static class AttendanceStats {
@@ -905,4 +958,25 @@ public class AttendanceDAO {
             return new AttendanceStats(); // Return empty stats object on error
         }
     }
+
+    public Map<String, List<Attendance>> getAllAttendancesForCourse(String courseId) throws SQLException {
+        Map<String, List<Attendance>> resultMap = new HashMap<>();
+        // Giả định bảng 'attendance' có session_id, và bảng 'class_sessions' có course_id và session_id
+        String sql = "SELECT a.* FROM attendance a " +
+                "JOIN class_sessions cs ON a.session_id = cs.session_id " +
+                "WHERE cs.course_id = ? ORDER BY a.session_id";
+
+        try (Connection conn = DatabaseConnection.getConnection(); // Hoặc dùng connection của DAO
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, courseId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    Attendance attendance = mapResultSetToAttendance(rs, conn); // Hàm map của bạn
+                    resultMap.computeIfAbsent(attendance.getSessionId(), k -> new ArrayList<>()).add(attendance);
+                }
+            }
+        }
+        return resultMap;
+    }
+
 }

@@ -302,9 +302,9 @@ public class MainController {
      Lấy ID lớp học của buổi học hiện tại
      @return ID lớp học hoặc -1 nếu không có buổi học nào được chọn
      */
-    public String getCurrentClassId() {
+    public String getCurrentCourseId() {
         if (currentSessionDetail != null) {
-            return currentSessionDetail.getClassId();
+            return currentSessionDetail.getCourseId();
         }
         return null;
     }

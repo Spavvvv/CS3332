@@ -15,7 +15,7 @@ public class ClassAttendanceModel {
     private String sessionId; // Added for homework submission
     private String homeworkId; // Added for homework submission
     private String className; // Added for reference
-    private String classId; // Added for reference
+    private String courseId; // Added for reference
     private DaoManager daoManager;
     private HomeworkDAO homeworkDAO;
 
@@ -27,7 +27,7 @@ public class ClassAttendanceModel {
         this.sessionId = null;
         this.homeworkId = null;
         this.className = "";
-        this.classId = "";
+        this.courseId = "";
         daoManager = DaoManager.getInstance();
         homeworkDAO = daoManager.getHomeworkDAO();
     }
@@ -49,7 +49,7 @@ public class ClassAttendanceModel {
     public ClassAttendanceModel(String sessionId, String homeworkId, String className, String classId) {
         this(sessionId, homeworkId);
         this.className = className;
-        this.classId = classId;
+        this.courseId = classId;
     }
 
     public ObservableList<StudentAttendanceData> getAttendanceList() {
@@ -132,16 +132,16 @@ public class ClassAttendanceModel {
      * Gets the course ID
      * @return The course ID
      */
-    public String getClassId() {
-        return classId;
+    public String getCourseId() {
+        return courseId;
     }
 
     /**
      * Sets the course ID
-     * @param classId The course ID to set
+     * @param courseId The course ID to set
      */
-    public void setClassId(String classId) {
-        this.classId = classId;
+    public void setCourseId(String courseId) {
+        this.courseId = courseId;
     }
 
     /**
@@ -194,40 +194,7 @@ public class ClassAttendanceModel {
         // Normally we would call DAOs here to load the actual student list for the class/session,
         // and then for each student, load their attendance and homework submission data.
         System.out.println("Loading attendance data for session " + sessionId + " from database...");
-        System.out.println("Class: " + className + ", Class ID: " + classId);
-
-        // --- Placeholder for actual DAO calls ---
-        // Example structure:
-        // StudentDAO studentDAO = new StudentDAO();
-        // List<Student> studentsInClass = studentDAO.getStudentsByClass(className); // or by courseId/sessionId
-        //
-        // StudentAttendanceDataDAO attendanceDataDAO = new StudentAttendanceDataDAO(); // Hypothetical DAO
-        // HomeworkSubmissionDAO homeworkSubmissionDAO = new HomeworkSubmissionDAO();
-        //
-        // int stt = 1;
-        // for (Student student : studentsInClass) {
-        //     // Fetch or create StudentAttendanceData for this student in this session
-        //     StudentAttendanceData sad = attendanceDataDAO.findByStudentAndSession(student.getId(), sessionId);
-        //     if (sad == null) {
-        //         // If no record, create a default one. This depends on application logic.
-        //         // For now, let's assume we only load existing records or records for enrolled students.
-        //         // sad = new StudentAttendanceData(stt++, student, false, 0, 0.0, 0, "", 0);
-        //         System.out.println("No attendance data found for student " + student.getName() + " in session " + sessionId);
-        //         // You might want to create a default entry for all students in the class for this session.
-        //         // For this example, we'll just skip or create a basic entry.
-        //          sad = new StudentAttendanceData(stt++, student, false, 0,0.0,0,"",0); // Example default
-        //     }
-        //
-        //     // If homework is associated with this session, load homework submission status
-        //     if (homeworkId != null && !homeworkId.isEmpty()) {
-        //         HomeworkSubmissionModel submission = homeworkSubmissionDAO.getByStudentAndHomework(student.getId(), homeworkId);
-        //         if (submission != null) {
-        //             sad.setHomeworkSubmission(submission); // This will update grade, submitted status etc.
-        //         }
-        //     }
-        //     addStudentAttendance(sad);
-        // }
-        // --- End Placeholder ---
+        System.out.println("Class: " + className + ", Course ID: " + courseId);
 
         // If no actual data loading logic is implemented yet, the list will remain empty.
         // You might want to inform the user or log this.

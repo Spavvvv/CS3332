@@ -1,33 +1,38 @@
-package src.model.homework;
+package src.model.homework; // Hoặc package chính xác của bạn
 
+import java.time.LocalDate; // Sử dụng LocalDate cho assigned_date
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 public class Homework {
     private String homeworkId;
-    private String classId; // ID của lớp mà bài tập này thuộc về
+    private String courseId;
     private String title;
     private String description;
-    private String assignedInSessionId; // ID của ClassSession mà bài tập này được giao
-    private LocalDateTime dueDate;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private LocalDate assignedDate; // MỚI: Thay thế cho dueDate, kiểu DATE trong DB
+    private String status;          // MỚI: VARCHAR(50)
+    private Double score;           // MỚI: DOUBLE, dùng kiểu đối tượng để cho phép null
+    private LocalDateTime submissionDate; // MỚI: TIMESTAMP
+    private String assignedInSessionId; // ID của ClassSession mà bài tập này được giao (giữ nguyên)
 
     // Constructors
     public Homework() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        // Có thể không cần khởi tạo createdAt/updatedAt nữa vì DB không có
     }
 
-    public Homework(String homeworkId, String classId, String title, String description, String assignedInSessionId, LocalDateTime dueDate) {
+    // Constructor đầy đủ hơn với các trường mới (bạn có thể tùy chỉnh)
+    public Homework(String homeworkId, String courseId, String title, String description,
+                    LocalDate assignedDate, String status, Double score, LocalDateTime submissionDate,
+                    String assignedInSessionId) {
         this.homeworkId = homeworkId;
-        this.classId = classId;
+        this.courseId = courseId;
         this.title = title;
         this.description = description;
+        this.assignedDate = assignedDate;
+        this.status = status;
+        this.score = score;
+        this.submissionDate = submissionDate;
         this.assignedInSessionId = assignedInSessionId;
-        this.dueDate = dueDate;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
     }
 
     // Getters and Setters
@@ -39,12 +44,12 @@ public class Homework {
         this.homeworkId = homeworkId;
     }
 
-    public String getClassId() {
-        return classId;
+    public String getCourseId() {
+        return courseId;
     }
 
-    public void setClassId(String classId) {
-        this.classId = classId;
+    public void setCourseId(String courseId) { // Sửa tên tham số nếu cần, nhưng hiện tại đã đúng
+        this.courseId = courseId;
     }
 
     public String getTitle() {
@@ -63,6 +68,38 @@ public class Homework {
         this.description = description;
     }
 
+    public LocalDate getAssignedDate() {
+        return assignedDate;
+    }
+
+    public void setAssignedDate(LocalDate assignedDate) {
+        this.assignedDate = assignedDate;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public Double getScore() {
+        return score;
+    }
+
+    public void setScore(Double score) {
+        this.score = score;
+    }
+
+    public LocalDateTime getSubmissionDate() {
+        return submissionDate;
+    }
+
+    public void setSubmissionDate(LocalDateTime submissionDate) {
+        this.submissionDate = submissionDate;
+    }
+
     public String getAssignedInSessionId() {
         return assignedInSessionId;
     }
@@ -71,31 +108,7 @@ public class Homework {
         this.assignedInSessionId = assignedInSessionId;
     }
 
-    public LocalDateTime getDueDate() {
-        return dueDate;
-    }
-
-    public void setDueDate(LocalDateTime dueDate) {
-        this.dueDate = dueDate;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    // equals, hashCode, toString
+    // equals, hashCode, toString (toString cần cập nhật)
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -113,13 +126,14 @@ public class Homework {
     public String toString() {
         return "Homework{" +
                 "homeworkId='" + homeworkId + '\'' +
-                ", classId='" + classId + '\'' +
+                ", courseId='" + courseId + '\'' +
                 ", title='" + title + '\'' +
                 ", description='" + description + '\'' +
+                ", assignedDate=" + assignedDate +
+                ", status='" + status + '\'' +
+                ", score=" + score +
+                ", submissionDate=" + submissionDate +
                 ", assignedInSessionId='" + assignedInSessionId + '\'' +
-                ", dueDate=" + dueDate +
-                ", createdAt=" + createdAt +
-                ", updatedAt=" + updatedAt +
                 '}';
     }
 }

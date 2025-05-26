@@ -1,24 +1,20 @@
 package src.view.Attendance;
 
-import javafx.application.Platform; // Thêm nếu thiếu
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.CheckBoxTableCell;
-import javafx.scene.control.cell.ComboBoxTableCell;
-import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.shape.Rectangle;
-import javafx.scene.effect.DropShadow;
 import src.controller.Attendance.AttendanceController;
 
+import src.model.person.Person;
+import src.model.person.Role;
+import src.model.person.Teacher;
 import src.view.components.Screen.BaseScreenView;
 import src.model.ClassSession;
 import src.model.attendance.Attendance;
@@ -63,7 +59,6 @@ public class AttendanceScreenView extends BaseScreenView {
     // Data
     private List<ClassSession> allLoadedSessions; // Đổi tên từ 'sessions' để rõ hơn đây là danh sách gốc
     private Map<String, List<Attendance>> sessionAttendanceMap;
-    private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     // Track current filter state
     private String currentStatusFilter = "ALL"; // Mặc định là "ALL"
@@ -81,13 +76,13 @@ public class AttendanceScreenView extends BaseScreenView {
         allLoadedSessions = new ArrayList<>();
         sessionAttendanceMap = new HashMap<>();
         attendanceController = new AttendanceController();
-        initializeView();
-        // Không load data ở đây, sẽ load trong onActivate hoặc refreshView
     }
 
     @Override
     public void initializeView() {
+
         root.getChildren().clear();
+
         root.setSpacing(0);
         root.setPadding(Insets.EMPTY);
         root.setStyle("-fx-background-color: " + WHITE_COLOR + ";");
@@ -123,44 +118,69 @@ public class AttendanceScreenView extends BaseScreenView {
 
         setupEventHandlers();
         // Chọn ngày hiện tại trong tuần làm mặc định và áp dụng filter ban đầu
+        loadDataAndApplyInitialFilter(); // Sau đó mới đặt filter mặc định và áp dụng
+    }
+
+    /**
+     * Phương thức mới để gom logic tải dữ liệu và áp dụng filter ban đầu.
+     */
+    private void loadDataAndApplyInitialFilter() {
+        // Chạy loadData trên một luồng nền để không làm đơ UI nếu tải lâu
+        // Tuy nhiên, để sửa lỗi "không hiện gì" trước mắt, chúng ta tạm thời gọi trực tiếp.
+        // Sau khi sửa được lỗi hiển thị, bạn NÊN chuyển loadData() sang luồng nền.
+
+        System.out.println("View: Starting loadDataAndApplyInitialFilter..."); // Log để theo dõi
+        loadData(); // Tải dữ liệu từ controller/DB
+        System.out.println("View: loadData() completed. allLoadedSessions size: " + (allLoadedSessions != null ? allLoadedSessions.size() : "null"));
+
+        // Chỉ gọi setDefaultDayFilterAndApply sau khi loadData đã có dữ liệu
+        // vì setDefaultDayFilterAndApply sẽ trigger applyFilters()
         setDefaultDayFilterAndApply();
+        System.out.println("View: setDefaultDayFilterAndApply() completed.");
     }
 
     private void setDefaultDayFilterAndApply() {
+        System.out.println("View: Starting setDefaultDayFilterAndApply. CurrentDayFilter before: " + currentDayFilter);
         LocalDate today = LocalDate.now();
-        DayOfWeek todayDayOfWeek = today.getDayOfWeek(); // Ví dụ MONDAY, TUESDAY
-        String todayDayString = todayDayOfWeek.name(); // "MONDAY", "TUESDAY"
+        DayOfWeek todayDayOfWeek = today.getDayOfWeek();
+        String todayDayString = todayDayOfWeek.name().toUpperCase(); // Đảm bảo UPPERCASE giống UserData
 
-        // Tìm ToggleButton tương ứng với ngày hôm nay và chọn nó
-        boolean daySet = false;
-        if (dayButtons != null) {
+        boolean daySetByLogic = false;
+        if (dayButtons != null && !dayButtons.isEmpty()) {
             for (ToggleButton dayButton : dayButtons) {
-                if (dayButton.getUserData().equals(todayDayString)) {
-                    dayButton.setSelected(true); // Điều này sẽ trigger setOnAction
-                    // currentDayFilter sẽ được set trong setOnAction của dayButton
-                    // applyFilters() cũng sẽ được gọi từ đó.
-                    daySet = true;
+                if (dayButton.getUserData() != null && dayButton.getUserData().equals(todayDayString)) {
+                    if (!dayButton.isSelected()) {
+                        dayButton.setSelected(true); // Sẽ trigger setOnAction
+                    } else {
+                        // Nếu đã được chọn, và currentDayFilter có thể chưa được set đúng
+                        // hoặc cần applyFilters với data mới
+                        currentDayFilter = todayDayString; // Đảm bảo currentDayFilter được set
+                        applyFilters();
+                    }
+                    daySetByLogic = true;
+                    System.out.println("View: Today's button (" + todayDayString + ") selected/re-applied. daySetByLogic=true");
                     break;
                 }
             }
-        }
-        // Nếu không tìm thấy (trường hợp hiếm), hoặc muốn đảm bảo filter được gọi
-        if (!daySet) {
-            // Nếu không có nút nào được chọn, bạn có thể không filter theo ngày
-            // hoặc chọn một ngày mặc định khác.
-            // Hiện tại, nếu không có nút ngày nào được chọn, applyFilters() vẫn chạy
-            // và currentDayFilter có thể là null (sẽ hiển thị tất cả các ngày trong tuần hiện tại)
-            // Để đảm bảo logic, nếu currentDayFilter vẫn null, ta có thể set nó là ngày hôm nay
-            if (currentDayFilter == null && !dayButtons.isEmpty()) {
-                dayButtons.get(today.getDayOfWeek().getValue() -1).setSelected(true);
-                // setOnAction sẽ tự gọi applyFilters
-            } else if (currentDayFilter != null) {
-                applyFilters(); // Gọi nếu currentDayFilter đã được set bởi setSelected(true) ở trên
-            } else {
-                // Xử lý trường hợp không có nút ngày nào hoặc dayButtons rỗng
-                // Có thể không cần làm gì nếu muốn hiển thị tất cả
+            if (!daySetByLogic && dayToggleGroup.getSelectedToggle() == null && !dayButtons.isEmpty()) {
+                // Nếu không có nút nào của ngày hôm nay, hoặc ngày hôm nay không có trong danh sách nút
+                // và chưa có nút nào được chọn, chọn nút đầu tiên.
+                // Tuy nhiên, logic này có thể không cần thiết nếu bạn muốn không có ngày nào được chọn mặc định.
+                // dayButtons.get(0).setSelected(true);
+                // daySetByLogic = true;
+                // System.out.println("View: No specific day button set or today's button not found, selecting first available day button. daySetByLogic=true");
+                // Thay vào đó, nếu không có ngày nào được chọn, cứ để applyFilters chạy với currentDayFilter = null
+                System.out.println("View: No specific day button (today) was selected automatically.");
+                applyFilters(); // Gọi để load dữ liệu ban đầu nếu không có ngày nào được set
+                daySetByLogic = true; // Đánh dấu là đã xử lý để không gọi applyFilters lần nữa ở dưới
             }
         }
+
+        if (!daySetByLogic) {
+            System.out.println("View: No day button was programmatically selected or dayButtons list is empty. Calling applyFilters directly.");
+            applyFilters();
+        }
+        System.out.println("View: Exiting setDefaultDayFilterAndApply. CurrentDayFilter after: " + currentDayFilter);
     }
 
 
@@ -171,12 +191,16 @@ public class AttendanceScreenView extends BaseScreenView {
                     if (dayButton.isSelected()) {
                         currentDayFilter = (String) dayButton.getUserData();
                     } else {
-                        // Nếu cho phép bỏ chọn tất cả, thì currentDayFilter có thể là null
-                        // Hoặc nếu luôn phải có 1 ngày được chọn, logic của ToggleGroup sẽ xử lý
+                        // Xử lý trường hợp nút bị bỏ chọn (nếu ToggleGroup cho phép)
+                        // Nếu không có nút nào được chọn, currentDayFilter có thể là null
                         if (dayToggleGroup.getSelectedToggle() == null) {
-                            currentDayFilter = null; // Hoặc giữ lại filter cũ nếu không muốn bỏ chọn
+                            currentDayFilter = null;
+                        } else {
+                            // Nếu vẫn còn nút khác được chọn, cập nhật currentDayFilter
+                            currentDayFilter = (String) ((ToggleButton)dayToggleGroup.getSelectedToggle()).getUserData();
                         }
                     }
+                    System.out.println("View: DayButton action. NewDayFilter: " + currentDayFilter);
                     applyFilters();
                 });
             }
@@ -222,86 +246,154 @@ public class AttendanceScreenView extends BaseScreenView {
     }
 
     private void applyFilters() {
-        List<ClassSession> currentlyProcessedSessions = new ArrayList<>(allLoadedSessions);
+        System.out.println("View: applyFilters called. CurrentDayFilter: " + currentDayFilter +
+                ", StatusFilter: " + currentStatusFilter +
+                ", Keyword: '" + currentSearchKeyword + "'");
+        System.out.println("View: applyFilters - allLoadedSessions size before filtering: " + (allLoadedSessions != null ? allLoadedSessions.size() : "null"));
 
-        // 1. Lọc theo từ khóa tìm kiếm (nếu có)
+        List<ClassSession> sessionsToProcess = (allLoadedSessions == null) ? new ArrayList<>() : new ArrayList<>(allLoadedSessions);
+
+        // 1. Lọc theo từ khóa tìm kiếm
         if (currentSearchKeyword != null && !currentSearchKeyword.isEmpty()) {
-            currentlyProcessedSessions = searchSessionsInternal(currentlyProcessedSessions, currentSearchKeyword);
+            sessionsToProcess = searchSessionsInternal(sessionsToProcess, currentSearchKeyword);
         }
 
-        // 2. SỬA ĐỔI: Lọc theo NGÀY TRONG TUẦN và TRONG TUẦN HIỆN TẠI
+        // 2. Lọc theo NGÀY TRONG TUẦN (currentDayFilter)
+        // Đối với Admin, allLoadedSessions có thể chứa nhiều tuần.
+        // Đối với Teacher, allLoadedSessions chỉ chứa các buổi trong tuần hiện tại.
+        Person currentUser = (mainController != null) ? mainController.getCurrentUser() : null;
+        Role userRole = (currentUser != null) ? currentUser.getRole() : null;
+
         if (currentDayFilter != null && !currentDayFilter.isEmpty()) {
-            // Lấy tất cả các buổi học cho ngày trong tuần đã chọn (ví dụ: tất cả các Thứ Hai)
-            List<ClassSession> sessionsForSelectedDayName = filterSessionsByDayInternal(currentlyProcessedSessions, currentDayFilter);
+            List<ClassSession> sessionsForSelectedDayName = filterSessionsByDayInternal(sessionsToProcess, currentDayFilter);
 
-            // Xác định ngày bắt đầu và kết thúc của tuần hiện tại
-            LocalDate today = LocalDate.now();
-            DayOfWeek firstDayOfWeek = DayOfWeek.MONDAY; // Tuần bắt đầu từ Thứ Hai
-            LocalDate startOfWeek = today.with(firstDayOfWeek);
-            LocalDate endOfWeek = startOfWeek.plusDays(6); // Thứ Hai + 6 ngày = Chủ Nhật
+            if (userRole == Role.TEACHER) { // Giáo viên chỉ xem các buổi trong tuần hiện tại cho ngày đã chọn
+                LocalDate today = LocalDate.now();
+                LocalDate startOfWeek = today.with(DayOfWeek.MONDAY);
+                LocalDate endOfWeek = today.with(DayOfWeek.SUNDAY);
+                final LocalDate finalStartOfWeek = startOfWeek;
+                final LocalDate finalEndOfWeek = endOfWeek;
 
-            // Lọc lại danh sách sessionsForSelectedDayName để chỉ giữ những buổi trong tuần hiện tại
-            final LocalDate finalStartOfWeek = startOfWeek;
-            final LocalDate finalEndOfWeek = endOfWeek;
-            currentlyProcessedSessions = sessionsForSelectedDayName.stream()
-                    .filter(session -> {
-                        LocalDate sessionDate = session.getDate(); // Giả sử ClassSession có getDate() trả về LocalDate
-                        return sessionDate != null &&
-                                !sessionDate.isBefore(finalStartOfWeek) &&
-                                !sessionDate.isAfter(finalEndOfWeek);
-                    })
-                    .collect(Collectors.toList());
+                sessionsToProcess = sessionsForSelectedDayName.stream()
+                        .filter(session -> {
+                            LocalDate sessionDate = session.getDate();
+                            return sessionDate != null &&
+                                    !sessionDate.isBefore(finalStartOfWeek) &&
+                                    !sessionDate.isAfter(finalEndOfWeek);
+                        })
+                        .collect(Collectors.toList());
+                System.out.println("View: applyFilters - Teacher role, filtered day '" + currentDayFilter + "' to current week. Size: " + sessionsToProcess.size());
+            } else { // Admin xem tất cả các buổi có ngày trong tuần khớp, không giới hạn tuần hiện tại
+                sessionsToProcess = sessionsForSelectedDayName;
+                System.out.println("View: applyFilters - Admin role, showing all sessions for day '" + currentDayFilter + "'. Size: " + sessionsToProcess.size());
+            }
         } else {
-            // Nếu không có ngày nào trong tuần được chọn (currentDayFilter là null hoặc rỗng),
-            // có thể bạn muốn hiển thị tất cả các buổi trong tuần hiện tại (sau khi đã search)
-            // hoặc không hiển thị gì cả. Hiện tại, nó sẽ lấy currentlyProcessedSessions (đã qua search).
-            // Để nhất quán, nếu không có currentDayFilter, có thể không nên lọc theo tuần.
-            // Tuy nhiên, logic setDefaultDayFilterAndApply() thường đảm bảo currentDayFilter được chọn.
+            // Nếu không có filter ngày trong tuần (currentDayFilter là null)
+            if (userRole == Role.TEACHER) {
+                // Giáo viên vẫn chỉ nên xem các buổi trong tuần hiện tại của họ
+                LocalDate today = LocalDate.now();
+                LocalDate startOfWeek = today.with(DayOfWeek.MONDAY);
+                LocalDate endOfWeek = today.with(DayOfWeek.SUNDAY);
+                final LocalDate finalStartOfWeek = startOfWeek;
+                final LocalDate finalEndOfWeek = endOfWeek;
+
+                sessionsToProcess = sessionsToProcess.stream() // Lọc từ danh sách đã qua search (nếu có)
+                        .filter(session -> {
+                            LocalDate sessionDate = session.getDate();
+                            return sessionDate != null &&
+                                    !sessionDate.isBefore(finalStartOfWeek) &&
+                                    !sessionDate.isAfter(finalEndOfWeek);
+                        })
+                        .collect(Collectors.toList());
+                System.out.println("View: applyFilters - Teacher role, no day selected, showing current week. Size: " + sessionsToProcess.size());
+            }
+            // Với Admin, nếu không có currentDayFilter, sessionsToProcess (đã qua search) sẽ được dùng
+            System.out.println("View: No day filter applied. Processed list size: " + sessionsToProcess.size());
         }
 
-        // 3. Lọc theo trạng thái điểm danh (áp dụng trên danh sách đã được lọc bởi tìm kiếm và ngày/tuần)
-        List<ClassSession> finalFilteredSessions = filterSessionsByStatusInternal(currentlyProcessedSessions, currentStatusFilter);
+        // 3. Lọc theo trạng thái điểm danh
+        List<ClassSession> finalFilteredSessions = filterSessionsByStatusInternal(sessionsToProcess, currentStatusFilter);
+        System.out.println("View: applyFilters - finalFilteredSessions size after all filters: " + finalFilteredSessions.size());
 
         updateClassCards(finalFilteredSessions);
-        // Cập nhật số lượng trên nút lọc trạng thái dựa trên danh sách đã lọc theo search và ngày/tuần
-        updateFilterButtonCounts(currentlyProcessedSessions);
+        updateFilterButtonCounts(sessionsToProcess); // Đếm trên danh sách trước khi lọc status
     }
 
     private void loadData() {
+        System.out.println("View: loadData() called.");
         if (attendanceController == null) {
-            showError("Bộ điều khiển điểm danh chưa được khởi tạo.");
-            allLoadedSessions = new ArrayList<>(); // Khởi tạo rỗng để tránh NullPointerException
-            sessionAttendanceMap.clear();
-            applyFilters(); // Cập nhật UI với danh sách rỗng
-            return;
+            showError("Lỗi: Controller chưa sẵn sàng.");
+            allLoadedSessions = new ArrayList<>(); sessionAttendanceMap.clear(); applyFilters(); return;
         }
-        try {
-            allLoadedSessions = attendanceController.getAllClassSessions();
-            if (allLoadedSessions == null) allLoadedSessions = new ArrayList<>(); // Đảm bảo không null
+        if (mainController == null) {
+            showError("Lỗi hệ thống: Không thể xác định người dùng hiện tại.");
+            allLoadedSessions = new ArrayList<>(); sessionAttendanceMap.clear(); applyFilters(); return;
+        }
 
-            sessionAttendanceMap.clear();
-            for (ClassSession session : allLoadedSessions) {
-                if (session != null && session.getId() != null) {
-                    List<Attendance> attendances = attendanceController.getAttendanceBySessionId(session.getId());
-                    sessionAttendanceMap.put(session.getId(), attendances != null ? attendances : new ArrayList<>());
+        Person currentUser = mainController.getCurrentUser();
+        Role userRole = (currentUser != null) ? currentUser.getRole() : null;
+
+        if (userRole == null) {
+            showError("Không thể xác định vai trò người dùng.");
+            allLoadedSessions = new ArrayList<>(); sessionAttendanceMap.clear(); applyFilters(); return;
+        }
+
+        System.out.println("View: loadData - Current user role: " + userRole);
+        long startTime = System.currentTimeMillis();
+
+        try {
+            if (userRole == Role.ADMIN) {
+                System.out.println("View: loadData - Admin user. Loading all sessions.");
+                allLoadedSessions = attendanceController.getAllClassSessions(); // Lấy TẤT CẢ buổi học
+            } else if (userRole == Role.TEACHER) {
+                String teacherName = currentUser.getName(); // Giả sử lấy tên giáo viên để query
+                if (teacherName == null || teacherName.trim().isEmpty()) {
+                    showError("Không thể xác định thông tin giáo viên.");
+                    allLoadedSessions = new ArrayList<>(); sessionAttendanceMap.clear(); applyFilters(); return;
                 }
+                System.out.println("View: loadData - Teacher user. Loading sessions for teacher: " + teacherName);
+                LocalDate today = LocalDate.now();
+                LocalDate startOfWeek = today.with(DayOfWeek.MONDAY);
+                LocalDate endOfWeek = today.with(DayOfWeek.SUNDAY); // Hoặc startOfWeek.plusDays(6)
+                allLoadedSessions = attendanceController.getSessionsForTeacherInDateRange(teacherName, startOfWeek, endOfWeek);
+            } else {
+                showError("Vai trò người dùng không được hỗ trợ cho chức năng này.");
+                allLoadedSessions = new ArrayList<>(); sessionAttendanceMap.clear(); applyFilters(); return;
             }
-            // applyFilters sẽ được gọi bởi setDefaultDayFilterAndApply hoặc khi người dùng tương tác
-            // không cần gọi ở đây nữa để tránh gọi nhiều lần khi khởi tạo.
-            // Nếu setDefaultDayFilterAndApply không được gọi đúng, bạn có thể cần gọi applyFilters() ở đây.
-            // Nhưng tốt nhất là để event handlers hoặc logic khởi tạo UI gọi nó.
+
+            if (allLoadedSessions == null) allLoadedSessions = new ArrayList<>();
+            System.out.println("View: loadData - Loaded " + allLoadedSessions.size() + " sessions based on role.");
+
+            if (!allLoadedSessions.isEmpty()) {
+                List<String> sessionIdsToFetch = allLoadedSessions.stream()
+                        .map(ClassSession::getId)
+                        .filter(Objects::nonNull)
+                        .distinct() // Đảm bảo không có ID trùng lặp
+                        .collect(Collectors.toList());
+                if (!sessionIdsToFetch.isEmpty()) {
+                    sessionAttendanceMap = attendanceController.getAttendancesForMultipleSessionIds(sessionIdsToFetch);
+                    System.out.println("View: loadData - Fetched attendance data for " + sessionAttendanceMap.size() + " distinct sessions.");
+                } else {
+                    sessionAttendanceMap.clear();
+                }
+            } else {
+                sessionAttendanceMap.clear();
+            }
+
         } catch (SQLException e) {
-            showError("Lỗi khi kết nối với cơ sở dữ liệu: " + e.getMessage());
-            e.printStackTrace();
-            allLoadedSessions = new ArrayList<>();
-            sessionAttendanceMap.clear();
-            applyFilters(); // Cập nhật UI với danh sách rỗng nếu có lỗi
+            showError("Lỗi tải dữ liệu từ cơ sở dữ liệu: " + e.getMessage());
+            System.err.println("SQLException in loadData: " + e.getMessage()); e.printStackTrace();
+            allLoadedSessions = new ArrayList<>(); sessionAttendanceMap.clear();
         } catch (Exception e) {
-            showError("Lỗi khi tải dữ liệu: " + e.getMessage());
-            e.printStackTrace();
-            allLoadedSessions = new ArrayList<>();
-            sessionAttendanceMap.clear();
-            applyFilters();
+            showError("Lỗi không mong muốn khi tải dữ liệu: " + e.getMessage());
+            System.err.println("Exception in loadData: " + e.getMessage()); e.printStackTrace();
+            allLoadedSessions = new ArrayList<>(); sessionAttendanceMap.clear();
+        } finally {
+            long endTime = System.currentTimeMillis();
+            System.out.println("View: loadData() completed in " + (endTime - startTime) + " ms. AllLoadedSessions: " +
+                    (allLoadedSessions != null ? allLoadedSessions.size() : "null") +
+                    ", SessionAttendanceMap entries: " + sessionAttendanceMap.size());
+            // applyFilters() sẽ được gọi thông qua setDefaultDayFilterAndApply()
         }
     }
 
@@ -611,25 +703,20 @@ public class AttendanceScreenView extends BaseScreenView {
 
     @Override
     public void refreshView() {
-        // Gọi loadData để tải lại toàn bộ dữ liệu từ controller và DB
-        // applyFilters() sẽ được gọi sau đó để cập nhật UI dựa trên filter hiện tại
-        Platform.runLater(() -> { // Đảm bảo chạy trên JavaFX Application Thread
-            loadData();
-            // Sau khi loadData, currentDayFilter có thể đã được set lại (nếu loadData gọi setDefaultDayFilterAndApply)
-            // hoặc applyFilters() được gọi ở cuối loadData().
-            // Nếu không, hãy gọi applyFilters() ở đây để đảm bảo UI được cập nhật.
-            // Tuy nhiên, setDefaultDayFilterAndApply() sẽ gọi applyFilters() nếu nó thay đổi lựa chọn.
-            // Và loadData() ở cuối cũng gọi applyFilters().
-            // Nên không cần gọi applyFilters() thêm ở đây.
-            // Nếu setDefaultDayFilterAndApply được gọi cuối cùng trong initializeView thì nó cũng đã gọi applyFilters rồi
+        System.out.println("View: refreshView() called.");
+        // Khi refreshView được gọi từ bên ngoài (ví dụ, sau khi lưu dữ liệu ở màn hình khác và quay lại)
+        // chúng ta nên tải lại toàn bộ dữ liệu và áp dụng lại filter.
+        Platform.runLater(() -> { // Cân nhắc dùng nếu loadDataAndApplyInitialFilter có thể chậm
+        loadDataAndApplyInitialFilter();
         });
     }
 
     @Override
     public void onActivate() {
-        super.onActivate(); // Gọi super nếu có logic quan trọng
-        // System.out.println(getViewId() + " activated. Refreshing data.");
-        refreshView(); // Luôn làm mới dữ liệu khi màn hình được kích hoạt
+        super.onActivate();
+        System.out.println("View: " + getViewId() + " activated. Calling loadDataAndApplyInitialFilter.");
+        // Khi màn hình được kích hoạt (ví dụ, navigate tới nó), tải dữ liệu và áp dụng filter.
+        loadDataAndApplyInitialFilter();
     }
 
     // --- Các phương thức filter và search nội bộ (giữ nguyên logic, chỉ đảm bảo dùng allLoadedSessions) ---

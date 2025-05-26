@@ -126,7 +126,7 @@ public class CourseDAO {
 
     private boolean internalInsert(Connection conn, Course course) throws SQLException {
         String sql = "INSERT INTO courses (course_id, course_name, subject, start_date, end_date, " +
-                "start_time, end_time, teacher_id, room_id, class_id, progress, total_sessions) " + // Added total_sessions, removed day_of_week
+                "start_time, end_time, teacher_id, room_id, progress, total_sessions) " + // Added total_sessions, removed day_of_week
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"; // Adjusted placeholder count
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, course.getCourseId());
@@ -138,7 +138,7 @@ public class CourseDAO {
             statement.setTime(7, course.getCourseEndTime() != null ? Time.valueOf(course.getCourseEndTime()) : null);
             statement.setString(8, course.getTeacher() != null ? course.getTeacher().getId() : null);
             statement.setString(9, course.getRoomId());
-            statement.setString(10, course.getClassId());
+            statement.setString(10, course.getCourseId());
             statement.setFloat(11, course.getProgress());
             statement.setInt(12, course.getTotalSessions()); // Use new totalSessions field
 
@@ -152,7 +152,7 @@ public class CourseDAO {
 
     private boolean internalUpdate(Connection conn, Course course) throws SQLException {
         String sql = "UPDATE courses SET course_name = ?, subject = ?, start_date = ?, end_date = ?, " +
-                "start_time = ?, end_time = ?, teacher_id = ?, room_id = ?, class_id = ?, " +
+                "start_time = ?, end_time = ?, teacher_id = ?, room_id = ?" +
                 "progress = ?, total_sessions = ? WHERE course_id = ?"; // Added total_sessions, removed day_of_week
 
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -164,7 +164,7 @@ public class CourseDAO {
             statement.setTime(6, course.getCourseEndTime() != null ? Time.valueOf(course.getCourseEndTime()) : null);
             statement.setString(7, course.getTeacher() != null ? course.getTeacher().getId() : null);
             statement.setString(8, course.getRoomId());
-            statement.setString(9, course.getClassId());
+            statement.setString(9, course.getCourseId());
             statement.setFloat(10, course.getProgress());
             statement.setInt(11, course.getTotalSessions()); // Use new totalSessions field
             statement.setString(12, course.getCourseId());
@@ -217,7 +217,7 @@ public class CourseDAO {
 
     Course getById(Connection conn, String courseId) throws SQLException {
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, start_time, end_time, " +
-                "teacher_id, room_id, class_id, progress, total_sessions FROM courses WHERE course_id = ?"; // Added total_sessions, removed day_of_week
+                "teacher_id, room_id, progress, total_sessions FROM courses WHERE course_id = ?"; // Added total_sessions, removed day_of_week
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, courseId);
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -232,7 +232,7 @@ public class CourseDAO {
     List<Course> getAll(Connection conn) throws SQLException {
         List<Course> courses = new ArrayList<>();
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, start_time, end_time, " +
-                "teacher_id, room_id, class_id, progress, total_sessions FROM courses"; // Added total_sessions, removed day_of_week
+                "teacher_id, room_id, progress, total_sessions FROM courses"; // Added total_sessions, removed day_of_week
         try (Statement statement = conn.createStatement();
              ResultSet resultSet = statement.executeQuery(sql)) {
             while (resultSet.next()) {
@@ -253,7 +253,6 @@ public class CourseDAO {
         LocalTime endTime = resultSet.getTime("end_time") != null ? resultSet.getTime("end_time").toLocalTime() : null;
         String teacherId = resultSet.getString("teacher_id");
         String roomId = resultSet.getString("room_id");
-        String classId = resultSet.getString("class_id");
         float progress = resultSet.getFloat("progress");
         int totalSessions = resultSet.getInt("total_sessions"); // Read new field
 
@@ -271,7 +270,7 @@ public class CourseDAO {
 
         // Use the comprehensive constructor from the updated Course class
         Course course = new Course(courseId, courseName, subject, startDate, endDate,
-                startTime, endTime, daysOfWeekList, roomId, classId,
+                startTime, endTime, daysOfWeekList, roomId,
                 teacher, totalSessions, progress);
 
         // Students are typically loaded separately or on-demand, not in this basic extraction
@@ -365,7 +364,7 @@ public class CourseDAO {
     List<Course> getCoursesByTeacherId(Connection conn, String teacherId) throws SQLException {
         List<Course> courses = new ArrayList<>();
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, " +
-                "start_time, end_time, teacher_id, room_id, class_id, progress, total_sessions FROM courses WHERE teacher_id = ?";
+                "start_time, end_time, teacher_id, room_id, progress, total_sessions FROM courses WHERE teacher_id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, teacherId);
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -379,7 +378,7 @@ public class CourseDAO {
 
     List<Course> getCoursesByStudentId(Connection conn, String studentId) throws SQLException {
         List<Course> courses = new ArrayList<>();
-        String sql = "SELECT c.course_id, c.course_name, c.subject, c.start_date, c.end_date, c.start_time, c.end_time, c.teacher_id, c.room_id, c.class_id, c.progress, c.total_sessions FROM courses c " +
+        String sql = "SELECT c.course_id, c.course_name, c.subject, c.start_date, c.end_date, c.start_time, c.end_time, c.teacher_id, c.room_id, c.progress, c.total_sessions FROM courses c " +
                 "JOIN enrollment e ON c.course_id = e.course_id " +
                 "WHERE e.student_id = ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
@@ -397,7 +396,7 @@ public class CourseDAO {
     List<Course> searchCourses(Connection conn, String searchTerm) throws SQLException {
         List<Course> courses = new ArrayList<>();
         String sql = "SELECT course_id, course_name, subject, start_date, end_date, " +
-                "start_time, end_time, teacher_id, room_id, class_id, progress, total_sessions FROM courses WHERE course_name LIKE ? OR subject LIKE ?";
+                "start_time, end_time, teacher_id, room_id, progress, total_sessions FROM courses WHERE course_name LIKE ? OR subject LIKE ?";
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             String searchPattern = "%" + searchTerm + "%";
             statement.setString(1, searchPattern);
@@ -413,8 +412,8 @@ public class CourseDAO {
 
     // The getStudentsByCourseId method's logic was a bit complex with actualClassIdForQuery
     // If enrollment table directly links student_id with courses.course_id, it's simpler.
-    // The previous logic was using courses.class_id to query enrollment.class_id which might be incorrect
-    // if enrollment.class_id was meant to be enrollment.course_id
+    // The previous logic was using courses.course_id to query enrollment.course_id which might be incorrect
+    // if enrollment.course_id was meant to be enrollment.course_id
     public List<Student> getStudentsByCourseId(Connection conn, String courseId) throws SQLException {
         checkStudentDAODependency();
         List<Student> students = new ArrayList<>();

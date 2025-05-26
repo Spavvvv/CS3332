@@ -15,6 +15,7 @@ public class ReportModel {
     private double homeworkPercentage = 0;
     private ObservableList<ClassReportData> classReportData = FXCollections.observableArrayList();
     private final ReportDAO reportDAO; // Sẽ được lấy từ DaoManager
+    private double trueOverallAverageHomeworkScore = 0.0;
 
     public ReportModel() {
         // SỬA ĐỔI: Lấy ReportDAO từ DaoManager thay vì tạo mới
@@ -36,15 +37,27 @@ public class ReportModel {
 
     public void loadReportData(LocalDate fromDate, LocalDate toDate) {
         classReportData.clear();
+        this.trueOverallAverageHomeworkScore = 0.0;
         try {
             List<ClassReportData> rawData = reportDAO.getClassReportData(fromDate, toDate);
             if (rawData != null) {
                 classReportData.addAll(rawData);
             }
+
+            ReportDAO.OverallHomeworkStats overallStats = reportDAO.getOverallHomeworkSubmissionStats(fromDate, toDate);
+            if (overallStats.countOfGradedSubmissions > 0) {
+                this.trueOverallAverageHomeworkScore = overallStats.sumOfGrades / overallStats.countOfGradedSubmissions;
+            } else {
+                this.trueOverallAverageHomeworkScore = 0.0; // Hoặc Double.NaN nếu bạn muốn biểu thị "không có dữ liệu"
+            }
+
         } catch (Exception e) {
             System.err.println("Error loading report data from DAO: " + e.getMessage());
             e.printStackTrace();
             // Consider throwing a custom exception for the Controller to handle
+            // Reset các giá trị nếu có lỗi
+            classReportData.clear();
+            this.trueOverallAverageHomeworkScore = 0.0;
         }
         calculateStatistics();
     }
@@ -118,32 +131,7 @@ public class ReportModel {
     }
 
     public double getAverageHomeworkScore() {
-        if (classReportData == null || classReportData.isEmpty()) {
-            return 0.0;
-        }
-        double totalScore = 0;
-        int count = 0;
-        for (ClassReportData data : classReportData) {
-            String scoreStr = data.getHomeworkScore();
-            if (scoreStr == null || scoreStr.trim().isEmpty() || scoreStr.equalsIgnoreCase("N/A")) {
-                continue;
-            }
-            try {
-                if (scoreStr.contains("/")) {
-                    String[] parts = scoreStr.split("/");
-                    if (parts.length > 0) {
-                        totalScore += Double.parseDouble(parts[0].trim());
-                        count++;
-                    }
-                } else {
-                    totalScore += Double.parseDouble(scoreStr.trim());
-                    count++;
-                }
-            } catch (NumberFormatException e) {
-                System.err.println("Could not parse homework score: " + scoreStr + " for class " + data.getClassName());
-            }
-        }
-        return count > 0 ? totalScore / count : 0.0;
+        return this.trueOverallAverageHomeworkScore;
     }
 
     // Data model class for report table

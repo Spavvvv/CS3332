@@ -65,7 +65,7 @@ public class AbsenceCallController {
         try {
             // Assuming attendanceController.getAllClassSessions() fetches from class_sessions
             List<ClassSession> sessionsFromDb = attendanceController.getClassSessionsByClassId(
-                    view.getMainController().getCurrentClassId());
+                    view.getMainController().getCurrentCourseId());
             sessionListData.setAll(sessionsFromDb);
             if (view != null && !sessionListData.isEmpty()) {
                 // Optionally select the first session and load its data

@@ -70,7 +70,7 @@ public class AttendanceController {
     public List<ClassSession> getClassSessionsByClassId(String classId) throws SQLException {
         List<ClassSession> allSessions = classSessionDAO.findAll();
         return allSessions.stream()
-                .filter(session -> session.getClassId() != null && session.getClassId().equals(classId))
+                .filter(session -> session.getCourseId() != null && session.getCourseId().equals(classId))
                 .collect(Collectors.toList());
     }
 
@@ -493,6 +493,44 @@ public class AttendanceController {
             return studentOpt.orElse(null);
         }
         return null;
+    }
+
+    /**
+     * Lấy các buổi học của một giáo viên cụ thể (dựa theo TÊN) trong một khoảng ngày.
+     *
+     * @param teacherName Tên của giáo viên.
+     * @param startDate Ngày bắt đầu.
+     * @param endDate   Ngày kết thúc.
+     * @return Danh sách các ClassSession.
+     * @throws SQLException
+     */
+    public List<ClassSession> getSessionsForTeacherInDateRange(String teacherName, LocalDate startDate, LocalDate endDate) throws SQLException {
+        if (teacherName == null || teacherName.trim().isEmpty() || startDate == null || endDate == null) {
+            LOGGER.warning("Invalid parameters for getSessionsForTeacherInDateRange (Controller).");
+            return new ArrayList<>();
+        }
+        // Gọi phương thức DAO đã được cập nhật để tìm theo tên giáo viên
+        return classSessionDAO.findByTeacherNameAndDateRange(teacherName, startDate, endDate);
+    }
+
+    /**
+     * Lấy TẤT CẢ dữ liệu điểm danh cho một danh sách các session ID cụ thể.
+     * Phương thức này gọi DAO để thực hiện một truy vấn tối ưu, giảm thiểu số lần gọi DB.
+     *
+     * @param sessionIds Danh sách các ID của buổi học cần lấy dữ liệu điểm danh.
+     * @return Map với key là session_id và value là List các đối tượng Attendance cho session đó.
+     * Trả về map rỗng nếu sessionIds là null, rỗng, hoặc không có dữ liệu điểm danh.
+     * @throws SQLException Nếu có lỗi truy vấn CSDL từ tầng DAO.
+     */
+    public Map<String, List<Attendance>> getAttendancesForMultipleSessionIds(List<String> sessionIds) throws SQLException {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            LOGGER.log(Level.INFO, "Controller: getAttendancesForMultipleSessionIds called with null or empty sessionIds list.");
+            return new HashMap<>(); // Trả về map rỗng
+        }
+        LOGGER.log(Level.INFO, "Controller: Fetching attendances for {0} session IDs.", sessionIds.size());
+        // Gọi phương thức tương ứng trong AttendanceDAO
+        // Bạn cần đảm bảo AttendanceDAO có phương thức này
+        return attendanceDAO.getAttendancesForMultipleSessionIds(sessionIds);
     }
 }
 

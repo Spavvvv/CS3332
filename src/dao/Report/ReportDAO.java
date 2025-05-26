@@ -7,7 +7,9 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -55,8 +57,6 @@ public class ReportDAO {
 
     public ReportDAO() {
         LOGGER.info("DAO: ReportDAO instance created.");
-        // Dòng này giúp bạn debug xem ai đang tạo ReportDAO
-        new Throwable("DEBUG: ReportDAO instantiated at:").printStackTrace(System.err);
     }
 
     /**
@@ -91,7 +91,7 @@ public class ReportDAO {
                 .append("SUM(CASE WHEN shs.is_submitted = 1 THEN 1 ELSE 0 END) as total_submission_instances, ") // Tổng số lượt nộp bài
                 .append("AVG(sm.awareness_score) as avg_awareness_score, ")
                 .append("AVG(sm.punctuality_score) as avg_punctuality_score, ")
-                .append("AVG(shs.grade) as avg_homework_grade, ")
+                .append("AVG(h.score) as avg_homework_grade_overall, ")
                 .append("COUNT(DISTINCT e.student_id) as enrolled_student_count ")
                 .append("FROM courses c ")
                 .append("LEFT JOIN class_sessions cs ON c.course_id = cs.course_id AND cs.session_date BETWEEN ? AND ? ")
@@ -148,7 +148,7 @@ public class ReportDAO {
                     int totalHomeworkExpectedSubmissions = distinctHomeworkItemsAssigned * studentCount;
                     String homeworkStr = totalSubmissionInstances + "/" + (totalHomeworkExpectedSubmissions > 0 ? totalHomeworkExpectedSubmissions : (distinctHomeworkItemsAssigned > 0 ? distinctHomeworkItemsAssigned : "0"));
 
-                    double avgHomeworkGrade = rs.getDouble("avg_homework_grade");
+                    double avgHomeworkGrade = rs.getDouble("avg_homework_grade_overall");
                     if (rs.wasNull()) avgHomeworkGrade = 0.0;
                     String formattedScore = String.format("%.2f/10", avgHomeworkGrade);
 
@@ -256,5 +256,61 @@ public class ReportDAO {
         return 0;
     }
 
-    // PHƯƠNG THỨC getDistinctClassStatuses() ĐÃ BỊ XÓA (do bảng courses không có cột status)
+    /**
+     * Lấy thống kê tổng thể về điểm của các bài nộp (submissions) trong một khoảng thời gian.
+     * Chỉ tính các bài đã nộp (is_submitted = 1) và có điểm (grade IS NOT NULL).
+     * Lọc theo h.assigned_date để khớp với phạm vi của báo cáo.
+     *
+     * @param fromDate Ngày bắt đầu.
+     * @param toDate   Ngày kết thúc.
+     * @return Đối tượng OverallHomeworkStats chứa tổng điểm và số lượng bài nộp có điểm.
+     * @throws SQLException Nếu có lỗi truy vấn.
+     */
+    public OverallHomeworkStats getOverallHomeworkSubmissionStats(LocalDate fromDate, LocalDate toDate) throws SQLException {
+        double totalSumOfGrades = 0;
+        int countOfGradedSubmissions = 0;
+
+        // Câu SQL này tính tổng điểm và số lượng các bài nộp có điểm,
+        // trong đó bài tập lớn (homework) có ngày giao (assigned_date) nằm trong khoảng thời gian báo cáo.
+        String sql = "SELECT SUM(shs.grade) as total_grades, COUNT(shs.grade) as count_submissions " +
+                "FROM student_homework_submissions shs " +
+                "JOIN homework h ON shs.homework_id = h.homework_id " +
+                "WHERE shs.is_submitted = 1 AND shs.grade IS NOT NULL " +
+                "AND h.assigned_date BETWEEN ? AND ?";
+        // LƯU Ý: Nếu báo cáo của bạn có thể được lọc thêm theo một danh sách các course_id cụ thể
+        // (không chỉ theo ngày), bạn cần thêm điều kiện "AND h.course_id IN (...)" vào đây.
+        // Hiện tại, nó đang tính trên TẤT CẢ các course có homework.assigned_date trong khoảng.
+
+        LOGGER.info("DAO: getOverallHomeworkSubmissionStats called for dates " + fromDate + " to " + toDate);
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setDate(1, java.sql.Date.valueOf(fromDate));
+            stmt.setDate(2, java.sql.Date.valueOf(toDate));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    totalSumOfGrades = rs.getDouble("total_grades"); // SUM có thể trả về NULL nếu không có dòng nào, getDouble sẽ trả về 0
+                    if (rs.wasNull()) { // Xử lý trường hợp SUM là NULL (không có bài nộp nào có điểm)
+                        totalSumOfGrades = 0.0;
+                    }
+                    countOfGradedSubmissions = rs.getInt("count_submissions");
+                }
+            }
+        }
+        LOGGER.info(String.format("DAO: OverallHomeworkStats - Sum: %.2f, Count: %d for dates %s to %s",
+                totalSumOfGrades, countOfGradedSubmissions, fromDate, toDate));
+        return new OverallHomeworkStats(totalSumOfGrades, countOfGradedSubmissions);
+    }
+
+    public static class OverallHomeworkStats {
+        public final double sumOfGrades;
+        public final int countOfGradedSubmissions;
+
+        public OverallHomeworkStats(double sumOfGrades, int countOfGradedSubmissions) {
+            this.sumOfGrades = sumOfGrades;
+            this.countOfGradedSubmissions = countOfGradedSubmissions;
+        }
+    }
 }

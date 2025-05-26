@@ -25,7 +25,6 @@ public class Course {
 
     private Teacher teacher;
     private String roomId;
-    private String classId; // Corresponds to courses.class_id column
 
     private List<Student> students;
     private int totalCurrentStudent; // Derived
@@ -34,7 +33,7 @@ public class Course {
 
     // Updated Constructor
     public Course(String courseId, String courseName, String subject, LocalDate startDate, LocalDate endDate,
-                  LocalTime startTime, LocalTime endTime, List<String> daysOfWeekList, String roomId, String classId,
+                  LocalTime startTime, LocalTime endTime, List<String> daysOfWeekList, String roomId,
                   Teacher teacher, int totalSessions, float progress) {
         this.courseId = courseId;
         this.courseName = courseName;
@@ -45,7 +44,6 @@ public class Course {
         this.endTime = endTime;
         this.daysOfWeekList = daysOfWeekList != null ? new ArrayList<>(daysOfWeekList) : new ArrayList<>();
         this.roomId = roomId;
-        this.classId = classId;
         this.teacher = teacher;
         this.totalSessions = totalSessions; // Initialize new field
         this.progress = progress;
@@ -67,7 +65,6 @@ public class Course {
         this.startTime = null;
         this.endTime = null;
         this.roomId = null;
-        this.classId = null;
         this.teacher = null;
         this.progress = 0.0f;
 
@@ -160,14 +157,6 @@ public class Course {
 
     public void setRoomId(String roomId) {
         this.roomId = roomId;
-    }
-
-    public String getClassId() {
-        return classId;
-    }
-
-    public void setClassId(String classId) {
-        this.classId = classId;
     }
 
     // Getter and Setter for the new totalSessions field (from DB)
@@ -410,7 +399,6 @@ public class Course {
                 ", Days: " + getDaysOfWeekAsString() +
                 ", Times: " + (startTime != null ? startTime : "N/A") + " - " + (endTime != null ? endTime : "N/A") +
                 ", RoomID: " + (roomId != null ? roomId : "N/A") +
-                ", ClassID (Group/Cohort): " + (classId != null ? classId : "N/A") + // Clarified classId meaning
                 ", Teacher: " + (teacher != null && teacher.getName() != null ? teacher.getName() : "N/A") +
                 ", Total Sessions (DB): " + totalSessions + // Added new field
                 ", Progress: " + String.format("%.2f%%", progress) +

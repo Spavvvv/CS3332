@@ -147,7 +147,7 @@ public class ClassDetailsDialog {
         row++;
 
         gridPane.add(createStyledLabel("Mã nhóm SV (Class ID):"), 0, row);
-        gridPane.add(createReadOnlyTextField(course.getClassId() != null ? course.getClassId() : "N/A"), 1, row, 3, 1);
+        gridPane.add(createReadOnlyTextField(course.getCourseId() != null ? course.getCourseId() : "N/A"), 1, row, 3, 1);
         row++;
 
 

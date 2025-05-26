@@ -5,6 +5,13 @@ module CS3323 {
     requires java.sql;
     requires java.desktop;
     requires java.prefs;
+    requires org.junit.jupiter.api;
+    requires org.junit.platform.commons;
+
+    // Add other required modules
+    requires org.junit.platform.engine;
+    requires org.junit.jupiter.engine;
+
 
     opens src.controller to javafx.fxml;
     opens src.model to javafx.fxml;
@@ -18,6 +25,8 @@ module CS3323 {
     opens src.model.teaching.yearly to javafx.base;
     opens src.model.report to javafx.base;
     opens src.model.attendance to javafx.base;
+
+    opens src.utils to org.junit.platform.commons;
 
     exports src.view.components.Screen;
     exports src.controller;
@@ -47,4 +56,6 @@ module CS3323 {
     opens src.controller.Settings to javafx.fxml;
     opens src.view.settings to javafx.base;
 
+    exports src.utils;
+    exports src.view.Attendance;
 }

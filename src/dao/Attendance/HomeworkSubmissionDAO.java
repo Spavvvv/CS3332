@@ -578,7 +578,7 @@ public class HomeworkSubmissionDAO {
     }
 
     public void saveOrUpdateBatch(List<HomeworkSubmissionModel> submissions) throws SQLException {
-        if (submissions.isEmpty()) {
+        if (submissions == null || submissions.isEmpty()) { // Thêm kiểm tra null cho submissions
             return;
         }
 
@@ -595,52 +595,137 @@ public class HomeworkSubmissionDAO {
                 "submission_timestamp, checked_in_session_id, evaluator_notes) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement checkStmt = conn.prepareStatement(checkExistingQuery);
-             PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
-             PreparedStatement insertStmt = conn.prepareStatement(insertQuery)) {
+        // Quản lý transaction và connection cẩn thận hơn
+        Connection conn = null;
+        boolean autoCommitStatus = false;
 
-            for (HomeworkSubmissionModel submission : submissions) {
-                // Kiểm tra xem bản ghi đã tồn tại chưa
-                checkStmt.setString(1, submission.getStudentId());
-                checkStmt.setString(2, submission.getHomeworkId());
+        try {
+            conn = DatabaseConnection.getConnection();
+            autoCommitStatus = conn.getAutoCommit(); // Lưu lại trạng thái auto-commit hiện tại
+            conn.setAutoCommit(false); // Bắt đầu transaction
 
-                ResultSet rs = checkStmt.executeQuery();
-                boolean exists = rs.next();
+            try (PreparedStatement checkStmt = conn.prepareStatement(checkExistingQuery);
+                 PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
+                 PreparedStatement insertStmt = conn.prepareStatement(insertQuery)) {
 
-                if (exists) {
-                    // Cập nhật bản ghi hiện có
-                    updateStmt.setBoolean(1, submission.isSubmitted());
-                    updateStmt.setDouble(2, submission.getGrade());
-                    updateStmt.setTimestamp(3, submission.getSubmissionTimestamp() != null ?
-                            Timestamp.valueOf(submission.getSubmissionTimestamp()) : null);
-                    updateStmt.setString(4, submission.getCheckedInSessionId());
-                    updateStmt.setString(5, submission.getEvaluatorNotes());
-                    updateStmt.setString(6, submission.getStudentSubmissionId());
-                    updateStmt.addBatch();
-                } else {
-                    // Thêm bản ghi mới
-                    insertStmt.setString(1, submission.getStudentSubmissionId());
-                    insertStmt.setString(2, submission.getStudentId());
-                    insertStmt.setString(3, submission.getHomeworkId());
-                    insertStmt.setBoolean(4, submission.isSubmitted());
-                    insertStmt.setDouble(5, submission.getGrade());
-                    insertStmt.setTimestamp(6, submission.getSubmissionTimestamp() != null ?
-                            Timestamp.valueOf(submission.getSubmissionTimestamp()) : null);
-                    insertStmt.setString(7, submission.getCheckedInSessionId());
-                    insertStmt.setString(8, submission.getEvaluatorNotes());
-                    insertStmt.addBatch();
+                for (HomeworkSubmissionModel submission : submissions) {
+                    String studentSubmissionId = submission.getStudentSubmissionId();
+                    boolean isNewRecord = false;
+
+                    // Nếu không có student_submission_id HOẶC nó rỗng, coi như có thể là bản ghi mới
+                    // hoặc cần kiểm tra sự tồn tại dựa trên student_id và homework_id
+                    if (studentSubmissionId == null || studentSubmissionId.isEmpty()) {
+                        isNewRecord = true; // Giả định là mới nếu không có ID, sẽ check lại bằng student_id và homework_id
+                    }
+
+                    // Kiểm tra xem bản ghi đã tồn tại chưa dựa trên student_id và homework_id
+                    checkStmt.setString(1, submission.getStudentId());
+                    checkStmt.setString(2, submission.getHomeworkId());
+
+                    ResultSet rs = checkStmt.executeQuery();
+                    boolean existsByNaturalKey = rs.next();
+                    String existingDbSubmissionId = null;
+                    if (existsByNaturalKey) {
+                        existingDbSubmissionId = rs.getString("student_submission_id");
+                    }
+                    rs.close();
+
+
+                    if (existsByNaturalKey) {
+                        // Cập nhật bản ghi hiện có
+                        // Sử dụng existingDbSubmissionId để đảm bảo cập nhật đúng bản ghi
+                        updateStmt.setBoolean(1, submission.isSubmitted());
+                        updateStmt.setDouble(2, submission.getGrade());
+                        updateStmt.setTimestamp(3, submission.getSubmissionTimestamp() != null ?
+                                Timestamp.valueOf(submission.getSubmissionTimestamp()) : null);
+                        updateStmt.setString(4, submission.getCheckedInSessionId());
+                        updateStmt.setString(5, submission.getEvaluatorNotes());
+                        updateStmt.setString(6, existingDbSubmissionId); // Quan trọng: Dùng ID từ DB
+                        updateStmt.addBatch();
+                    } else {
+                        // Thêm bản ghi mới
+                        // 🌟 Tự động tạo student_submission_id nếu nó chưa được cung cấp hoặc rỗng
+                        if (studentSubmissionId == null || studentSubmissionId.isEmpty()) {
+                            studentSubmissionId = UUID.randomUUID().toString();
+                        }
+                        // (Nếu submission object được dùng lại, cần set lại ID mới này vào nó
+                        //  để nếu có lỗi và retry, nó không tạo ID khác. Nhưng với batch thì ít khi.)
+                        // submission.setStudentSubmissionId(studentSubmissionId); // Tùy chọn: cập nhật lại model
+
+                        insertStmt.setString(1, studentSubmissionId); // Sử dụng ID đã có hoặc vừa tạo
+                        insertStmt.setString(2, submission.getStudentId());
+                        insertStmt.setString(3, submission.getHomeworkId());
+                        insertStmt.setBoolean(4, submission.isSubmitted());
+                        insertStmt.setDouble(5, submission.getGrade());
+                        insertStmt.setTimestamp(6, submission.getSubmissionTimestamp() != null ?
+                                Timestamp.valueOf(submission.getSubmissionTimestamp()) : null);
+                        insertStmt.setString(7, submission.getCheckedInSessionId());
+                        insertStmt.setString(8, submission.getEvaluatorNotes());
+                        insertStmt.addBatch();
+                    }
                 }
 
-                rs.close();
+                // Thực thi các batch
+                updateStmt.executeBatch();
+                insertStmt.executeBatch();
+
+                conn.commit(); // Commit transaction nếu tất cả thành công
+
+            } catch (SQLException e) {
+                if (conn != null) {
+                    try {
+                        System.err.println("Transaction is being rolled back for saveOrUpdateBatch due to SQL error.");
+                        conn.rollback(); // Rollback nếu có lỗi trong quá trình xử lý batch
+                    } catch (SQLException ex) {
+                        System.err.println("Error rolling back transaction: " + ex.getMessage());
+                        // Ghi log lỗi rollback nếu cần
+                    }
+                }
+                throw e; // Ném lại ngoại lệ để lớp gọi xử lý
             }
 
-            // Thực thi các batch
-            updateStmt.executeBatch();
-            insertStmt.executeBatch();
+        } catch (SQLException e) {
+            // Lỗi khi lấy connection hoặc setAutoCommit
+            System.err.println("Database connection or transaction setup error in saveOrUpdateBatch: " + e.getMessage());
+            throw e; // Ném lại ngoại lệ
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(autoCommitStatus); // Khôi phục trạng thái auto-commit
+                    if (!conn.isClosed()) {
+                        conn.close(); // Đóng connection
+                    }
+                } catch (SQLException ex) {
+                    System.err.println("Error restoring auto-commit or closing connection: " + ex.getMessage());
+                    // Ghi log lỗi nếu cần
+                }
+            }
         }
     }
 
+    /**
+     * Lấy tất cả các bài nộp cho một bài tập cụ thể.
+     *
+     * @param homeworkId ID của bài tập cần lấy các bài nộp.
+     * @return Danh sách các đối tượng HomeworkSubmissionModel. Trả về danh sách rỗng nếu không tìm thấy.
+     * @throws SQLException Nếu có lỗi truy vấn cơ sở dữ liệu.
+     */
+    public List<HomeworkSubmissionModel> getSubmissionsByHomeworkId(String homeworkId) throws SQLException {
+        List<HomeworkSubmissionModel> submissions = new ArrayList<>();
+        // Sắp xếp theo student_id để có thứ tự nhất quán
+        String sql = "SELECT * FROM student_homework_submissions WHERE homework_id = ? ORDER BY student_id";
 
+        // Sử dụng this.connection đã được khởi tạo trong constructor
+        try (PreparedStatement stmt = this.connection.prepareStatement(sql)) {
+            stmt.setString(1, homeworkId);
 
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    submissions.add(mapResultSetToModel(rs));
+                }
+            }
+        }
+        // Không đóng this.connection ở đây vì nó được quản lý ở mức DAO instance
+        return submissions;
+    }
 }
