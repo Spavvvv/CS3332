@@ -9,7 +9,9 @@ import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.TextAlignment;
+import javafx.stage.Stage;
 import src.controller.Holidays.HolidaysController;
+import src.dao.Holidays.HolidayDAO;
 import src.model.holidays.Holiday;
 import src.model.holidays.HolidayHistory;
 import src.view.components.Screen.BaseScreenView;
@@ -28,6 +30,7 @@ public class HolidaysView extends BaseScreenView {
     private GridPane calendarGrid;
     private VBox historyBox;
     private Map<String, Holiday> uniqueHolidays = new HashMap<>();
+    private VBox legendsBoxGlobal;
 
     public HolidaysView() {
         super("Ngày nghỉ", "holidays");
@@ -48,12 +51,37 @@ public class HolidaysView extends BaseScreenView {
         titleLabel.setTextFill(Color.rgb(0, 149, 246));
         HBox titleBox = new HBox(titleLabel);
         titleBox.setPadding(new Insets(0, 0, 20, 0));
+        // titleBox.setAlignment(Pos.CENTER); // Cân giữa tiêu đề nếu muốn
 
-        // Year selector
-        HBox yearSelectorBox = createYearSelector();
-        HBox yearContainer = new HBox(yearSelectorBox);
-        yearContainer.setAlignment(Pos.CENTER);
-        yearContainer.setPadding(new Insets(0, 0, 20, 0));
+        // Year selector và Nút Refresh
+        HBox yearSelectorAndRefreshBox = new HBox(20); // HBox chứa bộ chọn năm và nút refresh
+        yearSelectorAndRefreshBox.setAlignment(Pos.CENTER);
+
+        HBox yearSelectorBox = createYearSelector(); // Bộ chọn năm (như cũ)
+
+        Button refreshButton = new Button("Làm mới \u21BB"); // Ký tự refresh: ↻ hoặc ↺ hoặc \u21BB
+        styleNavigationButton(refreshButton); // Sử dụng style tương tự các nút điều hướng năm
+        refreshButton.setOnAction(e -> {
+            refreshView();
+            showAlert(Alert.AlertType.INFORMATION, "Thông báo", "Dữ liệu ngày nghỉ đã được làm mới.");
+        });
+
+        // Sử dụng Pane để đẩy nút Refresh về bên phải
+        Pane spacer = new Pane();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        // Bố cục cho phần header (Tiêu đề, Bộ chọn năm, Nút Refresh)
+        // VBox headerControls = new VBox(10);
+        // HBox yearAndRefreshControls = new HBox(10, yearSelectorBox, spacer, refreshButton);
+        // yearAndRefreshControls.setAlignment(Pos.CENTER_LEFT); // Hoặc CENTER_RIGHT tùy ý
+        // headerControls.getChildren().addAll(titleBox, yearAndRefreshControls);
+        // headerControls.setAlignment(Pos.TOP_CENTER); // Căn giữa toàn bộ header
+
+        // Thay vì VBox, chúng ta có thể dùng BorderPane hoặc AnchorPane cho root
+        // Hoặc đơn giản là thêm vào HBox yearSelectorAndRefreshBox
+        yearSelectorAndRefreshBox.getChildren().addAll(yearSelectorBox, spacer, refreshButton);
+        yearSelectorAndRefreshBox.setPadding(new Insets(0, 0, 20, 0));
+
 
         // Main content area
         HBox contentContainer = new HBox(30);
@@ -70,7 +98,8 @@ public class HolidaysView extends BaseScreenView {
         contentContainer.getChildren().addAll(calendarContainer, rightPanel);
 
         // Add all components to root
-        root.getChildren().addAll(titleBox, yearContainer, contentContainer);
+        // root.getChildren().addAll(headerControls, contentContainer);
+        root.getChildren().addAll(titleBox, yearSelectorAndRefreshBox, contentContainer);
     }
 
     private HBox createYearSelector() {
@@ -271,24 +300,25 @@ public class HolidaysView extends BaseScreenView {
         }
     }
 
+    // Trong HolidaysView.java
     private VBox createRightPanel() {
         VBox panel = new VBox(25);
 
         // Legends section
-        VBox legendsBox = createLegendsBox();
+        this.legendsBoxGlobal = createLegendsBox(); // << GÁN CHO BIẾN THÀNH VIÊN
+        // VBox legendsBox = createLegendsBox(); // Bỏ dòng này nếu đã gán ở trên
 
         // History section
         Label historyTitle = new Label("Lịch sử");
         historyTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
         historyTitle.setTextFill(Color.BLACK);
 
-        historyBox = new VBox(10);
+        historyBox = new VBox(10); // historyBox đã là biến thành viên
         historyBox.setPrefWidth(350);
 
-        panel.getChildren().addAll(legendsBox, historyTitle, historyBox);
+        panel.getChildren().addAll(this.legendsBoxGlobal, historyTitle, historyBox); // Sử dụng biến thành viên
         return panel;
     }
-
     private VBox createLegendsBox() {
         VBox legendsBox = new VBox(15);
         // Legends will be populated in updateLegends method
@@ -297,16 +327,25 @@ public class HolidaysView extends BaseScreenView {
 
     private void updateLegends(VBox legendsBox) {
         legendsBox.getChildren().clear();
+        legendsBox.setSpacing(10); // Thêm khoảng cách giữa các legend items
 
         // Add legends for each unique holiday
-        for (Holiday holiday : uniqueHolidays.values()) {
-            String dateRangeText = formatDateRange(holiday.getStartDate(), holiday.getEndDate());
-            HBox legendItem = createLegendItem(
-                    Color.web(holiday.getColorHex()),
-                    holiday.getName().toUpperCase(),
-                    dateRangeText
-            );
-            legendsBox.getChildren().add(legendItem);
+        if (uniqueHolidays.isEmpty()) {
+            Label noHolidaysLabel = new Label("Không có ngày nghỉ nào được hiển thị cho năm này.");
+            noHolidaysLabel.setFont(Font.font("System", 13));
+            noHolidaysLabel.setTextFill(Color.GRAY);
+            legendsBox.getChildren().add(noHolidaysLabel);
+        } else {
+            for (Holiday holiday : uniqueHolidays.values()) {
+                String dateRangeText = formatDateRange(holiday.getStartDate(), holiday.getEndDate());
+                HBox legendItem = createLegendItem(
+                        Color.web(holiday.getColorHex()),
+                        holiday.getName().toUpperCase(),
+                        dateRangeText,
+                        holiday // << TRUYỀN ĐỐI TƯỢNG HOLIDAY
+                );
+                legendsBox.getChildren().add(legendItem);
+            }
         }
     }
 
@@ -322,11 +361,12 @@ public class HolidaysView extends BaseScreenView {
         return String.format("%02d/%02d/%d", date.getDayOfMonth(), date.getMonthValue(), date.getYear());
     }
 
-    private HBox createLegendItem(Color color, String title, String dateRange) {
+    private HBox createLegendItem(Color color, String title, String dateRange, Holiday holidayToDelete) { // Thêm Holiday vào tham số
         HBox item = new HBox(15);
+        item.setAlignment(Pos.CENTER_LEFT); // Căn chỉnh các item bên trong HBox
 
         // Color circle
-        Circle colorCircle = new Circle(20);
+        Circle colorCircle = new Circle(15); // Giảm kích thước vòng tròn một chút
         colorCircle.setFill(color);
 
         // Text info
@@ -340,9 +380,94 @@ public class HolidaysView extends BaseScreenView {
         dateLabel.setTextFill(Color.BLACK);
 
         textBox.getChildren().addAll(titleLabel, dateLabel);
-        item.getChildren().addAll(colorCircle, textBox);
 
+        // Nút Xóa
+        Button deleteButton = new Button("✕"); // Hoặc dùng icon
+        deleteButton.setStyle(
+                "-fx-background-color: #ff6b6b; " + // Màu đỏ cho nút xóa
+                        "-fx-text-fill: white; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-font-size: 10px; " +
+                        "-fx-padding: 3 7 3 7; " + // Điều chỉnh padding
+                        "-fx-background-radius: 4;" +
+                        "-fx-cursor: hand;"
+        );
+        deleteButton.setOnMouseEntered(e -> deleteButton.setStyle(
+                "-fx-background-color: #e05252; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-font-size: 10px; " +
+                        "-fx-padding: 3 7 3 7; " +
+                        "-fx-background-radius: 4;" +
+                        "-fx-cursor: hand;"
+        ));
+        deleteButton.setOnMouseExited(e -> deleteButton.setStyle(
+                "-fx-background-color: #ff6b6b; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-font-size: 10px; " +
+                        "-fx-padding: 3 7 3 7; " +
+                        "-fx-background-radius: 4;" +
+                        "-fx-cursor: hand;"
+        ));
+
+        // Xử lý sự kiện khi nhấn nút xóa
+        deleteButton.setOnAction(e -> handleDeleteHolidayAction(holidayToDelete));
+
+        // Sử dụng Pane để đẩy nút xóa về phía cuối
+        Pane spacer = new Pane();
+        HBox.setHgrow(spacer, Priority.ALWAYS); // Cho spacer co giãn để đẩy nút xóa
+
+        item.getChildren().addAll(colorCircle, textBox, spacer, deleteButton);
+        item.setPadding(new Insets(5, 0, 5, 0)); // Thêm padding cho mỗi item
         return item;
+    }
+    private void handleDeleteHolidayAction(Holiday holidayToDelete) {
+        if (holidayToDelete == null || holidayToDelete.getId() == null) {
+            showAlert(Alert.AlertType.ERROR, "Lỗi", "Không thể xác định ngày nghỉ để xóa.");
+            return;
+        }
+
+        Alert confirmationDialog = new Alert(Alert.AlertType.CONFIRMATION);
+        confirmationDialog.setTitle("Xác nhận Xóa Ngày nghỉ");
+        confirmationDialog.setHeaderText("Bạn có chắc chắn muốn xóa ngày nghỉ '" + holidayToDelete.getName() + "'?");
+        confirmationDialog.setContentText("Hành động này sẽ xóa ngày nghỉ khỏi hệ thống và không thể hoàn tác.\n" +
+                "Lưu ý: Các lịch học đã được điều chỉnh trước đó sẽ KHÔNG tự động thay đổi lại khi xóa ngày nghỉ này.");
+
+        ButtonType buttonTypeYes = new ButtonType("Xóa");
+        ButtonType buttonTypeNo = new ButtonType("Hủy", ButtonBar.ButtonData.CANCEL_CLOSE);
+        confirmationDialog.getButtonTypes().setAll(buttonTypeYes, buttonTypeNo);
+
+        // Sử dụng Stage của view làm owner cho dialog
+        Stage stage = (Stage) getRoot().getScene().getWindow();
+        confirmationDialog.initOwner(stage);
+
+
+        confirmationDialog.showAndWait().ifPresent(response -> {
+            if (response == buttonTypeYes) {
+                if (controller != null) {
+                    controller.deleteHoliday(holidayToDelete.getId()); // Gọi controller để xóa
+                    showAlert(Alert.AlertType.INFORMATION, "Thành công", "Đã xóa ngày nghỉ: " + holidayToDelete.getName());
+                    refreshView(); // Cập nhật lại view để hiển thị thay đổi
+                } else {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi", "Controller chưa được khởi tạo.");
+                }
+            }
+        });
+    }
+
+    // Thêm phương thức showAlert nếu chưa có trong HolidaysView
+    private void showAlert(Alert.AlertType alertType, String title, String message) {
+        Alert alert = new Alert(alertType);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+
+        // Đảm bảo dialog hiển thị đúng trên màn hình hiện tại
+        Stage stage = (Stage) getRoot().getScene().getWindow();
+        alert.initOwner(stage);
+
+        alert.showAndWait();
     }
 
     private void updateHistoryItems() {
@@ -413,27 +538,21 @@ public class HolidaysView extends BaseScreenView {
     }
 
     // Cập nhật lại phương thức refreshView để đảm bảo cập nhật đúng
+    // Trong HolidaysView.java
     @Override
     public void refreshView() {
         if (controller != null) {
+            updateCalendar(); // Hàm này sẽ gọi controller.getAllHolidays()
 
-            updateCalendar();
-            // Tìm và cập nhật hộp ghi chú
-            for (javafx.scene.Node node : root.getChildren()) {
-                if (node instanceof HBox) {
-                    HBox contentContainer = (HBox) node;
-                    for (javafx.scene.Node contentNode : contentContainer.getChildren()) {
-                        if (contentNode instanceof VBox) {
-                            VBox rightPanel = (VBox) contentNode;
-                            if (rightPanel.getChildren().size() > 0 && rightPanel.getChildren().get(0) instanceof VBox) {
-                                VBox legendsBox = (VBox) rightPanel.getChildren().get(0);
-                                updateLegends(legendsBox);
-                            }
-                        }
-                    }
-                }
+            // Cập nhật danh sách chú giải (legends)
+            if (this.legendsBoxGlobal != null) {
+                updateLegends(this.legendsBoxGlobal); // Sử dụng biến thành viên đã lưu
+            } else {
+                // Điều này không nên xảy ra nếu createRightPanel được gọi đúng trong initializeView
+                System.err.println("HolidaysView: legendsBoxGlobal is null, không thể cập nhật legends.");
             }
-            updateHistoryItems();
+
+            updateHistoryItems(); // Hàm này sẽ gọi controller.getRecentHistory()
         }
     }
 
@@ -532,6 +651,12 @@ public class HolidaysView extends BaseScreenView {
                 );
             }
         });
+    }
+    @Override
+    public void onActivate() {
+        super.onActivate(); // Gọi phương thức của lớp cha nếu có
+        refreshView();      // Luôn làm mới view khi nó được kích hoạt
+        System.out.println(getViewId() + " activated and data refreshed via onActivate.");
     }
 
 }
