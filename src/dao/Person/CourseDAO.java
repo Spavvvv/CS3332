@@ -126,8 +126,8 @@ public class CourseDAO {
 
     private boolean internalInsert(Connection conn, Course course) throws SQLException {
         String sql = "INSERT INTO courses (course_id, course_name, subject, start_date, end_date, " +
-                "start_time, end_time, teacher_id, room_id, progress, total_sessions) " + // Added total_sessions, removed day_of_week
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"; // Adjusted placeholder count
+                "start_time, end_time, teacher_id, room_id, progress, total_sessions) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"; // CORRECTED: Now has 11 placeholders // Adjusted placeholder count
         try (PreparedStatement statement = conn.prepareStatement(sql)) {
             statement.setString(1, course.getCourseId());
             statement.setString(2, course.getCourseName());
@@ -138,9 +138,8 @@ public class CourseDAO {
             statement.setTime(7, course.getCourseEndTime() != null ? Time.valueOf(course.getCourseEndTime()) : null);
             statement.setString(8, course.getTeacher() != null ? course.getTeacher().getId() : null);
             statement.setString(9, course.getRoomId());
-            statement.setString(10, course.getCourseId());
-            statement.setFloat(11, course.getProgress());
-            statement.setInt(12, course.getTotalSessions()); // Use new totalSessions field
+            statement.setFloat(10, course.getProgress());
+            statement.setInt(11, course.getTotalSessions()); // Use new totalSessions field
 
             boolean courseInserted = statement.executeUpdate() > 0;
             if (courseInserted) {
