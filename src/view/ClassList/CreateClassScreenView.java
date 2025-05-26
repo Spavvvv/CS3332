@@ -27,6 +27,7 @@ import src.model.classroom.Classroom;
 import src.model.holidays.HolidaysModel; // Import HolidaysModel
 import src.model.person.Teacher; // Assuming you have a Teacher model
 import src.model.system.course.Course;
+import src.utils.DaoManager;
 import src.utils.DatabaseConnection;
 
 import java.sql.Connection;
@@ -90,6 +91,7 @@ public class CreateClassScreenView {
         this.holidaysModel = holidaysModel; // holidaysModel có thể được dùng để tạo holidayDAO
         this.callback = callback;           // Vẫn giữ callback nếu bạn có thể muốn dùng cho mục đích khác
         // hoặc để tương thích ngược, nhưng logic tạo session sẽ qua Controller.
+        this.holidayDAO = DaoManager.getInstance().getHolidayDAO();
 
         // Khởi tạo các DAO mà CourseController cần nhưng không được truyền trực tiếp vào View
         this.classSessionDAO = new ClassSessionDAO(); // Tạo mới
@@ -339,7 +341,7 @@ public class CreateClassScreenView {
 
         LocalDate currentDate = startDate;
         int sessionsCounted = 0;
-        LocalDate DUMMY_MAX_END_DATE = startDate.plusYears(5); // Safety break
+        LocalDate DUMMY_MAX_END_DATE = startDate.plusYears(5);
 
         while (sessionsCounted < totalRequiredSessions) {
             if (currentDate.isAfter(DUMMY_MAX_END_DATE)) {
@@ -347,25 +349,39 @@ public class CreateClassScreenView {
                 return;
             }
 
-            // Check if current date is a holiday (using HolidaysModel)
-            if (holidaysModel != null && holidaysModel.isHoliday(currentDate)) {
+            boolean isCurrentDateHoliday = false;
+            // Ưu tiên sử dụng holidaysModel được truyền vào
+            if (this.holidaysModel != null) {
+                // Giả định HolidaysModel có phương thức isHoliday() hoặc getHolidayForDate()
+                // Nếu HolidaysModel có isHoliday():
+                // isCurrentDateHoliday = this.holidaysModel.isHoliday(currentDate);
+
+                // Nếu HolidaysModel chỉ có getHolidayForDate() (trả về Holiday object hoặc null):
+                if (this.holidaysModel.getHolidayForDate(currentDate) != null) { // Lấy từ file HolidaysController.java
+                    isCurrentDateHoliday = true;
+                }
+            }
+            // Nếu không có holidaysModel hoặc nó không xác định được, có thể dùng holidayDAOInternal làm fallback (tùy chọn)
+            // else if (this.holidayDAOInternal != null) {
+            //     isCurrentDateHoliday = this.holidayDAOInternal.isHoliday(currentDate);
+            // }
+
+
+            if (isCurrentDateHoliday) {
                 currentDate = currentDate.plusDays(1);
-                continue; // Skip to next day if it's a holiday
+                continue;
             }
 
-            // Check if current date is one of the selected weekdays
             if (selectedWeekdays.contains(currentDate.getDayOfWeek())) {
                 sessionsCounted++;
             }
 
-            // If all sessions are counted, current date is the end date
             if (sessionsCounted == totalRequiredSessions) {
                 calculatedEndDateField.setText(currentDate.format(DATE_FORMATTER));
                 return;
             }
             currentDate = currentDate.plusDays(1);
         }
-        // Fallback if loop finishes without meeting conditions (should ideally not happen with DUMMY_MAX_END_DATE)
         calculatedEndDateField.setText("Không thể tính");
     }
 

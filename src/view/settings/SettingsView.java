@@ -5,15 +5,18 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Callback;
 import src.dao.Accounts.AccountDAO;
+import src.dao.Holidays.HolidayDAO;
 import src.dao.Person.CourseDAO;
 import src.dao.Person.StudentDAO;
 import src.dao.Person.TeacherDAO;
 import src.dao.Person.UserDAO;
+import src.model.holidays.Holiday;
 import src.model.system.course.Course;
 import src.model.person.Teacher;
 import src.view.components.Screen.BaseScreenView;
@@ -34,12 +37,19 @@ public class SettingsView extends BaseScreenView {
     private TableView<CoursePlaceholder> courseTable;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter SQL_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private TextField holidayNameField;
+    private DatePicker holidayStartDatePicker;
+    private DatePicker holidayEndDatePicker;
+    private ColorPicker holidayColorPicker;
+    private Button saveHolidayButton;
 
     private TeacherDAO teacherDAO;
     private AccountDAO accountDAO;
     private CourseDAO courseDAO;
     private UserDAO userDAO;
     private List<Teacher> originalTeachersList;
+    private HolidayDAO holidayDAO;
+
 
 
     public SettingsView() {
@@ -50,6 +60,7 @@ public class SettingsView extends BaseScreenView {
             userDAO = new UserDAO();
             courseDAO = new CourseDAO();
             courseDAO.setTeacherDAO(teacherDAO);
+            this.holidayDAO = new HolidayDAO();
         } catch (SQLException e) {
             System.err.println("Lỗi nghiêm trọng: Không thể khởi tạo DAO. " + e.getMessage());
             e.printStackTrace();
@@ -66,7 +77,22 @@ public class SettingsView extends BaseScreenView {
 
         VBox teacherSection = createTeacherListSection();
         VBox courseSection = createCourseListSection(); // Gọi phương thức tạo mục khóa học
-        root.getChildren().addAll(teacherSection, courseSection); // Thêm cả hai mục
+        VBox holidayCreationSection = createHolidayCreationSection();
+
+        VBox contentBox = new VBox(20); // Khoảng cách 20px giữa các khu vực (teacher, course, holiday)
+        contentBox.setPadding(new Insets(25)); // Padding cho toàn bộ nội dung bên trong ScrollPane
+        contentBox.getChildren().addAll(teacherSection, courseSection, holidayCreationSection); // Thêm tất cả các khu vực
+
+        // Tạo ScrollPane và đặt contentBox vào đó
+        ScrollPane scrollPane = new ScrollPane(contentBox);
+        scrollPane.setFitToWidth(true); // Quan trọng: làm cho nội dung trong ScrollPane co giãn theo chiều rộng
+        scrollPane.setFitToHeight(true); // Tùy chọn: làm cho ScrollPane cố gắng vừa với chiều cao nếu có thể
+        scrollPane.setStyle("-fx-background-color: transparent; -fx-background: transparent;"); // Làm nền của ScrollPane trong suốt
+
+        // Xóa các con cũ của root (nếu có) và thêm ScrollPane vào
+        root.getChildren().clear();
+        root.getChildren().add(scrollPane);
+        VBox.setVgrow(scrollPane, javafx.scene.layout.Priority.ALWAYS);
     }
     private void loadActualData() {
         teacherData.clear();
@@ -706,6 +732,133 @@ public class SettingsView extends BaseScreenView {
             }
 
             loadActualData(); // Tải lại dữ liệu để làm mới bảng
+        }
+    }
+    private VBox createHolidayCreationSection() {
+        VBox section = new VBox(10); // Khoảng cách giữa các phần tử
+        section.setStyle("-fx-background-color: white; -fx-padding: 20px; -fx-border-color: #dee2e6; -fx-border-width: 1px; -fx-border-radius: 8px; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 10, 0, 0, 5);");
+        section.setPadding(new Insets(15));
+
+        Label title = new Label("Tạo Ngày nghỉ Mới");
+        title.setFont(Font.font("Arial", FontWeight.BOLD, 18));
+        title.setStyle("-fx-text-fill: #007bff;"); // Màu xanh dương cho tiêu đề khu vực này
+
+        holidayNameField = new TextField();
+        holidayNameField.setPromptText("Tên ngày nghỉ (ví dụ: Tết Nguyên Đán)");
+
+        holidayStartDatePicker = new DatePicker();
+        holidayStartDatePicker.setPromptText("Ngày bắt đầu");
+
+        holidayEndDatePicker = new DatePicker();
+        holidayEndDatePicker.setPromptText("Ngày kết thúc");
+
+        holidayColorPicker = new ColorPicker(javafx.scene.paint.Color.LIGHTBLUE); // Màu mặc định
+        // Label cho ColorPicker để UI rõ ràng hơn
+        Label colorPickerLabel = new Label("Màu hiển thị:");
+
+
+        saveHolidayButton = new Button("Lưu Ngày nghỉ");
+        saveHolidayButton.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
+        saveHolidayButton.setOnMouseEntered(e -> saveHolidayButton.setStyle("-fx-background-color: #218838; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"));
+        saveHolidayButton.setOnMouseExited(e -> saveHolidayButton.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"));
+
+        saveHolidayButton.setOnAction(e -> handleSaveHoliday());
+
+        // GridPane để bố trí các trường nhập liệu gọn gàng
+        GridPane grid = new GridPane();
+        grid.setHgap(10); // Khoảng cách ngang
+        grid.setVgap(10); // Khoảng cách dọc
+
+        grid.add(new Label("Tên ngày nghỉ:"), 0, 0);
+        grid.add(holidayNameField, 1, 0);
+        GridPane.setHgrow(holidayNameField, javafx.scene.layout.Priority.ALWAYS); // Cho phép trường tên mở rộng
+
+
+        grid.add(new Label("Ngày bắt đầu:"), 0, 1);
+        grid.add(holidayStartDatePicker, 1, 1);
+        holidayStartDatePicker.setMaxWidth(Double.MAX_VALUE); // Cho phép DatePicker mở rộng
+
+
+        grid.add(new Label("Ngày kết thúc:"), 0, 2);
+        grid.add(holidayEndDatePicker, 1, 2);
+        holidayEndDatePicker.setMaxWidth(Double.MAX_VALUE); // Cho phép DatePicker mở rộng
+
+
+        grid.add(colorPickerLabel, 0, 3);
+        grid.add(holidayColorPicker, 1, 3);
+        holidayColorPicker.setMaxWidth(Double.MAX_VALUE); // Cho phép ColorPicker mở rộng
+
+
+        section.getChildren().addAll(title, grid, saveHolidayButton);
+        return section;
+    }
+    // Trong file: SettingsView.java
+
+    private void handleSaveHoliday() {
+        String name = holidayNameField.getText();
+        LocalDate startDate = holidayStartDatePicker.getValue();
+        LocalDate endDate = holidayEndDatePicker.getValue();
+        javafx.scene.paint.Color selectedColor = holidayColorPicker.getValue();
+
+        // 1. Xác thực đầu vào (Validation)
+        if (name == null || name.trim().isEmpty()) {
+            showError("Tên ngày nghỉ không được để trống.");
+            return;
+        }
+        if (startDate == null) {
+            showError("Ngày bắt đầu không được để trống.");
+            return;
+        }
+        if (endDate == null) {
+            showError("Ngày kết thúc không được để trống.");
+            return;
+        }
+        if (endDate.isBefore(startDate)) {
+            showError("Ngày kết thúc không thể trước ngày bắt đầu.");
+            return;
+        }
+        if (selectedColor == null) {
+            // Mặc dù ColorPicker thường có giá trị mặc định, kiểm tra vẫn tốt
+            showError("Vui lòng chọn một màu hiển thị.");
+            return;
+        }
+
+        // 2. Chuyển đổi màu sang định dạng Hex (#RRGGBB)
+        // Color.toString() trả về dạng 0xRRGGBBTT (TT là alpha/opacity)
+        // Chúng ta chỉ cần #RRGGBB
+        String colorHex = String.format("#%02X%02X%02X",
+                (int) (selectedColor.getRed() * 255),
+                (int) (selectedColor.getGreen() * 255),
+                (int) (selectedColor.getBlue() * 255));
+
+        // 3. Tạo đối tượng Holiday
+        Holiday newHoliday = new Holiday(); // Giả sử bạn có class model Holiday
+        newHoliday.setName(name);
+        newHoliday.setStartDate(startDate);
+        newHoliday.setEndDate(endDate);
+        newHoliday.setColorHex(colorHex.toUpperCase()); // Lưu trữ dạng chữ hoa cho nhất quán
+
+        // 4. Kiểm tra holidayDAO
+        if (holidayDAO == null) {
+            showError("Lỗi hệ thống: HolidayDAO chưa được khởi tạo. Không thể lưu ngày nghỉ.");
+            return;
+        }
+
+        // 5. Gọi phương thức lưu của DAO
+        // Phương thức saveHoliday trong HolidayDAO sẽ tự động gọi insertHoliday (cho ngày nghỉ mới)
+        // và insertHoliday sẽ gọi logHolidayChange để ghi vào holiday_history
+        Holiday savedHoliday = holidayDAO.saveHoliday(newHoliday);
+
+        // 6. Phản hồi cho người dùng
+        if (savedHoliday != null && savedHoliday.getId() != null) {
+            showSuccess("Đã lưu ngày nghỉ thành công: " + savedHoliday.getName());
+            // Xóa các trường nhập liệu để người dùng có thể thêm ngày nghỉ mới
+            holidayNameField.clear();
+            holidayStartDatePicker.setValue(null);
+            holidayEndDatePicker.setValue(null);
+            holidayColorPicker.setValue(javafx.scene.paint.Color.LIGHTBLUE); // Reset về màu mặc định
+        } else {
+            showError("Không thể lưu ngày nghỉ. Vui lòng kiểm tra log của ứng dụng để biết thêm chi tiết.");
         }
     }
 }
