@@ -16,8 +16,9 @@ public class HolidaysModel {
     private final HolidayDAO holidayDAO;
     private Map<LocalDate, Holiday> holidayCache;
 
-    public HolidaysModel() {
-        this.holidayDAO = new HolidayDAO();
+
+    public HolidaysModel(HolidayDAO holidayDAO) {
+        this.holidayDAO = holidayDAO; // Sử dụng HolidayDAO được cung cấp
         this.holidayCache = new HashMap<>();
         currentYear.set(LocalDate.now().getYear()); // Default to current year
 
@@ -27,6 +28,7 @@ public class HolidaysModel {
         // Update cache when year changes
         currentYear.addListener((obs, oldVal, newVal) -> refreshHolidayCache());
     }
+
 
     public void refreshHolidayCache() {
         holidayCache.clear();

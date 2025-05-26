@@ -1,6 +1,7 @@
 package src.view.ClassList;
 
 import src.dao.Classrooms.ClassroomDAO;
+import src.dao.Holidays.HolidayDAO;
 import src.dao.Person.CourseDAO;
 import src.dao.Person.StudentDAO;
 import src.dao.Person.TeacherDAO;
@@ -21,6 +22,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Pair;
+import src.utils.DaoManager;
 import src.view.components.Screen.BaseScreenView;
 import src.model.system.course.Course;
 // CreateClassScreenView đã được import ở trên nếu cần
@@ -74,10 +76,13 @@ public class ClassListScreenView extends BaseScreenView {
         this.courseDAO = new CourseDAO();   // Khởi tạo courseDAO
         this.courseDAO.setStudentDAO(studentDAO);
         this.courseDAO.setTeacherDAO(this.teacherDAO);
+        HolidayDAO holidayDAOInstance = DaoManager.getInstance().getHolidayDAO(); // Giả sử DaoManager cung cấp HolidayDAO
 
+        // 2. Khởi tạo HolidaysModel với HolidayDAO instance
+        this.holidaysModel = new HolidaysModel(holidayDAOInstance);
         this.classSessionDAO = new ClassSessionDAO();
         this.classroomDAO = new ClassroomDAO();
-        this.holidaysModel = new HolidaysModel();
+        this.holidaysModel = new HolidaysModel(holidayDAOInstance);
 
         initializeView();
         initializeData();

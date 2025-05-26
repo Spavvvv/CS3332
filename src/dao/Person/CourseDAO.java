@@ -15,12 +15,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 
 public class CourseDAO {
     private StudentDAO studentDAO;
     private TeacherDAO teacherDAO;
+    private static final Logger LOGGER = Logger.getLogger(CourseDAO.class.getName());
+
 
     public CourseDAO() {
         // Dependencies will be set by DaoManager
@@ -121,6 +125,51 @@ public class CourseDAO {
             }
         }
         return daysOfWeekList;
+    }
+    public List<Course> findCoursesEndingOnOrAfter(Connection conn, LocalDate date) throws SQLException {
+        List<Course> courses = new ArrayList<>();
+        // Câu SQL này sẽ lấy các khóa học có ngày kết thúc NULL (chưa xác định/đang diễn ra)
+        // HOẶC có ngày kết thúc lớn hơn hoặc bằng ngày được cung cấp.
+        String sql = "SELECT * FROM courses WHERE end_date IS NULL OR end_date >= ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setDate(1, java.sql.Date.valueOf(date)); // Sửa: Dùng java.sql.Date
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    // Giả sử bạn đã có phương thức extractCourseFromResultSet(Connection conn, ResultSet rs)
+                    // và nó xử lý đúng việc TeacherDAO có thể null hoặc cần được inject.
+                    courses.add(extractCourseFromResultSet(conn, rs));
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Lỗi khi tìm các khóa học kết thúc sau hoặc bằng ngày: " + date, e);
+            throw e; // Ném lại lỗi để phương thức gọi có thể xử lý (ví dụ: rollback transaction)
+        }
+        return courses;
+    }
+
+    public boolean updateCourseEndDate(Connection conn, String courseId, LocalDate newEndDate) throws SQLException {
+        String sql = "UPDATE courses SET end_date = ? WHERE course_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            if (newEndDate != null) {
+                stmt.setDate(1, Date.valueOf(newEndDate));
+            } else {
+                stmt.setNull(1, Types.DATE); // Cho phép đặt end_date thành NULL nếu cần
+            }
+            stmt.setString(2, courseId);
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                LOGGER.log(Level.INFO, "Cập nhật thành công end_date cho course {0} thành {1}", new Object[]{courseId, newEndDate});
+                return true;
+            } else {
+                // Có thể không tìm thấy course_id hoặc giá trị không thay đổi.
+                // Không nhất thiết là lỗi nghiêm trọng, nhưng cần ghi log.
+                LOGGER.log(Level.WARNING, "Không tìm thấy course {0} để cập nhật end_date hoặc end_date không thay đổi.", courseId);
+                return false;
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Lỗi khi cập nhật end_date cho course " + courseId, e);
+            throw e; // Ném lại lỗi để phương thức gọi xử lý
+        }
     }
 
 
