@@ -148,11 +148,13 @@ public class StudentDAO {
      */
     public boolean deleteStudent(String studentId) throws SQLException {
         String getUserIdSql = "SELECT user_id FROM students WHERE id = ?";
+        String deleteEnrollmentsSql = "DELETE FROM enrollment WHERE student_id = ?"; // New SQL to delete enrollments
         String deleteStudentSql = "DELETE FROM students WHERE id = ?";
         String deleteUserSql = "DELETE FROM users WHERE id = ?";
 
         Connection conn = null;
         PreparedStatement getUserIdStmt = null;
+        PreparedStatement deleteEnrollmentsStmt = null; // PreparedStatement for deleting enrollments
         PreparedStatement deleteStudentStmt = null;
         PreparedStatement deleteUserStmt = null;
         ResultSet rs = null;
@@ -183,31 +185,39 @@ public class StudentDAO {
                 return false;
             }
 
-            // Bước 2: Xóa bản ghi student trước
+            // Bước 2: Xóa các bản ghi liên quan trong bảng 'enrollment'
+            deleteEnrollmentsStmt = conn.prepareStatement(deleteEnrollmentsSql);
+            deleteEnrollmentsStmt.setString(1, studentId);
+            deleteEnrollmentsStmt.executeUpdate(); // Không cần kiểm tra số hàng bị xóa ở đây, có thể không có enrollment nào
+
+            // Bước 3: Xóa bản ghi student
             deleteStudentStmt = conn.prepareStatement(deleteStudentSql);
             deleteStudentStmt.setString(1, studentId);
             int studentRowsDeleted = deleteStudentStmt.executeUpdate();
 
             if (studentRowsDeleted == 0) {
-                System.err.println("Không thể xóa sinh viên với ID: " + studentId);
-                conn.rollback();
+                System.err.println("Không thể xóa sinh viên với ID: " + studentId + " (có thể đã bị xóa hoặc không tồn tại sau khi xóa enrollment).");
+                conn.rollback(); // Rollback nếu không xóa được student (ví dụ: student không tồn tại)
                 return false;
             }
 
-            // Bước 3: Xóa bản ghi user sau khi đã xóa student thành công
+            // Bước 4: Xóa bản ghi user sau khi đã xóa student thành công
             deleteUserStmt = conn.prepareStatement(deleteUserSql);
             deleteUserStmt.setString(1, userId);
             int userRowsDeleted = deleteUserStmt.executeUpdate();
 
             if (userRowsDeleted == 0) {
-                System.err.println("Không thể xóa người dùng với ID: " + userId);
+                System.err.println("Không thể xóa người dùng với ID: " + userId + " (có thể đã bị xóa hoặc user_id không đúng).");
+                // Quyết định rollback hay không ở đây tùy thuộc vào logic nghiệp vụ.
+                // Nếu việc student bị xóa mà user không bị xóa là chấp nhận được thì có thể commit.
+                // Tuy nhiên, để nhất quán, nên rollback.
                 conn.rollback();
                 return false;
             }
 
             // Xác nhận giao dịch nếu tất cả các bước đều thành công
             conn.commit();
-            System.out.println("Đã xóa thành công sinh viên (ID: " + studentId + ") và người dùng liên kết (ID: " + userId + ")");
+            System.out.println("Đã xóa thành công sinh viên (ID: " + studentId + "), các enrollment liên quan, và người dùng liên kết (ID: " + userId + ")");
             return true;
 
         } catch (SQLException e) {
@@ -225,9 +235,13 @@ public class StudentDAO {
             try {
                 if (rs != null) rs.close();
                 if (getUserIdStmt != null) getUserIdStmt.close();
+                if (deleteEnrollmentsStmt != null) deleteEnrollmentsStmt.close(); // Close the new PreparedStatement
                 if (deleteStudentStmt != null) deleteStudentStmt.close();
                 if (deleteUserStmt != null) deleteUserStmt.close();
-                if (conn != null) conn.close();
+                if (conn != null) {
+                    conn.setAutoCommit(true); // Reset auto-commit
+                    conn.close();
+                }
             } catch (SQLException e) {
                 System.err.println("Lỗi khi đóng kết nối: " + e.getMessage());
             }
