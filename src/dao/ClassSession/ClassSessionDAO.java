@@ -266,53 +266,40 @@ public class ClassSessionDAO {
      */
     public List<ClassSession> generateAndSaveSessionsForCourse(
             Connection conn,
-            Course course,
+            Course course, // Đối tượng Course, chứa course.getTotalSessions(), course.getStartDate(), v.v.
             ClassroomDAO classroomDAO,
             TeacherDAO teacherDAO,
             HolidayDAO holidayDAO,
-            ScheduleDAO scheduleDAO // scheduleDAO có thể là null nếu không dùng
+            ScheduleDAO scheduleDAO // Có thể là null nếu không dùng
     ) throws SQLException {
 
         List<ClassSession> generatedSessions = new ArrayList<>();
 
-        // --- Bước 1: Kiểm tra tính hợp lệ của đối tượng Course ---
-        if (course == null) {
-            LOGGER.log(Level.WARNING, "Đối tượng Course là null. Không thể tạo buổi học.");
+        // --- Bước 1: Kiểm tra tính hợp lệ của đối tượng Course (GIỮ NGUYÊN TỪ CODE BẠN CUNG CẤP) ---
+        if (course == null || course.getCourseId() == null || course.getStartDate() == null ||
+                course.getCourseStartTime() == null || course.getCourseEndTime() == null ||
+                course.getDaysOfWeekList() == null || course.getDaysOfWeekList().isEmpty()) {
+            LOGGER.log(Level.WARNING, "Khóa học {0} thiếu các trường thông tin cần thiết. Không thể tạo buổi học.",
+                    course.getCourseId() != null ? course.getCourseId() : "ID UNKNOWN"); //
             return generatedSessions;
         }
 
-        // Sử dụng course.getDaysOfWeekList() thay vì course.getDaysOfWeekAsString()
-        // và course.getClassId() đã có sẵn trong model Course.java
-        if (course.getCourseId() == null || course.getStartDate() == null ||
-                course.getEndDate() == null || course.getCourseStartTime() == null || course.getCourseEndTime() == null ||
-                course.getDaysOfWeekList() == null || course.getDaysOfWeekList().isEmpty()) { // SỬA Ở ĐÂY
-            LOGGER.log(Level.WARNING, "Khóa học {0} thiếu các trường thông tin cần thiết cho lịch trình (ID, ngày, giờ, danh sách ngày học). Không thể tạo buổi học.",
-                    course.getCourseId());
-            return generatedSessions;
-        }
-        // Kiểm tra course.getClassId() nếu nó là bắt buộc cho ClassSession
-        // Trong file Course.java bạn cung cấp, classId có thể null, nên không cần kiểm tra ở đây trừ khi ClassSession yêu cầu.
-        // Nếu ClassSession yêu cầu classId không null:
-        // if (course.getClassId() == null || course.getClassId().trim().isEmpty()){
-        //     LOGGER.log(Level.WARNING, "Khóa học {0} thiếu Class ID. Không thể tạo buổi học.", course.getCourseId());
-        //     return generatedSessions;
-        // }
-
-
-        if (course.getStartDate().isAfter(course.getEndDate())) {
-            LOGGER.log(Level.WARNING, "Ngày bắt đầu của khóa học {0} sau ngày kết thúc. Không thể tạo buổi học.",
-                    course.getCourseId());
+        int targetTotalSessions = course.getTotalSessions(); //
+        if (targetTotalSessions <= 0) {
+            LOGGER.log(Level.INFO, "Khóa học {0} có tổng số buổi học dự kiến là {1}. Sẽ không có buổi học nào được tạo.",
+                    new Object[]{course.getCourseId(), targetTotalSessions}); //
             return generatedSessions;
         }
 
         // --- Bước 2: Lấy thông tin phòng học và giáo viên ---
+        // BỔ SUNG ĐOẠN CODE NÀY:
         String actualRoomName = "N/A";
         if (classroomDAO != null && course.getRoomId() != null && !course.getRoomId().trim().isEmpty()) {
-            // Giả định ClassroomDAO.findByRoomId(String roomId) tự quản lý connection
-            // hoặc bạn có một phiên bản findByRoomId(Connection conn, String roomId) nếu cần dùng transaction hiện tại.
-            Optional<Classroom> classroomOpt = classroomDAO.findByRoomId(course.getRoomId()); //
+            // Giả định classroomDAO.findByRoomId trả về Optional<Classroom>
+            // và Classroom có getRoomName()
+            Optional<Classroom> classroomOpt = classroomDAO.findByRoomId(course.getRoomId());
             if (classroomOpt.isPresent()) {
-                actualRoomName = classroomOpt.get().getRoomName(); //
+                actualRoomName = classroomOpt.get().getRoomName();
             } else {
                 LOGGER.log(Level.WARNING, "Không tìm thấy phòng học với ID: {0} cho khóa học {1}",
                         new Object[]{course.getRoomId(), course.getCourseId()});
@@ -320,116 +307,116 @@ public class ClassSessionDAO {
         }
 
         String actualTeacherName = "N/A";
-        // Ưu tiên lấy thông tin Teacher từ đối tượng Course đã có
-        if (course.getTeacher() != null) { //
-            actualTeacherName = course.getTeacher().getName(); // getName() từ lớp Person
-            // Nếu tên không hợp lệ và có TeacherDAO, thử tải lại bằng ID (user_id)
-            if ((actualTeacherName == null || actualTeacherName.trim().isEmpty() || actualTeacherName.equals("N/A")) &&
-                    teacherDAO != null && course.getTeacher().getId() != null && !course.getTeacher().getId().trim().isEmpty()) {
-                // Giả định TeacherDAO.findById(String userId) tự quản lý connection
-                Optional<Teacher> teacherOpt = teacherDAO.findById(course.getTeacher().getId()); // getId() từ Person, là user_id
-                if (teacherOpt.isPresent()) {
-                    actualTeacherName = teacherOpt.get().getName();
-                } else {
-                    LOGGER.log(Level.WARNING, "Không tìm thấy giáo viên (khi tải lại) với user_id: {0} cho khóa học {1}.",
-                            new Object[]{course.getTeacher().getId(), course.getCourseId()});
-                }
-            }
-        } else if (teacherDAO != null && course.getTeacherId() != null && !course.getTeacherId().trim().isEmpty()) {
-            // Nếu course.getTeacher() là null nhưng có course.getTeacherId() (là user_id)
-            Optional<Teacher> teacherOpt = teacherDAO.findById(course.getTeacherId()); //
+        // Ưu tiên lấy thông tin Teacher từ đối tượng Course đã có (nếu teacher được load sẵn)
+        if (course.getTeacher() != null && course.getTeacher().getName() != null && !course.getTeacher().getName().trim().isEmpty()) {
+            actualTeacherName = course.getTeacher().getName();
+        }
+        // Nếu không có hoặc tên rỗng, thử tải bằng teacher_id từ Course và TeacherDAO
+        else if (teacherDAO != null && course.getTeacherId() != null && !course.getTeacherId().trim().isEmpty()) {
+            // Giả định teacherDAO.findById trả về Optional<Teacher> (tìm theo user_id của teacher)
+            // và Teacher có getName()
+            Optional<Teacher> teacherOpt = teacherDAO.findById(course.getTeacherId());
             if (teacherOpt.isPresent()) {
                 actualTeacherName = teacherOpt.get().getName();
             } else {
-                LOGGER.log(Level.WARNING, "Không tìm thấy giáo viên với user_id: {0} cho khóa học {1}",
+                LOGGER.log(Level.WARNING, "Không tìm thấy giáo viên với (user) ID: {0} cho khóa học {1}",
                         new Object[]{course.getTeacherId(), course.getCourseId()});
             }
         }
-
+        // KẾT THÚC BỔ SUNG CHO BƯỚC 2
 
         // --- Bước 3: Phân tích các ngày học trong tuần ---
-        Set<DayOfWeek> scheduledDays = new HashSet<>();
-        // Sử dụng getDaysOfWeekList() từ Course.java, trả về List<String> như "Mon", "Tue"
-        List<String> shortDayStrings = course.getDaysOfWeekList(); //
+        // BỔ SUNG ĐOẠN CODE NÀY:
+        Set<DayOfWeek> scheduledDays = new HashSet<>(); // Khởi tạo scheduledDays
+        List<String> shortDayStrings = course.getDaysOfWeekList(); // Lấy danh sách ngày dạng String ("Mon", "Tue") từ Course
 
-        for (String shortDayStr : shortDayStrings) {
-            // Gọi phương thức mapShortDayToDayOfWeek đã thêm vào ClassSessionDAO
-            DayOfWeek dow = mapShortDayToDayOfWeek(shortDayStr);
-            if (dow != null) {
-                scheduledDays.add(dow);
-            } else {
-                // mapShortDayToDayOfWeek đã ghi log cảnh báo
-                LOGGER.log(Level.SEVERE, "Chuỗi ngày không hợp lệ '{0}' trong danh sách ngày học của khóa {1}. Ngày này sẽ bị bỏ qua.",
-                        new Object[]{shortDayStr, course.getCourseId()});
+        if (shortDayStrings != null) { // Kiểm tra null cho shortDayStrings
+            for (String shortDayStr : shortDayStrings) {
+                DayOfWeek dow = mapShortDayToDayOfWeek(shortDayStr); // Phương thức này đã có ở cuối file ClassSessionDAO
+                if (dow != null) {
+                    scheduledDays.add(dow);
+                } else {
+                    LOGGER.log(Level.WARNING, "Chuỗi ngày không hợp lệ '{0}' trong danh sách ngày học của khóa {1}. Ngày này sẽ bị bỏ qua.",
+                            new Object[]{shortDayStr, course.getCourseId()});
+                }
             }
         }
+        // KẾT THÚC BỔ SUNG CHO BƯỚC 3
 
-        if (scheduledDays.isEmpty()) {
-            LOGGER.log(Level.WARNING, "Không có ngày học hợp lệ nào được phân tích cho khóa học {0}. Sẽ không có buổi học nào được tạo.",
-                    course.getCourseId());
+        // Dòng code gây lỗi của bạn giờ sẽ hoạt động
+        if (scheduledDays.isEmpty()) { //
+            LOGGER.log(Level.WARNING, "Không có ngày học hợp lệ nào được phân tích cho khóa học {0}. Sẽ không có buổi học nào được tạo.", course.getCourseId()); //
             return generatedSessions;
         }
 
-        // --- Bước 4: Lặp qua các ngày để tạo buổi học ---
-        LocalDate currentIterDate = course.getStartDate();
-        LocalDate courseEndDate = course.getEndDate();
+        // --- Bước 4: Lặp qua các ngày để tạo buổi học (LOGIC NÀY GIỮ NGUYÊN TỪ CODE BẠN CUNG CẤP) ---
+        LocalDate currentIterDate = course.getStartDate(); //
         LocalTime sessionStartTimeOfDay = course.getCourseStartTime(); //
-        LocalTime sessionEndTimeOfDay = course.getCourseEndTime();     //
-        int sessionCounter = 1;
+        LocalTime sessionEndTimeOfDay = course.getCourseEndTime(); //
+        int successfullyGeneratedSessionCount = 0; //
 
-        while (!currentIterDate.isAfter(courseEndDate)) {
-            if (scheduledDays.contains(currentIterDate.getDayOfWeek())) {
+        LocalDate maxEndDateSafety = course.getStartDate().plusYears(3); //
+
+        while (successfullyGeneratedSessionCount < targetTotalSessions && !currentIterDate.isAfter(maxEndDateSafety)) { //
+            if (scheduledDays.contains(currentIterDate.getDayOfWeek())) { //
                 boolean isHoliday = false;
                 if (holidayDAO != null) {
-                    // Giả sử holidayDAO.isHoliday không yêu cầu Connection hoặc tự quản lý
-                    isHoliday = holidayDAO.isHoliday(currentIterDate);
+                    isHoliday = holidayDAO.isHoliday(currentIterDate); //
                 }
 
-                if (!isHoliday) {
-                    LocalDateTime actualSessionStartDateTime = LocalDateTime.of(currentIterDate, sessionStartTimeOfDay);
-                    LocalDateTime actualSessionEndDateTime = LocalDateTime.of(currentIterDate, sessionEndTimeOfDay);
+                if (!isHoliday) { //
+                    LocalDateTime actualSessionStartDateTime = LocalDateTime.of(currentIterDate, sessionStartTimeOfDay); //
+                    LocalDateTime actualSessionEndDateTime = LocalDateTime.of(currentIterDate, sessionEndTimeOfDay); //
 
-                    ClassSession newSession = new ClassSession();
+                    ClassSession newSession = new ClassSession(); //
                     String generatedSessionId = "SESS_" +
                             course.getCourseId().replaceAll("[^a-zA-Z0-9]", "") + "_" +
                             currentIterDate.toString().replace("-", "") + "_" +
-                            String.format("%03d", sessionCounter);
+                            String.format("%03d", (successfullyGeneratedSessionCount + 1)); //
 
-                    newSession.setId(generatedSessionId);
-                    newSession.setCourseId(course.getCourseId());
-                    newSession.setCourseId(course.getCourseId()); // Lấy classId từ Course object
-                    newSession.setCourseName(course.getCourseName());
-                    newSession.setStartTime(actualSessionStartDateTime); // Gán cả ngày và giờ
-                    newSession.setEndTime(actualSessionEndDateTime);   // Gán cả ngày và giờ
-                    newSession.setRoom(actualRoomName);
-                    newSession.setTeacher(actualTeacherName);
-                    newSession.setSessionNumber(sessionCounter);
-                    // newSession.setSessionNotes("Ghi chú cho buổi " + sessionCounter); // Nếu bạn có trường này
+                    newSession.setId(generatedSessionId); //
+                    newSession.setCourseId(course.getCourseId()); //
+                    newSession.setCourseName(course.getCourseName()); // Tên khóa học (cohort name nếu áp dụng)
+                    newSession.setStartTime(actualSessionStartDateTime); //
+                    newSession.setEndTime(actualSessionEndDateTime); //
+                    newSession.setRoom(actualRoomName); // Sử dụng tên phòng đã lấy được //
+                    newSession.setTeacher(actualTeacherName); // Sử dụng tên giáo viên đã lấy được //
+                    newSession.setSessionNumber(successfullyGeneratedSessionCount + 1); // SỐ BUỔI HỌC TUẦN TỰ //
+                    // newSession.setSessionNotes(...); // Nếu có
 
-                    // Gọi internalCreate đã được cập nhật để lưu session_date, class_id
-                    boolean savedSuccessfully = internalCreate(conn, newSession);
+                    boolean savedSuccessfully = internalCreate(conn, newSession); //
                     if (savedSuccessfully) {
-                        generatedSessions.add(newSession);
-                        // LOGGER.log(Level.FINER, "Đã tạo và lưu buổi học: {0}", newSession.getId());
+                        generatedSessions.add(newSession); //
+                        successfullyGeneratedSessionCount++; //
                     } else {
-                        LOGGER.log(Level.WARNING, "Không thể lưu buổi học được tạo: {0} cho khóa học {1}. "
+                        LOGGER.log(Level.WARNING, "Không thể lưu buổi học: {0} cho khóa học {1}. "
                                         + "Transaction nên được rollback bởi bên gọi.",
-                                new Object[]{newSession.getId(), course.getCourseId()});
-                        // Nếu việc tạo một session thất bại là nghiêm trọng, bạn có thể ném SQLException ở đây
-                        // để trigger rollback ở nơi gọi.
-                        // throw new SQLException("Không thể lưu buổi học đã tạo: " + newSession.getId() + " cho khóa " + course.getCourseId());
+                                new Object[]{newSession.getId(), course.getCourseId()}); //
+                        // Cân nhắc ném SQLException ở đây nếu việc này là nghiêm trọng
+                        // throw new SQLException("Không thể lưu buổi học đã tạo: " + newSession.getId());
                     }
-                    sessionCounter++;
                 } else {
-                    LOGGER.log(Level.INFO, "Bỏ qua tạo buổi học cho khóa {0} vào ngày {1} vì là ngày nghỉ.",
-                            new Object[]{course.getCourseId(), currentIterDate});
+                    LOGGER.log(Level.FINER, "Bỏ qua tạo buổi học cho khóa {0} vào ngày {1} vì là ngày nghỉ.",
+                            new Object[]{course.getCourseId(), currentIterDate}); //
                 }
             }
-            currentIterDate = currentIterDate.plusDays(1);
+            currentIterDate = currentIterDate.plusDays(1); //
+
+            if (currentIterDate.isAfter(maxEndDateSafety) && successfullyGeneratedSessionCount < targetTotalSessions) { //
+                LOGGER.log(Level.SEVERE, "Đã đạt đến ngày giới hạn an toàn ({0}) nhưng vẫn chưa tạo đủ số buổi học ({1}/{2}) cho khóa {3}. Dừng tạo.",
+                        new Object[]{maxEndDateSafety, successfullyGeneratedSessionCount, targetTotalSessions, course.getCourseId()}); //
+                break; // Thoát vòng lặp
+            }
         }
 
-        LOGGER.log(Level.INFO, "Đã cố gắng tạo {0} buổi học cho khóa {1}, lưu thành công {2} buổi.",
-                new Object[]{(sessionCounter - 1), course.getCourseId(), generatedSessions.size()});
+        if (successfullyGeneratedSessionCount < targetTotalSessions) { //
+            LOGGER.log(Level.WARNING, "Số buổi học thực tế được tạo ({0}) cho khóa {1} ít hơn số buổi dự kiến ({2}). " +
+                            "Điều này có thể do đã đạt đến ngày giới hạn an toàn hoặc có lỗi khác.",
+                    new Object[]{successfullyGeneratedSessionCount, course.getCourseId(), targetTotalSessions}); //
+        } else {
+            LOGGER.log(Level.INFO, "Đã tạo thành công {0} buổi học cho khóa {1} (mục tiêu: {2} buổi).",
+                    new Object[]{successfullyGeneratedSessionCount, course.getCourseId(), targetTotalSessions}); //
+        }
         return generatedSessions;
     }
 
