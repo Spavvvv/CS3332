@@ -635,7 +635,7 @@ public class AttendanceScreenView extends BaseScreenView {
             statusLabelBox.getChildren().add(attendanceStatusLabel);
 
             if (absentUnexcusedCount > 0 && !allAbsencesNotified) {
-                Label warningLabel = new Label(" ⚠️");
+                Label warningLabel = new Label("⚠");
                 warningLabel.setFont(Font.font("System", 13));
                 warningLabel.setTextFill(Color.web(RED_COLOR));
                 warningLabel.setTooltip(new Tooltip("Còn HS vắng không phép chưa gọi điện xác nhận!"));
