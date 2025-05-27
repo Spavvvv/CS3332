@@ -15,6 +15,22 @@ public class RegisterDAO {
     public RegisterDAO() {
         this.dbConnector = new DatabaseConnection();
     }
+    public boolean isAdminExists() {
+        String sql = "SELECT COUNT(*) FROM accounts WHERE role = ?";
+        try (Connection conn = dbConnector.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, "ADMIN");
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Lỗi kiểm tra Admin tồn tại: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return false; // Default to false in case of error, though ideally should handle error more robustly
+    }
 
     // Đã thêm tham số 'gender' vào phương thức
     public boolean registerUser(String username, String password, String roleFromUI,

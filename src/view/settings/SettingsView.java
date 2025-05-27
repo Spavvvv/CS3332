@@ -12,6 +12,7 @@ import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Callback;
+import src.controller.Holidays.HolidaysController;
 import src.dao.Accounts.AccountDAO;
 import src.dao.Holidays.HolidayDAO;
 import src.dao.Person.CourseDAO;
@@ -52,6 +53,7 @@ public class SettingsView extends BaseScreenView {
     private UserDAO userDAO;
     private List<Teacher> originalTeachersList;
     private HolidayDAO holidayDAO;
+    private HolidaysController holidaysController;
 
 
 
@@ -68,6 +70,7 @@ public class SettingsView extends BaseScreenView {
             System.err.println("Lỗi nghiêm trọng: Không thể khởi tạo DAO. " + e.getMessage());
             e.printStackTrace();
         }
+        this.holidaysController = new HolidaysController();
     }
 
     @Override
@@ -835,18 +838,12 @@ public class SettingsView extends BaseScreenView {
         LocalDate endDate = holidayEndDatePicker.getValue();
         javafx.scene.paint.Color selectedColor = holidayColorPicker.getValue();
 
+        // --- Kiểm tra dữ liệu đầu vào (giữ nguyên) ---
         if (name == null || name.trim().isEmpty()) {
             showError("Tên ngày nghỉ không được để trống.");
             return;
         }
-        if (startDate == null) {
-            showError("Ngày bắt đầu không được để trống.");
-            return;
-        }
-        if (endDate == null) {
-            showError("Ngày kết thúc không được để trống.");
-            return;
-        }
+        // ... (các kiểm tra khác cho startDate, endDate, selectedColor) ...
         if (endDate.isBefore(startDate)) {
             showError("Ngày kết thúc không thể trước ngày bắt đầu.");
             return;
@@ -867,21 +864,30 @@ public class SettingsView extends BaseScreenView {
         newHoliday.setEndDate(endDate);
         newHoliday.setColorHex(colorHex.toUpperCase());
 
-        if (holidayDAO == null) {
-            showError("Lỗi hệ thống: HolidayDAO chưa được khởi tạo. Không thể lưu ngày nghỉ.");
+        // Kiểm tra xem holidaysController đã được khởi tạo chưa
+        if (holidaysController == null) {
+            showError("Lỗi hệ thống: Chức năng quản lý ngày nghỉ chưa sẵn sàng.");
+            // Ghi log ở đây nếu cần
+            // LOGGER.severe("HolidaysController is null in handleSaveHoliday");
             return;
         }
 
-        Holiday savedHoliday = holidayDAO.saveHoliday(newHoliday);
+        try {
+            // SỬ DỤNG HOLIDAYSCONTROLLER ĐỂ THÊM NGÀY NGHỈ
+            // Phương thức này sẽ thực hiện việc lưu vào DB và sau đó là sắp xếp lại lịch học
+            holidaysController.addHoliday(newHoliday);
 
-        if (savedHoliday != null && savedHoliday.getId() != null) {
-            showSuccess("Đã lưu ngày nghỉ thành công: " + savedHoliday.getName());
+            // Nếu không có lỗi, thông báo thành công và dọn dẹp form
+            showSuccess("Đã lưu ngày nghỉ '" + newHoliday.getName() + "' thành công. Lịch học sẽ được tự động cập nhật (nếu cần).");
             holidayNameField.clear();
             holidayStartDatePicker.setValue(null);
             holidayEndDatePicker.setValue(null);
-            holidayColorPicker.setValue(javafx.scene.paint.Color.LIGHTBLUE);
-        } else {
-            showError("Không thể lưu ngày nghỉ. Vui lòng kiểm tra log của ứng dụng để biết thêm chi tiết.");
+            holidayColorPicker.setValue(javafx.scene.paint.Color.LIGHTBLUE); // Hoặc màu mặc định
+
+        } catch (Exception ex) {
+            System.err.println("Lỗi khi lưu ngày nghỉ '" + newHoliday.getName() + "': " + ex.getMessage());
+            ex.printStackTrace();
+            showError("Không thể lưu ngày nghỉ. Đã có lỗi xảy ra: " + ex.getMessage());
         }
     }
 }

@@ -43,6 +43,7 @@ public class RegisterUI {
     private MainController mainController;
     private ComboBox genderComboBox;
     private String currentTheme = "light"; // Mặc định là theme sáng
+    private RegisterDAO registerDAO;
     // Định dạng ngày tháng
     private final static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     public RegisterUI(Stage primaryStage) {
@@ -544,70 +545,152 @@ public class RegisterUI {
         }).start();
     }
     private void handleRegister() {
-        // Lấy dữ liệu từ form
+        // 1. Get all data from form fields
         String username = usernameField.getText().trim();
         String password = passwordField.getText();
         String confirmPassword = confirmPasswordField.getText();
         String fullName = fullNameField.getText().trim();
         String email = emailField.getText().trim();
         String phone = phoneField.getText().trim();
-        String role = roleComboBox.getValue().toString();
-        String selectedGender = genderComboBox.getValue().toString();
-        if (selectedGender == null || selectedGender.trim().isEmpty()) {
-            selectedGender = null; // Đặt là null nếu không chọn hoặc chọn rỗng
-        }
-        LocalDate dob;
-        try {
-            dob = LocalDate.parse(dobTextField.getText(), DATE_FORMATTER);
-        } catch (DateTimeParseException e) {
-            showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Ngày sinh không hợp lệ (định dạng DD/MM/YYYY).");
-            return;
-        }
-        // Kiểm tra nếu thiếu dữ liệu
+        String role = roleComboBox.getValue().toString(); // Assumes ComboBox<String>
+        String selectedGender = genderComboBox.getValue().toString(); // Assumes ComboBox<String>
+        String dobText = dobTextField.getText().trim();
+
+        // 2. Perform comprehensive client-side validation first
         if (username.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()
-                || fullName.isEmpty() || email.isEmpty() || phone.isEmpty() || role == null || selectedGender == null) {
-            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Vui lòng điền đầy đủ thông tin.");
+                || fullName.isEmpty() || email.isEmpty() || phone.isEmpty()
+                || role == null || selectedGender == null || selectedGender.trim().isEmpty()
+                || dobText.isEmpty()) {
+            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Vui lòng điền đầy đủ tất cả thông tin bắt buộc.");
             return;
         }
-        // Kiểm tra nếu mật khẩu không khớp
+
         if (!password.equals(confirmPassword)) {
             showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Mật khẩu xác nhận không khớp.");
+            confirmPasswordField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+            showTooltip(confirmPasswordField, "Mật khẩu xác nhận không khớp");
+            return;
+        } else { // Matched or empty, reset style if it was error
+            styleTextField(confirmPasswordField); // Assuming this is your default style method
+        }
+
+
+        if (password.length() < 8) {
+            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Mật khẩu phải có ít nhất 8 ký tự.");
+            passwordField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+            showTooltip(passwordField, "Mật khẩu phải ít nhất 8 ký tự");
+            return;
+        } else {
+            passwordField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #00aa00; -fx-text-fill: #555;"); // Green if valid
+        }
+
+
+        if (!isValidEmail(email)) {
+            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Email không đúng định dạng.");
+            emailField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+            showTooltip(emailField, "Email không đúng định dạng");
             return;
         }
-        if (!termsCheckBox.isSelected()) {
-            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Bạn phải đồng ý điều khoản sử dụng.");
+        // Assuming successful validation for email format by this point, DAO will check existence
+
+        if (!isValidPhone(phone)) {
+            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Số điện thoại không đúng định dạng (chỉ chứa số).");
+            phoneField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+            showTooltip(phoneField, "Số điện thoại không đúng định dạng");
             return;
         }
-        // Kiểm tra tuổi
-        int birthYear = dob.getYear();
-        int currentYear = Year.now().getValue();
-        int age = currentYear - birthYear;
-        // Sinh ID độc nhất dựa trên vai trò
-        String userId = generateUniqueID(role);
-        // Sử dụng DAO để kiểm tra và lưu dữ liệu
-        RegisterDAO registerDAO = new RegisterDAO();
+        // Assuming successful validation for phone format
+
+        LocalDate dob;
+        int age;
         try {
-            // Kiểm tra trùng lặp username
-            if (registerDAO.isUsernameExists(username)) {
-                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Tên đăng nhập đã tồn tại.");
+            dob = LocalDate.parse(dobText, DATE_FORMATTER);
+            if (dob.isAfter(LocalDate.now())) {
+                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Ngày sinh không được là một ngày trong tương lai.");
+                dobTextField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+                showTooltip(dobTextField, "Ngày sinh không hợp lệ");
                 return;
             }
-            // Kiểm tra trùng lặp email
-            if (registerDAO.isEmailExists(email)) {
-                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Email đã được sử dụng.");
-                return;
+            age = Year.now().getValue() - dob.getYear();
+            // Consider if day/month makes them not yet passed their birthday this year
+            if (LocalDate.now().getDayOfYear() < dob.getDayOfYear() && LocalDate.now().getYear() == dob.getYear() + age) {
+                age--; // Decrement age if birthday hasn't occurred this year.
             }
-            // Ghi vào cơ sở dữ liệu thông qua DAO
-            boolean isRegistered = registerDAO.registerUser(username, password, role, fullName, email, phone, dob, age,selectedGender, userId);
-            if (isRegistered) {
-                showAlert(Alert.AlertType.INFORMATION, "Đăng ký thành công", "Tài khoản đã được tạo thành công!");
-                clearRegisterFields(); // Xóa sạch form sau khi thành công
-            } else {
-                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Đăng ký thất bại. Vui lòng thử lại.");
-            }
+            // Add any other age validations (e.g., must be > 18)
+            dobTextField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #00aa00; -fx-text-fill: #555;");
+
+        } catch (DateTimeParseException e) {
+            showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Ngày sinh không hợp lệ (định dạng DD/MM/YYYY).");
+            dobTextField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+            showTooltip(dobTextField, "Định dạng ngày không hợp lệ (DD/MM/YYYY)");
+            return;
+        }
+
+        if (!termsCheckBox.isSelected()) {
+            showAlert(Alert.AlertType.WARNING, "Lỗi đăng ký", "Bạn phải đồng ý với điều khoản sử dụng.");
+            return;
+        }
+
+        // 3. Instantiate DAO and perform DB operations
+        RegisterDAO registerDAO;
+        try {
+            registerDAO = new RegisterDAO();
         } catch (Exception e) {
-            e.printStackTrace();
-            showAlert(Alert.AlertType.ERROR, "Lỗi hệ thống", "Có lỗi xảy ra trong quá trình kết nối với cơ sở dữ liệu.");
+            showAlert(Alert.AlertType.ERROR, "Lỗi hệ thống", "Không thể khởi tạo dịch vụ dữ liệu (DAO). Vui lòng thử lại sau.");
+            e.printStackTrace(); // Log for debugging
+            return;
+        }
+
+        try {
+            // Check if Admin role is selected and an Admin already exists
+            if ("Admin".equals(role)) {
+                if (registerDAO.isAdminExists()) { //
+                    showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Chỉ được phép tạo một tài khoản Admin trong hệ thống.");
+                    return;
+                }
+            }
+
+            // Server-side validation for username uniqueness
+            if (registerDAO.isUsernameExists(username)) { //
+                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Tên đăng nhập đã tồn tại.");
+                usernameField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+                showTooltip(usernameField, "Tên đăng nhập đã tồn tại");
+                return;
+            } else {
+                usernameField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #00aa00; -fx-text-fill: #555;");
+            }
+
+            // Server-side validation for email uniqueness
+            if (registerDAO.isEmailExists(email)) { //
+                showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Email đã được sử dụng.");
+                emailField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #ff0000; -fx-text-fill: #555;");
+                showTooltip(emailField, "Email đã được sử dụng");
+                return;
+            } else {
+                emailField.setStyle("-fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #00aa00; -fx-text-fill: #555;");
+            }
+
+            // If all checks pass, generate ID and proceed with registration
+            String userId = generateUniqueID(role);
+
+            boolean isRegistered = registerDAO.registerUser(username, password, role, fullName, email, phone, dob, age, selectedGender, userId); //
+
+            if (isRegistered) {
+                // showSuccessDialog(userId); // You have a showSuccessDialog, consider using it.
+                showAlert(Alert.AlertType.INFORMATION, "Đăng ký thành công", "Tài khoản đã được tạo thành công! ID của bạn là: " + userId);
+                clearRegisterFields();
+            } else {
+                // This 'else' might be due to the internal Admin check in registerUser method in DAO,
+                // or other handled failures within registerUser.
+                if ("Admin".equals(role)) {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Đăng ký Admin thất bại. Có thể tài khoản Admin đã tồn tại hoặc đã xảy ra lỗi khác trong quá trình xử lý.");
+                } else {
+                    showAlert(Alert.AlertType.ERROR, "Lỗi đăng ký", "Đăng ký thất bại. Vui lòng thử lại hoặc kiểm tra lại thông tin đã nhập.");
+                }
+            }
+        } catch (Exception e) { // Catch any other unexpected errors from DAO operations
+            e.printStackTrace(); // Important for debugging
+            showAlert(Alert.AlertType.ERROR, "Lỗi hệ thống", "Đã xảy ra lỗi không mong muốn trong quá trình đăng ký. Xin vui lòng thử lại sau.");
         }
     }
     private void clearRegisterFields() {
